@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Wand2, Upload, CheckCircle2, ArrowRight, ArrowLeft, Settings2 } from "lucide-react";
+import { Plus, Trash2, Wand2, Upload, CheckCircle2, ArrowRight, ArrowLeft, Settings2, Sparkles, FileDown } from "lucide-react";
 import { useStore, type AdjustmentKind, type Invoice } from "@/lib/commission-store";
 import { fmtMoney, calcInvoice } from "@/lib/commission-calc";
 import { labelFor } from "@/lib/ledger";
@@ -376,45 +376,89 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
   const s = useStore();
   const t = useT();
   const [step, setStep] = useState(0);
-  const [agentDraft, setAgentDraft] = useState({ name: "", email: "" });
-  const [financeDraft, setFinanceDraft] = useState({
-    name: "", defaultFee: 0.05, dealerFee: 0, adminFee: 0,
-  });
 
-  const steps = ["Company", "Team", "Finance Companies"];
+  const [agentDraft, setAgentDraft] = useState({ name: "", email: "", commissionPercent: "8", level: "Sales Rep" });
+  const [financeDraft, setFinanceDraft] = useState({ name: "", defaultFee: 0.05, dealerFee: 0, adminFee: 0 });
+  const [tierRate, setTierRate] = useState(8);
+  const [ovRate, setOvRate] = useState(2);
 
-  const goTo = (n: number) => setStep(n);
-  const next = () => goTo(Math.min(steps.length - 1, step + 1));
-  const back = () => goTo(Math.max(0, step - 1));
+  const STEPS = [
+    t("wiz_step_company"),
+    t("wiz_step_branding"),
+    t("wiz_step_team"),
+    t("wiz_step_plan"),
+    t("wiz_step_finance"),
+    t("wiz_step_splits"),
+    t("wiz_step_advances"),
+    t("wiz_step_test"),
+  ];
+  const TOTAL = STEPS.length;
+
+  const next = () => setStep((p) => Math.min(TOTAL - 1, p + 1));
+  const back = () => setStep((p) => Math.max(0, p - 1));
 
   const finish = () => {
     s.completeWizard();
-    toast.success("Setup complete! You're ready to go.");
+    toast.success(t("wiz_ready"));
     onClose();
   };
 
+  const generateTest = () => {
+    let inv = s.invoices[0];
+    if (!inv) { s.loadDemoData(); inv = useStore.getState().invoices[0]; }
+    if (!inv) { toast.error(t("err_pdf")); return; }
+    try {
+      const fcs = useStore.getState().financeCompanies;
+      const company = useStore.getState().company;
+      const agents = useStore.getState().agents;
+      const c = calcInvoice(inv, fcs);
+      const agentName = agents.find((a) => a.id === inv!.agentId)?.name || "—";
+      buildSaleAndDownload(c, company, agentName);
+      toast.success(t("success_pdf"));
+    } catch (e: any) {
+      toast.error(e?.message || t("err_pdf"));
+    }
+  };
+
+  const es = s.language === "es";
+
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <Card className="w-full max-w-xl p-6 shadow-elegant max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-lg p-6 shadow-elegant max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
         <div className="flex items-center gap-2 mb-1">
           <Wand2 className="w-5 h-5 text-accent" />
-          <h2 className="text-lg font-semibold">Quick Setup</h2>
+          <h2 className="text-lg font-semibold">{t("wiz_title")}</h2>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">
-          Step {step + 1} of {steps.length}: {steps[step]}
+        <p className="text-xs text-muted-foreground mb-3">
+          {t("wiz_step")} {step + 1} {t("wiz_of")} {TOTAL}:{" "}
+          <span className="font-medium text-foreground">{STEPS[step]}</span>
         </p>
 
-        <div className="h-1 bg-muted rounded mb-5 overflow-hidden">
-          <div className="h-full bg-primary transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
+        {/* Progress bar */}
+        <div className="h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+          <div className="h-full bg-gradient-cta transition-all duration-300"
+            style={{ width: `${((step + 1) / TOTAL) * 100}%` }} />
         </div>
 
+        {/* Step dots */}
+        <div className="flex gap-1.5 mb-5 justify-center">
+          {STEPS.map((_, i) => (
+            <button key={i} onClick={() => setStep(i)}
+              className={`h-2 rounded-full transition-all ${i === step ? "w-6 bg-accent" : i < step ? "w-2 bg-accent/40" : "w-2 bg-muted"}`}
+            />
+          ))}
+        </div>
+
+        {/* ── Paso 0: Perfil de la compañía ── */}
         {step === 0 && (
           <div className="grid gap-3">
-            <div><Label>Company name</Label>
-              <Input value={s.company.name} onChange={(e) => s.setCompany({ name: e.target.value })} />
+            <div><Label>{t("lbl_company_name")}</Label>
+              <Input value={s.company.name} onChange={(e) => s.setCompany({ name: e.target.value })} placeholder="Mi Empresa LLC" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Currency</Label>
+              <div><Label>{t("lbl_currency")}</Label>
                 <Select value={s.company.currency} onValueChange={(v) => s.setCompany({ currency: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -424,85 +468,285 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Invoice prefix</Label>
-                <Input value={s.company.invoicePrefix} onChange={(e) => s.setCompany({ invoicePrefix: e.target.value })} />
+              <div><Label>{t("lbl_invoice_prefix")}</Label>
+                <Input value={s.company.invoicePrefix} onChange={(e) => s.setCompany({ invoicePrefix: e.target.value })} placeholder="INV-" />
               </div>
             </div>
-            <div><Label>Billing email</Label>
-              <Input value={s.company.email} onChange={(e) => s.setCompany({ email: e.target.value })} />
+            <div><Label>{t("lbl_billing_email")}</Label>
+              <Input type="email" value={s.company.email} onChange={(e) => s.setCompany({ email: e.target.value })} />
             </div>
-            <div><Label>Address</Label>
+            <div><Label>{t("lbl_address")}</Label>
               <Input value={s.company.address} onChange={(e) => s.setCompany({ address: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>{t("lbl_phone")}</Label>
+                <Input value={s.company.phone} onChange={(e) => s.setCompany({ phone: e.target.value })} />
+              </div>
+              <div><Label>{t("lbl_tax_id")}</Label>
+                <Input value={s.company.taxId} onChange={(e) => s.setCompany({ taxId: e.target.value })} />
+              </div>
             </div>
           </div>
         )}
 
+        {/* ── Paso 1: Marca y plantilla ── */}
         {step === 1 && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Add salespeople. Reps are saved instantly and used by every invoice.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Name</Label>
-                <Input value={agentDraft.name} onChange={(e) => setAgentDraft({ ...agentDraft, name: e.target.value })} />
+          <div className="grid gap-4">
+            <p className="text-sm text-muted-foreground">{t("sect_company_desc")}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <Label>{t("lbl_brand_color")}</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input type="color" value={s.company.brandColor}
+                    onChange={(e) => s.setCompany({ brandColor: e.target.value })}
+                    className="h-10 w-14 rounded-lg border-2 border-sky-200 cursor-pointer p-0.5" />
+                  <span className="text-xs font-mono text-muted-foreground">{s.company.brandColor}</span>
+                </div>
               </div>
-              <div><Label>Email</Label>
-                <Input value={agentDraft.email} onChange={(e) => setAgentDraft({ ...agentDraft, email: e.target.value })} />
+              <div className="flex-1">
+                <Label>{t("lbl_invoice_prefix")}</Label>
+                <Input value={s.company.invoicePrefix}
+                  onChange={(e) => s.setCompany({ invoicePrefix: e.target.value })} placeholder="INV-" />
+              </div>
+            </div>
+            <div>
+              <Label>{t("wiz_template_pick")}</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {INVOICE_TEMPLATES.map((tpl) => (
+                  <button key={tpl.id}
+                    onClick={() => s.setCompany({ pdfTemplate: tpl.id } as any)}
+                    className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${(s.company as any).pdfTemplate === tpl.id ? "border-accent bg-sky-50 text-accent" : "border-border hover:border-sky-300 text-foreground"}`}
+                  >
+                    {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Paso 2: Equipo de ventas ── */}
+        {step === 2 && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t("sect_team_desc")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>{t("lbl_name")} *</Label>
+                <Input value={agentDraft.name}
+                  onChange={(e) => setAgentDraft({ ...agentDraft, name: e.target.value })} placeholder="Ana López" />
+              </div>
+              <div><Label>{t("lbl_email")}</Label>
+                <Input value={agentDraft.email}
+                  onChange={(e) => setAgentDraft({ ...agentDraft, email: e.target.value })} placeholder="ana@empresa.com" />
+              </div>
+              <div><Label>{t("lbl_commission_pct")} *</Label>
+                <Input type="number" step="0.1" value={agentDraft.commissionPercent}
+                  onChange={(e) => setAgentDraft({ ...agentDraft, commissionPercent: e.target.value })} placeholder="8" />
+              </div>
+              <div><Label>{t("lbl_level")}</Label>
+                <Select value={agentDraft.level} onValueChange={(v) => setAgentDraft({ ...agentDraft, level: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Junior Rep">Junior Rep</SelectItem>
+                    <SelectItem value="Sales Rep">Sales Rep</SelectItem>
+                    <SelectItem value="Senior Rep">Senior Rep</SelectItem>
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Director">Director</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => {
-              if (!agentDraft.name.trim()) return toast.error("Name required");
-              s.addAgent({ name: agentDraft.name.trim(), email: agentDraft.email.trim(), sponsorId: null });
-              setAgentDraft({ name: "", email: "" });
-              toast.success("Added");
-            }}><Plus className="w-3 h-3 mr-2" />Add salesperson</Button>
+              if (!agentDraft.name.trim()) return toast.error(t("err_name_required"));
+              s.addAgent({
+                name: agentDraft.name.trim(), email: agentDraft.email.trim(),
+                sponsorId: null,
+                commissionPercent: Number(agentDraft.commissionPercent) / 100 || 0.08,
+                level: agentDraft.level,
+              });
+              setAgentDraft({ name: "", email: "", commissionPercent: "8", level: "Sales Rep" });
+              toast.success(t("success_rep_added"));
+            }}>
+              <Plus className="w-3 h-3 mr-2" />{t("btn_add")}
+            </Button>
             {s.agents.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                Added: {s.agents.map((a) => a.name).join(", ")}
+              <div className="text-xs text-muted-foreground bg-sky-50 rounded-lg px-3 py-2">
+                ✓ {s.agents.map((a) => a.name).join(", ")}
               </div>
             )}
           </div>
         )}
 
-        {step === 2 && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Add finance companies (lenders). Each is selectable on every invoice.
-            </p>
-            <div className="grid grid-cols-4 gap-3">
-              <div className="col-span-2"><Label>Name</Label>
-                <Input value={financeDraft.name} onChange={(e) => setFinanceDraft({ ...financeDraft, name: e.target.value })} placeholder="Goodleap" />
+        {/* ── Paso 3: Plan de compensación ── */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("sect_tiers_desc")}</p>
+            <div className="bg-sky-50 rounded-xl p-4 space-y-2">
+              <Label className="text-xs font-semibold">{t("sect_tiers")}</Label>
+              <div className="flex items-center gap-3">
+                <Input type="number" step="0.1" className="w-28"
+                  value={tierRate} onChange={(e) => setTierRate(Number(e.target.value))} />
+                <span className="text-sm text-muted-foreground">%</span>
+                <Button variant="outline" size="sm" onClick={() => {
+                  s.setPersonalTiers([{ minVolume: 0, rate: tierRate / 100 }]);
+                  toast.success("✓");
+                }}>{t("btn_save")}</Button>
               </div>
-              <div><Label>Fee %</Label>
+              {s.personalTiers.length > 0 && (
+                <p className="text-xs text-accent">✓ {(s.personalTiers[0].rate * 100).toFixed(1)}% {es ? "configurado" : "set"}</p>
+              )}
+            </div>
+            <div className="bg-sky-50 rounded-xl p-4 space-y-2">
+              <Label className="text-xs font-semibold">{t("sect_overrides")} — {es ? "Nivel 1" : "Level 1"}</Label>
+              <p className="text-xs text-muted-foreground">{t("sect_overrides_desc")}</p>
+              <div className="flex items-center gap-3">
+                <Input type="number" step="0.1" className="w-28"
+                  value={ovRate} onChange={(e) => setOvRate(Number(e.target.value))} />
+                <span className="text-sm text-muted-foreground">%</span>
+                <Button variant="outline" size="sm" onClick={() => {
+                  s.setOverrides([{ level: 1, rate: ovRate / 100 }]);
+                  toast.success("✓");
+                }}>{t("btn_save")}</Button>
+              </div>
+              {s.overrides.length > 0 && (
+                <p className="text-xs text-accent">✓ {(s.overrides[0].rate * 100).toFixed(1)}% {es ? "configurado" : "set"}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Paso 4: Financieras ── */}
+        {step === 4 && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t("sect_finance_desc")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><Label>{t("lbl_name")}</Label>
+                <Input value={financeDraft.name}
+                  onChange={(e) => setFinanceDraft({ ...financeDraft, name: e.target.value })} placeholder="Goodleap, Sunrun…" />
+              </div>
+              <div><Label>{t("lbl_fee_pct")}</Label>
                 <Input type="number" step="0.1" value={financeDraft.defaultFee * 100}
                   onChange={(e) => setFinanceDraft({ ...financeDraft, defaultFee: Number(e.target.value) / 100 })} />
               </div>
-              <div><Label>Dealer fee</Label>
+              <div><Label>{t("lbl_dealer_fee_lbl")}</Label>
                 <Input type="number" value={financeDraft.dealerFee}
                   onChange={(e) => setFinanceDraft({ ...financeDraft, dealerFee: Number(e.target.value) })} />
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => {
-              if (!financeDraft.name.trim()) return toast.error("Name required");
+              if (!financeDraft.name.trim()) return toast.error(t("err_name_required"));
               s.addFinanceCo({ ...financeDraft, usesApprovalDiscount: false, active: true, notes: "" });
               setFinanceDraft({ name: "", defaultFee: 0.05, dealerFee: 0, adminFee: 0 });
-              toast.success("Added");
-            }}><Plus className="w-3 h-3 mr-2" />Add finance company</Button>
+              toast.success(t("success_finance_added"));
+            }}>
+              <Plus className="w-3 h-3 mr-2" />{t("btn_add")}
+            </Button>
             {s.financeCompanies.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                Added: {s.financeCompanies.map((f) => f.name).join(", ")}
+              <div className="text-xs text-muted-foreground bg-sky-50 rounded-lg px-3 py-2">
+                ✓ {s.financeCompanies.map((f) => f.name).join(", ")}
               </div>
             )}
           </div>
         )}
 
-        <div className="flex justify-between mt-6">
-          <Button variant="ghost" onClick={onClose}>Skip setup</Button>
+        {/* ── Paso 5: Splits & Overrides ── */}
+        {step === 5 && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {es
+                ? "Los splits permiten dividir una comisión entre varios vendedores en un mismo invoice."
+                : "Splits let you divide a commission between multiple reps on a single invoice."}
+            </p>
+            <div className="bg-sky-50 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-accent">{es ? "¿Cómo funciona?" : "How it works"}</p>
+              <ul className="text-xs text-muted-foreground space-y-1.5 list-none">
+                <li>① {es ? "Crea una regla de split con porcentajes por participante." : "Create a split rule with percentages per participant."}</li>
+                <li>② {es ? "Asigna la regla al invoice desde el ícono de split en la tabla." : "Assign the rule to an invoice via the split icon in the table."}</li>
+                <li>③ {es ? "El admin aprueba el split antes de marcar el invoice como pagado." : "Admin approves the split before marking the invoice paid."}</li>
+              </ul>
+            </div>
+            <p className="text-xs text-muted-foreground italic">
+              {es
+                ? "Configura las reglas detalladas en Compensación → Splits del menú principal."
+                : "Configure detailed rules in Compensation → Splits from the main menu."}
+            </p>
+          </div>
+        )}
+
+        {/* ── Paso 6: Advances ── */}
+        {step === 6 && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {es
+                ? "Los advances son pagos anticipados que se descuentan de la comisión final del vendedor."
+                : "Advances are upfront payments deducted from the rep's final commission payout."}
+            </p>
+            <div className="bg-sky-50 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-accent">{es ? "Flujo de advances:" : "Advance flow:"}</p>
+              <ul className="text-xs text-muted-foreground space-y-1.5 list-none">
+                <li>① {es ? "El admin ingresa el monto de advance en el invoice." : "Admin enters the advance amount on the invoice."}</li>
+                <li>② {es ? "El advance se descuenta del pago neto del vendedor." : "The advance is deducted from the rep's net payout."}</li>
+                <li>③ {es ? "El balance pendiente queda visible en la cartera del vendedor." : "The pending balance is visible in the rep's wallet."}</li>
+              </ul>
+            </div>
+            <div>
+              <Label className="text-xs">{t("lbl_tax_reserve_pct")} {es ? "por defecto en invoices" : "default on invoices"}</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input type="number" step="0.1" className="w-28"
+                  defaultValue={20}
+                  onChange={(e) => {
+                    const v = Number(e.target.value) / 100;
+                    s.setCompany({ defaultTaxReserve: v } as any);
+                  }} />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {es ? "Se aplica automáticamente a cada nuevo invoice." : "Applied automatically to each new invoice."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Paso 7: Invoice de prueba ── */}
+        {step === 7 && (
+          <div className="space-y-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-cta shadow-btn flex items-center justify-center mx-auto">
+              <Sparkles className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg">{t("wiz_ready")}</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {es
+                  ? "Tu cuenta está configurada. Genera un PDF de prueba para verificar que todo se ve bien."
+                  : "Your account is set up. Generate a test PDF to verify everything looks good."}
+              </p>
+            </div>
+            <Button variant="outline" onClick={generateTest} className="w-full">
+              <FileDown className="w-4 h-4 mr-2" />{t("wiz_generate_test")}
+            </Button>
+            <div className="text-left bg-sky-50 rounded-xl p-4 space-y-1.5">
+              <p className="text-xs font-semibold text-accent">{es ? "Resumen de configuración:" : "Setup summary:"}</p>
+              <p className="text-xs text-muted-foreground">✓ {t("lbl_company_name")}: <span className="font-medium text-foreground">{s.company.name || "—"}</span></p>
+              <p className="text-xs text-muted-foreground">✓ {t("tab_team")}: <span className="font-medium text-foreground">{s.agents.length} {es ? "vendedores" : "reps"}</span></p>
+              <p className="text-xs text-muted-foreground">✓ {t("sect_finance")}: <span className="font-medium text-foreground">{s.financeCompanies.length} {es ? "registradas" : "registered"}</span></p>
+              <p className="text-xs text-muted-foreground">✓ {t("sect_tiers")}: <span className="font-medium text-foreground">{s.personalTiers.length > 0 ? `${(s.personalTiers[0].rate * 100).toFixed(1)}%` : "—"}</span></p>
+              <p className="text-xs text-muted-foreground">✓ {t("sect_overrides")}: <span className="font-medium text-foreground">{s.overrides.length > 0 ? `${(s.overrides[0].rate * 100).toFixed(1)}%` : "—"}</span></p>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-between mt-6 pt-4 border-t border-border/40">
+          <Button variant="ghost" size="sm" onClick={onClose}>{t("wiz_cancel")}</Button>
           <div className="flex gap-2">
-            {step > 0 && <Button variant="outline" onClick={back}><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>}
-            {step < steps.length - 1
-              ? <Button onClick={next}>Next<ArrowRight className="w-4 h-4 ml-1" /></Button>
-              : <Button onClick={finish}>Finish</Button>}
+            {step > 0 && (
+              <Button variant="outline" size="sm" onClick={back}>
+                <ArrowLeft className="w-4 h-4 mr-1" />{t("wiz_back")}
+              </Button>
+            )}
+            {step < TOTAL - 1
+              ? <Button size="sm" onClick={next}>{t("wiz_next")}<ArrowRight className="w-4 h-4 ml-1" /></Button>
+              : <Button size="sm" onClick={finish} className="bg-gradient-cta"><Sparkles className="w-4 h-4 mr-1" />{t("wiz_finish")}</Button>
+            }
           </div>
         </div>
       </Card>
