@@ -88,7 +88,7 @@ export type Database = {
           id: string
           email: string
           full_name: string | null
-          role: "admin" | "rep" | "accountant" | null
+          role: "admin" | "rep" | "accountant" | "superadmin" | null
           status: "pending" | "active" | "rejected"
           company_id: string | null
           created_at: string
@@ -98,7 +98,7 @@ export type Database = {
           id: string
           email: string
           full_name?: string | null
-          role?: "admin" | "rep" | "accountant" | null
+          role?: "admin" | "rep" | "accountant" | "superadmin" | null
           status?: "pending" | "active" | "rejected"
           company_id?: string | null
           created_at?: string
@@ -108,7 +108,7 @@ export type Database = {
           id?: string
           email?: string
           full_name?: string | null
-          role?: "admin" | "rep" | "accountant" | null
+          role?: "admin" | "rep" | "accountant" | "superadmin" | null
           status?: "pending" | "active" | "rejected"
           company_id?: string | null
           created_at?: string
@@ -1039,9 +1039,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      superadmin_companies_summary: {
+        Row: {
+          id: string
+          name: string
+          status: "active" | "trial" | "suspended"
+          plan: string
+          invite_code: string | null
+          created_at: string
+          user_count: number
+          active_user_count: number
+          agent_count: number
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      is_superadmin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      create_company_with_invite: {
+        Args: {
+          p_name: string
+          p_invite_code?: string | null
+          p_plan?: string
+        }
+        Returns: Json
+      }
+      regenerate_invite_code: {
+        Args: { p_company_id: string }
+        Returns: string
+      }
+      set_company_status: {
+        Args: { p_company_id: string; p_status: string }
+        Returns: void
+      }
       verify_invite_code: {
         Args: { code: string }
         Returns: string | null

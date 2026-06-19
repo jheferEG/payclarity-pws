@@ -81,9 +81,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         .eq("id", session.user.id)
         .single();
 
+      const isSuperadmin = profile?.role === "superadmin";
       const isApproved = profile?.status === "active" && profile?.role != null;
 
-      if (!isApproved) {
+      if (!isApproved && !isSuperadmin) {
         // Session exists but user is not approved yet — sign out and block
         await supabase.auth.signOut();
         if (!isAuthRoute) throw redirect({ to: "/login" });
@@ -91,6 +92,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       }
 
       if (isAuthRoute) {
+        throw redirect({ to: isSuperadmin ? "/superadmin" : "/" });
+      }
+
+      // Block non-superadmins from accessing superadmin route
+      if (location.pathname.startsWith("/superadmin") && !isSuperadmin) {
         throw redirect({ to: "/" });
       }
     }
