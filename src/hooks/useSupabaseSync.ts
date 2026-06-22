@@ -24,11 +24,27 @@ export function useSupabaseSync() {
   const companyId = profile?.company_id ?? null;
   const loadedCompanyId = useRef<string | null>(null);
   const loadComplete = useRef(false);
+  const clearedStale = useRef(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // ── LOAD ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId) {
+      // Authenticated but no company (e.g. superadmin not yet linked) — wipe stale localStorage once
+      if (profile && !clearedStale.current) {
+        useStore.setState({
+          agents: [],
+          financeCompanies: [],
+          invoices: [],
+          payments: [],
+          adjustments: [],
+          disputes: [],
+          notifications: [],
+        });
+        clearedStale.current = true;
+      }
+      return;
+    }
 
     // Company switched (or first load after sign-in) — wipe stale data immediately
     if (loadedCompanyId.current !== companyId) {

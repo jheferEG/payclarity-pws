@@ -481,11 +481,11 @@ function sameAudience(
 
 const defaults = {
   company: {
-    name: "Pasteur Water System Demo",
-    address: "123 Market Street, City",
-    email: "billing@pasteurwater.demo",
-    phone: "+1 555 000 0000",
-    taxId: "TAX-000-000",
+    name: "",
+    address: "",
+    email: "",
+    phone: "",
+    taxId: "",
     currency: "USD",
     invoicePrefix: "INV",
     brandColor: "#0B1F3A",

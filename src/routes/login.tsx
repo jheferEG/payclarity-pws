@@ -83,10 +83,11 @@ function LoginPage() {
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-sky-500/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl" />
         <div className="absolute top-1/2 left-1/3 w-48 h-48 rounded-full bg-blue-600/10 blur-2xl" />
+        <div className="absolute bottom-1/4 left-0 w-64 h-64 rounded-full bg-orange-500/10 blur-3xl" />
 
         {/* logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-cta shadow-btn flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-orange shadow-orange flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <span className="text-white text-xl font-bold tracking-tight">PayClarity</span>
@@ -97,7 +98,7 @@ function LoginPage() {
           <div>
             <h2 className="text-4xl font-bold text-white leading-tight">
               Claridad en cada<br />
-              <span className="text-gradient-cta">comisión.</span>
+              <span className="text-orange">comisión.</span>
             </h2>
             <p className="mt-4 text-sky-200/80 text-lg leading-relaxed max-w-sm">
               Gestiona pagos, splits y reportes de todo tu equipo en un solo lugar.
@@ -128,7 +129,7 @@ function LoginPage() {
         <div className="w-full max-w-md space-y-8">
           {/* mobile logo */}
           <div className="lg:hidden text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-cta shadow-btn mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-orange shadow-orange mb-4">
               <Zap className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">PayClarity</h1>
@@ -218,9 +219,8 @@ function LoginPage() {
 
             <Button
               type="submit"
-              variant="cta"
               size="lg"
-              className="w-full mt-2"
+              className="w-full mt-2 bg-gradient-orange shadow-orange text-white hover:opacity-90"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -238,7 +238,7 @@ function LoginPage() {
             ¿No tienes cuenta?{" "}
             <Link
               to="/register"
-              className="text-accent font-semibold hover:text-primary-glow transition-colors"
+              className="text-orange font-semibold hover:opacity-80 transition-opacity"
             >
               Regístrate
             </Link>

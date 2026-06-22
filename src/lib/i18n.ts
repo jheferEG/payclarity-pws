@@ -19,6 +19,8 @@ const D: Dict = {
   nav_payouts: { es: "Pagos", en: "Payouts" },
   nav_reports: { es: "Reportes", en: "Reports" },
   nav_settings: { es: "Ajustes", en: "Settings" },
+  nav_wallet: { es: "Cartera", en: "Wallet" },
+  nav_tools: { es: "Herramientas", en: "Tools" },
 
   // Quick actions
   qa_create_invoice: { es: "+ Crear nuevo invoice", en: "+ Create New Invoice" },
@@ -54,6 +56,12 @@ const D: Dict = {
   tab_payouts: { es: "Pagos", en: "Payouts" },
   tab_reports: { es: "Reportes", en: "Reports" },
   tab_year_end: { es: "Cierre 1099", en: "Year-End 1099" },
+  tab_splits: { es: "Splits", en: "Split Rules" },
+  tab_products: { es: "Productos", en: "Products" },
+  tab_generate: { es: "Pagos", en: "Payments" },
+  tab_adjustments: { es: "Ajustes", en: "Adjustments" },
+  tab_import: { es: "Importar CSV", en: "Import CSV" },
+  tab_users: { es: "Usuarios", en: "User Management" },
 
   no_rep_title: { es: "Ningún vendedor seleccionado", en: "No salesperson selected" },
   no_rep_msg: {
