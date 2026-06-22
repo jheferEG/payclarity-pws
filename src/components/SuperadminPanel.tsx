@@ -108,6 +108,9 @@ export default function SuperadminPanel() {
   const [generatingLink, setGeneratingLink] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
+  // Pending company users count (badge shown on Users tab always)
+  const [pendingCompanyCount, setPendingCompanyCount] = useState(0);
+
   // Defense-in-depth: verify role client-side in addition to the route guard in __root.tsx
   if (profile && !profile.is_superadmin) {
     return (
@@ -121,11 +124,22 @@ export default function SuperadminPanel() {
     );
   }
 
+  async function loadPendingCount() {
+    const { count } = await supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("is_superadmin", false)
+      .not("company_id", "is", null);
+    setPendingCompanyCount(count ?? 0);
+  }
+
   async function loadCompanies() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("superadmin_companies_summary")
-      .select("*");
+    const [{ data, error }] = await Promise.all([
+      supabase.from("superadmin_companies_summary").select("*"),
+      loadPendingCount(),
+    ]);
     if (error) {
       toast.error("Error cargando empresas: " + error.message);
     } else {
@@ -250,6 +264,7 @@ export default function SuperadminPanel() {
       .eq("id", userId);
     if (error) { toast.error("Error: " + error.message); return; }
     toast.success("Usuario aprobado");
+    loadPendingCount();
     if (detailCompany) openDetail(detailCompany);
     if (tab === "users") loadAllUsers();
   }
@@ -261,6 +276,7 @@ export default function SuperadminPanel() {
       .eq("id", userId);
     if (error) { toast.error("Error: " + error.message); return; }
     toast.success("Usuario rechazado");
+    loadPendingCount();
     if (detailCompany) openDetail(detailCompany);
     if (tab === "users") loadAllUsers();
   }
@@ -393,7 +409,17 @@ export default function SuperadminPanel() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {t === "companies" ? "Empresas" : t === "users" ? "Usuarios" : "Superadmins"}
+                {t === "companies" ? "Empresas" :
+                 t === "superadmins" ? "Superadmins" : (
+                  <span className="flex items-center gap-1.5">
+                    Usuarios
+                    {pendingCompanyCount > 0 && (
+                      <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none">
+                        {pendingCompanyCount > 99 ? "99+" : pendingCompanyCount}
+                      </span>
+                    )}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -540,8 +566,11 @@ export default function SuperadminPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allUsers.map((u) => (
-                      <TableRow key={u.id} className="hover:bg-muted/20">
+                    {[...allUsers].sort((a, b) =>
+                      a.status === "pending" && b.status !== "pending" ? -1 :
+                      a.status !== "pending" && b.status === "pending" ?  1 : 0
+                    ).map((u) => (
+                      <TableRow key={u.id} className={`hover:bg-muted/20 ${u.status === "pending" ? "bg-amber-50/50" : ""}`}>
                         <TableCell>
                           <p className="font-medium text-sm">{u.full_name ?? u.email}</p>
                           <p className="text-xs text-muted-foreground">{u.email}</p>
