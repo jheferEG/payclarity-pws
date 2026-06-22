@@ -427,30 +427,6 @@ function DashboardQuickActions({
   // Hide demo loader when connected to a real Supabase company
   const isLiveAccount = !!profile?.company_id;
 
-  const generateTestPdf = () => {
-    let inv = s.invoices[0];
-    if (!inv) {
-      if (!isLiveAccount) {
-        s.loadDemoData();
-        inv = useStore.getState().invoices[0];
-      }
-      if (!inv) {
-        toast.error(t("err_pdf"));
-        return;
-      }
-    }
-    try {
-      const fcs = useStore.getState().financeCompanies;
-      const company = useStore.getState().company;
-      const agents = useStore.getState().agents;
-      const c = calcInvoice(inv, fcs);
-      const agentName = agents.find((a) => a.id === inv!.agentId)?.name || "—";
-      buildSaleAndDownload(c, company, agentName);
-      toast.success(t("success_pdf"));
-    } catch (e: any) {
-      toast.error(e?.message || t("err_pdf"));
-    }
-  };
 
   return (
     <Card className="p-5 shadow-card border-primary/10">
@@ -479,10 +455,7 @@ function DashboardQuickActions({
           <Layers className="w-4 h-4 mr-2" />
           {t("qa_setup_plan")}
         </Button>
-        <Button variant="outline" size="sm" onClick={generateTestPdf}>
-          <FileDown className="w-4 h-4 mr-2" />
-          {t("qa_test_pdf")}
-        </Button>
+
         {!isLiveAccount && (
           <Button
             variant="outline"
@@ -1849,28 +1822,6 @@ function BrandingPanel() {
     reader.readAsDataURL(file);
   };
 
-  const generateTestPdf = () => {
-    const sample = invoices[0];
-    if (sample) {
-      const ag = agents.find((a) => a.id === sample.agentId);
-      const c = calcInvoice(sample, financeCompanies);
-      const doc = buildSaleInvoicePDF(c, company, ag?.name || "—");
-      window.open(doc.output("bloburl"), "_blank");
-      return;
-    }
-    const fakeInv: Invoice = {
-      id: "test", number: `${company.invoicePrefix}-PREVIEW`, date: new Date().toISOString().slice(0, 10),
-      status: "draft", agentId: "", financeCompanyId: null,
-      customerName: "Sample Customer", customerNotes: "Test invoice — branding preview",
-      salesAmount: 10000, productCost: 6000, approvalPercent: 1, discount: 0,
-      charges: [{ label: "Setup fee", amount: 150 }],
-      credits: [], advanceApplied: 0, specialDeductions: 0, taxReservePercent: 0.25, paid: false,
-      saleType: "finance", commissionLevel: "Sales Rep", commissionBase: "profit",
-    };
-    const c = calcInvoice(fakeInv, financeCompanies);
-    const doc = buildSaleInvoicePDF(c, company, "Sample Rep");
-    window.open(doc.output("bloburl"), "_blank");
-  };
 
   return (
     <SectionCard
@@ -1928,9 +1879,7 @@ function BrandingPanel() {
             <Textarea rows={3} value={company.disclaimerText} onChange={(e) => setCompany({ disclaimerText: e.target.value })} />
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={generateTestPdf}><FileDown className="w-4 h-4 mr-2" />Generate test PDF</Button>
-          </div>
+
         </div>
 
         <div>
