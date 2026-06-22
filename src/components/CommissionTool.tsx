@@ -160,7 +160,7 @@ export default function CommissionTool() {
   // Open Setup Wizard after Supabase data loads, only if company has no data yet.
   useEffect(() => {
     if (!dataLoaded) return;
-    if (s.agents.length === 0 && s.invoices.length === 0 && !s.wizard?.completed) {
+    if (isAdmin && s.agents.length === 0 && s.invoices.length === 0 && !s.wizard?.completed) {
       setWizardOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
