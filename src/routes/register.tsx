@@ -26,7 +26,7 @@ const schema = z.object({
     .regex(/[A-Z]/, "Must contain an uppercase letter")
     .regex(/[0-9]/, "Must contain a number"),
   confirmPassword: z.string(),
-  inviteCode: z.string().min(1, "Company code is required"),
+  inviteCode: z.string().optional(),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
