@@ -53,7 +53,7 @@ function LoginPage() {
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("status, role")
+        .select("status, role, is_superadmin")
         .eq("id", user.id)
         .single();
 
@@ -62,11 +62,18 @@ function LoginPage() {
         setServerError("Your account has been rejected. Contact your administrator.");
         return;
       }
-      if (!profile || profile.status !== "active" || !profile.role) {
+
+      const isSuperadmin = profile?.is_superadmin === true && profile?.status === "active";
+      const isApproved   = profile?.status === "active" && profile?.role != null;
+
+      if (!isSuperadmin && !isApproved) {
         await supabase.auth.signOut();
         setPendingUser(true);
         return;
       }
+
+      navigate({ to: isSuperadmin ? "/superadmin" : "/" });
+      return;
     }
 
     navigate({ to: "/" });
