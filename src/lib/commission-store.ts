@@ -1293,6 +1293,11 @@ export const useStore = create<State>()(
     }),
     {
       name: "commission-tool-v3",
+      partialize: (state: any) => {
+        // Exclude language so it always resets to the default "es" on load
+        const { language, ...rest } = state;
+        return rest;
+      },
       migrate: (persisted: any) => {
         if (persisted?.disputes) {
           persisted.disputes = persisted.disputes.map((d: any) => ({

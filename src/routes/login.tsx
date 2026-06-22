@@ -82,11 +82,11 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex relative">
+    <div className="min-h-screen flex">
       {/* Language toggle */}
       <button
         onClick={() => setLanguage(language === "es" ? "en" : "es")}
-        className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white text-xs font-semibold hover:bg-white/20 transition-colors"
+        className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-border text-foreground text-xs font-semibold shadow-sm hover:bg-white transition-colors"
       >
         <Globe className="w-3.5 h-3.5" />
         {language === "es" ? "EN" : "ES"}

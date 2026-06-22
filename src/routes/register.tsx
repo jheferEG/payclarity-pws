@@ -38,6 +38,16 @@ function RegisterPage() {
   const navigate = useNavigate();
   const { superadmin_invite: saInvite } = Route.useSearch();
   const { language, setLanguage } = useStore();
+
+  const langBtn = (
+    <button
+      onClick={() => setLanguage(language === "es" ? "en" : "es")}
+      className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-border text-foreground text-xs font-semibold shadow-sm hover:bg-white transition-colors"
+    >
+      <Globe className="w-3.5 h-3.5" />
+      {language === "es" ? "EN" : "ES"}
+    </button>
+  );
   const isSuperadminInvite = !!saInvite;
 
   const [showPass, setShowPass] = useState(false);
@@ -115,6 +125,7 @@ function RegisterPage() {
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+        {langBtn}
         <div className="w-full max-w-md text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-success/10 mb-4">
             <CheckCircle2 className="w-8 h-8 text-success" />
@@ -140,16 +151,8 @@ function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4 relative">
-      {/* Language toggle */}
-      <button
-        onClick={() => setLanguage(language === "es" ? "en" : "es")}
-        className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background border border-border text-foreground text-xs font-semibold hover:bg-muted transition-colors"
-      >
-        <Globe className="w-3.5 h-3.5" />
-        {language === "es" ? "EN" : "ES"}
-      </button>
-
+    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+      {langBtn}
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
