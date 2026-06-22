@@ -1059,6 +1059,22 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      verify_superadmin_invite: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
+      create_superadmin_invite: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      consume_superadmin_invite: {
+        Args: { p_token: string }
+        Returns: void
+      }
+      revoke_superadmin_invite: {
+        Args: { p_invite_id: string }
+        Returns: void
+      }
       create_company_with_invite: {
         Args: {
           p_name: string

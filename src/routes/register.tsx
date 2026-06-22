@@ -11,6 +11,9 @@ import { Sparkles, Eye, EyeOff, AlertCircle, CheckCircle2, HelpCircle } from "lu
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export const Route = createFileRoute("/register")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    superadmin_invite: typeof s.superadmin_invite === "string" ? s.superadmin_invite : undefined,
+  }),
   component: RegisterPage,
 });
 
@@ -32,6 +35,9 @@ type FormValues = z.infer<typeof schema>;
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const { superadmin_invite: saInvite } = Route.useSearch();
+  const isSuperadminInvite = !!saInvite;
+
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -46,7 +52,36 @@ function RegisterPage() {
   async function onSubmit(values: FormValues) {
     setServerError(null);
 
-    // Verify invite code — returns the company_id uuid, or null if invalid
+    // ── Superadmin invite flow ────────────────────────────────────────────────
+    if (isSuperadminInvite) {
+      const { data: valid } = await supabase.rpc("verify_superadmin_invite", {
+        p_token: saInvite,
+      });
+      if (!valid) {
+        setServerError("El enlace de invitación no es válido o ya fue usado.");
+        return;
+      }
+
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: { data: { full_name: values.fullName }, emailRedirectTo: undefined },
+      });
+
+      if (signUpError) {
+        setServerError(signUpError.message.includes("already registered")
+          ? "Ya existe una cuenta con este correo."
+          : signUpError.message);
+        return;
+      }
+
+      // Consume invite → sets role=superadmin / status=pending
+      await supabase.rpc("consume_superadmin_invite", { p_token: saInvite });
+      setSuccess(true);
+      return;
+    }
+
+    // ── Normal company flow ───────────────────────────────────────────────────
     const { data: companyId, error: rpcError } = await supabase.rpc("verify_invite_code", {
       code: values.inviteCode,
     });
@@ -56,7 +91,6 @@ function RegisterPage() {
       return;
     }
 
-    // Create Supabase auth user; trigger auto-creates profile with company_id
     const { error: signUpError } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
@@ -67,11 +101,9 @@ function RegisterPage() {
     });
 
     if (signUpError) {
-      if (signUpError.message.includes("already registered")) {
-        setServerError("An account with this email already exists.");
-      } else {
-        setServerError(signUpError.message);
-      }
+      setServerError(signUpError.message.includes("already registered")
+        ? "An account with this email already exists."
+        : signUpError.message);
       return;
     }
 
@@ -85,17 +117,20 @@ function RegisterPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-success/10 mb-4">
             <CheckCircle2 className="w-8 h-8 text-success" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Registration complete!</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            {isSuperadminInvite ? "¡Solicitud enviada!" : "Registration complete!"}
+          </h2>
           <p className="text-muted-foreground mb-6">
-            Your account has been created and is waiting for an administrator to approve it.
-            You'll be able to sign in once your access is granted.
+            {isSuperadminInvite
+              ? "Tu cuenta de superadmin fue creada y está pendiente de aprobación. Un superadmin existente debe aprobarla antes de que puedas entrar."
+              : "Your account has been created and is waiting for an administrator to approve it. You'll be able to sign in once your access is granted."}
           </p>
           <Button
             variant="outline"
             onClick={() => navigate({ to: "/login" })}
             className="w-full"
           >
-            Back to sign in
+            {isSuperadminInvite ? "Ir al login" : "Back to sign in"}
           </Button>
         </div>
       </div>
@@ -117,9 +152,13 @@ function RegisterPage() {
         {/* Card */}
         <div className="bg-card border border-border rounded-2xl shadow-card p-8">
           <div className="mb-6">
-            <h2 className="text-xl font-semibold text-foreground">Create an account</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              {isSuperadminInvite ? "Crear cuenta de Superadmin" : "Create an account"}
+            </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              You'll need a company code from your administrator.
+              {isSuperadminInvite
+                ? "Tu acceso será revisado y aprobado por un superadmin existente."
+                : "You'll need a company code from your administrator."}
             </p>
           </div>
 
@@ -211,32 +250,34 @@ function RegisterPage() {
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label htmlFor="inviteCode">Company code</Label>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Ask your administrator for the company access code.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+            {!isSuperadminInvite && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="inviteCode">Company code</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Ask your administrator for the company access code.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Input
+                  id="inviteCode"
+                  type="text"
+                  placeholder="Enter your company code"
+                  autoComplete="off"
+                  {...register("inviteCode")}
+                  className={errors.inviteCode ? "border-destructive uppercase tracking-widest" : "uppercase tracking-widest"}
+                />
+                {errors.inviteCode && (
+                  <p className="text-xs text-destructive">{errors.inviteCode.message}</p>
+                )}
               </div>
-              <Input
-                id="inviteCode"
-                type="text"
-                placeholder="Enter your company code"
-                autoComplete="off"
-                {...register("inviteCode")}
-                className={errors.inviteCode ? "border-destructive uppercase tracking-widest" : "uppercase tracking-widest"}
-              />
-              {errors.inviteCode && (
-                <p className="text-xs text-destructive">{errors.inviteCode.message}</p>
-              )}
-            </div>
+            )}
 
             <Button
               type="submit"

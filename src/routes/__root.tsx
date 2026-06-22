@@ -81,7 +81,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         .eq("id", session.user.id)
         .single();
 
-      const isSuperadmin = profile?.role === "superadmin";
+      // Superadmin must be active (status=active) — pending superadmins wait for approval
+      const isSuperadmin = profile?.role === "superadmin" && profile?.status === "active";
       const hasCompany   = !!profile?.company_id;
       const isApproved   = profile?.status === "active" && profile?.role != null;
 
@@ -92,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       }
 
       if (isAuthRoute) {
-        // Superadmin con empresa asociada → app principal; sin empresa → panel superadmin
+        // Superadmin con empresa → app principal; sin empresa → panel superadmin
         throw redirect({ to: isSuperadmin ? (hasCompany ? "/" : "/superadmin") : "/" });
       }
 

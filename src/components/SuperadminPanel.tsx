@@ -86,7 +86,7 @@ export default function SuperadminPanel() {
   const { profile, signOut } = useAuth();
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"companies" | "users">("companies");
+  const [tab, setTab] = useState<"companies" | "users" | "superadmins">("companies");
 
   // Create company dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -101,6 +101,12 @@ export default function SuperadminPanel() {
   // All users tab
   const [allUsers, setAllUsers] = useState<(CompanyUser & { company_name: string })[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+
+  // Superadmins tab
+  const [superadmins, setSuperadmins] = useState<CompanyUser[]>([]);
+  const [superadminsLoading, setSuperadminsLoading] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   // Defense-in-depth: verify role client-side in addition to the route guard in __root.tsx
   if (profile && profile.role !== "superadmin") {
@@ -152,10 +158,53 @@ export default function SuperadminPanel() {
     setUsersLoading(false);
   }
 
+  async function loadSuperadmins() {
+    setSuperadminsLoading(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role, status, created_at")
+      .eq("role", "superadmin")
+      .order("created_at");
+    if (error) toast.error("Error: " + error.message);
+    else setSuperadmins((data ?? []) as CompanyUser[]);
+    setSuperadminsLoading(false);
+  }
+
+  async function generateInvite() {
+    setGeneratingLink(true);
+    setInviteLink(null);
+    const { data, error } = await supabase.rpc("create_superadmin_invite");
+    setGeneratingLink(false);
+    if (error) { toast.error("Error: " + error.message); return; }
+    const url = `${window.location.origin}/register?superadmin_invite=${data}`;
+    setInviteLink(url);
+  }
+
+  async function handleApproveSuperadmin(userId: string) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "active" })
+      .eq("id", userId);
+    if (error) { toast.error("Error: " + error.message); return; }
+    toast.success("Superadmin aprobado");
+    loadSuperadmins();
+  }
+
+  async function handleRejectSuperadmin(userId: string) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "rejected", role: null })
+      .eq("id", userId);
+    if (error) { toast.error("Error: " + error.message); return; }
+    toast.success("Solicitud rechazada");
+    loadSuperadmins();
+  }
+
   useEffect(() => { loadCompanies(); }, []);
 
   useEffect(() => {
     if (tab === "users") loadAllUsers();
+    if (tab === "superadmins") loadSuperadmins();
   }, [tab]);
 
   async function handleCreate() {
@@ -334,7 +383,7 @@ export default function SuperadminPanel() {
         {/* Tabs */}
         <div className="flex items-center justify-between">
           <div className="flex gap-1 bg-white rounded-xl border border-border p-1">
-            {(["companies", "users"] as const).map((t) => (
+            {(["companies", "users", "superadmins"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -344,7 +393,7 @@ export default function SuperadminPanel() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {t === "companies" ? "Empresas" : "Todos los usuarios"}
+                {t === "companies" ? "Empresas" : t === "users" ? "Usuarios" : "Superadmins"}
               </button>
             ))}
           </div>
@@ -549,6 +598,111 @@ export default function SuperadminPanel() {
                 </Table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── SUPERADMINS TAB ─────────────────────────────────────────── */}
+        {tab === "superadmins" && (
+          <div className="space-y-4">
+
+            {/* Generate invite link */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-semibold text-sm">Invitar nuevo superadmin</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Genera un enlace de un solo uso. La persona se registra y queda pendiente de aprobación.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-gradient-orange shadow-orange text-white hover:opacity-90"
+                  onClick={generateInvite}
+                  disabled={generatingLink}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  {generatingLink ? "Generando…" : "Generar enlace"}
+                </Button>
+              </div>
+
+              {inviteLink && (
+                <div className="mt-4 flex items-center gap-2 bg-orange-muted rounded-lg px-3 py-2 border border-orange/20">
+                  <p className="text-xs font-mono text-orange break-all flex-1">{inviteLink}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => { navigator.clipboard.writeText(inviteLink); toast.success("Enlace copiado"); }}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Superadmin accounts list */}
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <div className="px-5 py-3 border-b border-border bg-muted/30">
+                <p className="text-sm font-medium">Cuentas superadmin</p>
+              </div>
+              {superadminsLoading ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">Cargando…</div>
+              ) : superadmins.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">No hay superadmins registrados</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead>Usuario</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Registrado</TableHead>
+                      <TableHead className="w-40">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {superadmins.map((sa) => (
+                      <TableRow key={sa.id} className="hover:bg-muted/20">
+                        <TableCell>
+                          <p className="font-medium text-sm">{sa.full_name ?? sa.email}</p>
+                          <p className="text-xs text-muted-foreground">{sa.email}</p>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={
+                            sa.status === "active"   ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                            sa.status === "pending"  ? "bg-amber-100 text-amber-700 border-amber-200" :
+                            "bg-red-100 text-red-700 border-red-200"
+                          }>
+                            {sa.status === "active" ? "Activo" : sa.status === "pending" ? "Pendiente" : "Rechazado"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{fmt(sa.created_at)}</TableCell>
+                        <TableCell>
+                          {sa.status === "pending" && sa.id !== profile?.id && (
+                            <div className="flex gap-1.5">
+                              <Button size="sm" variant="outline"
+                                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 text-xs h-7"
+                                onClick={() => handleApproveSuperadmin(sa.id)}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Aprobar
+                              </Button>
+                              <Button size="sm" variant="outline"
+                                className="text-destructive border-destructive/30 hover:bg-destructive/5 text-xs h-7"
+                                onClick={() => handleRejectSuperadmin(sa.id)}
+                              >
+                                <Ban className="w-3.5 h-3.5 mr-1" /> Rechazar
+                              </Button>
+                            </div>
+                          )}
+                          {sa.id === profile?.id && (
+                            <span className="text-xs text-muted-foreground">Tú</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
           </div>
         )}
       </div>
