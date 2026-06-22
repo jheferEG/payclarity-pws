@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  PayClarity — RESET COMPLETO PARA PRUEBAS                          ║
 -- ║  Borra usuarios, empresas y todos los datos ingresados.            ║
--- ║  CONSERVA las cuentas con role = 'superadmin'.                     ║
+-- ║  CONSERVA las cuentas con is_superadmin = true.                    ║
 -- ║                                                                    ║
 -- ║  ⚠️  IRREVERSIBLE — úsalo solo en entorno de pruebas.              ║
 -- ║  Corre en: Supabase Dashboard → SQL Editor                        ║
@@ -18,7 +18,7 @@ begin
   -- ── 0. Identificar superadmins (estos NO se tocan) ─────────────────
   select array_agg(id) into superadmin_ids
   from public.profiles
-  where role = 'superadmin';
+  where is_superadmin = true;
 
   raise notice '──────────────────────────────────────────────';
   raise notice 'RESET PayClarity — iniciando...';
