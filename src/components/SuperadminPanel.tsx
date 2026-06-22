@@ -109,7 +109,7 @@ export default function SuperadminPanel() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   // Defense-in-depth: verify role client-side in addition to the route guard in __root.tsx
-  if (profile && profile.role !== "superadmin") {
+  if (profile && !profile.is_superadmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -162,8 +162,8 @@ export default function SuperadminPanel() {
     setSuperadminsLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role, status, created_at")
-      .eq("role", "superadmin")
+      .select("id, email, full_name, role, is_superadmin, status, created_at")
+      .eq("is_superadmin", true)
       .order("created_at");
     if (error) toast.error("Error: " + error.message);
     else setSuperadmins((data ?? []) as CompanyUser[]);
@@ -193,7 +193,7 @@ export default function SuperadminPanel() {
   async function handleRejectSuperadmin(userId: string) {
     const { error } = await supabase
       .from("profiles")
-      .update({ status: "rejected", role: null })
+      .update({ status: "rejected", is_superadmin: false })
       .eq("id", userId);
     if (error) { toast.error("Error: " + error.message); return; }
     toast.success("Solicitud rechazada");
@@ -288,7 +288,7 @@ export default function SuperadminPanel() {
       <header className="sticky top-0 z-10 border-b border-sky-200/60 bg-white/95 backdrop-blur-md shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-duo flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center">
               <ShieldAlert className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
@@ -305,7 +305,7 @@ export default function SuperadminPanel() {
             {profile?.company_id ? (
               <Button
                 size="sm"
-                className="bg-gradient-duo text-white hover:opacity-90 gap-1.5"
+                className="bg-gradient-primary text-white hover:opacity-90 gap-1.5"
                 onClick={() => { window.location.href = "/"; }}
               >
                 <Building2 className="w-4 h-4" />
@@ -335,7 +335,7 @@ export default function SuperadminPanel() {
                           if (!profile) return;
                           const { error } = await supabase
                             .from("profiles")
-                            .update({ company_id: c.id })
+                            .update({ company_id: c.id, role: "admin" })
                             .eq("id", profile.id);
                           if (error) { toast.error("Error: " + error.message); return; }
                           toast.success(`Vinculado a ${c.name}. Recarga para entrar al app.`);
@@ -389,7 +389,7 @@ export default function SuperadminPanel() {
                 onClick={() => setTab(t)}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   tab === t
-                    ? "bg-gradient-duo text-white shadow-sm"
+                    ? "bg-gradient-primary text-white shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >

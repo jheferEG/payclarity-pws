@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "admin" | "rep" | "accountant" | "superadmin";
+export type UserRole = "admin" | "rep" | "accountant";
 export type UserStatus = "pending" | "active" | "rejected";
 
 export interface Profile {
@@ -10,6 +10,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   role: UserRole | null;
+  is_superadmin: boolean;
   status: UserStatus;
   company_id: string | null;
   created_at: string;

@@ -77,12 +77,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     if (session) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("status, role, company_id")
+        .select("status, role, company_id, is_superadmin")
         .eq("id", session.user.id)
         .single();
 
       // Superadmin must be active (status=active) — pending superadmins wait for approval
-      const isSuperadmin = profile?.role === "superadmin" && profile?.status === "active";
+      const isSuperadmin = profile?.is_superadmin === true && profile?.status === "active";
       const hasCompany   = !!profile?.company_id;
       const isApproved   = profile?.status === "active" && profile?.role != null;
 
@@ -93,13 +93,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       }
 
       if (isAuthRoute) {
-        // Superadmin con empresa → app principal; sin empresa → panel superadmin
-        throw redirect({ to: isSuperadmin ? (hasCompany ? "/" : "/superadmin") : "/" });
+        // Superadmins ALWAYS land on their panel; they navigate to the app from there
+        throw redirect({ to: isSuperadmin ? "/superadmin" : "/" });
       }
 
       // Block non-superadmins from /superadmin
       if (location.pathname.startsWith("/superadmin") && !isSuperadmin) {
         throw redirect({ to: "/" });
+      }
+
+      // Superadmin without a company trying to reach the company app → back to their panel
+      if (location.pathname === "/" && isSuperadmin && !hasCompany) {
+        throw redirect({ to: "/superadmin" });
       }
     }
   },

@@ -48,51 +48,57 @@ import { useSupabaseSync } from "@/hooks/useSupabaseSync";
 type NavTab = { id: string; label: string; icon: any };
 type NavGroup = { id: string; label: string; tabs: NavTab[] };
 
-const NAV_GROUPS: NavGroup[] = [
-  { id: "dashboard", label: "Dashboard", tabs: [{ id: "dashboard", label: "Overview", icon: LayoutDashboard }] },
-  { id: "invoices", label: "Invoices", tabs: [{ id: "invoices", label: "Invoices", icon: Receipt }] },
-  { id: "team", label: "Team", tabs: [
-    { id: "agents", label: "Sales Reps", icon: Users },
-    { id: "wallet", label: "Commission Wallet", icon: Wallet },
-  ]},
-  { id: "compensation", label: "Compensation", tabs: [
-    { id: "plan", label: "Commission Plan", icon: Layers },
-    { id: "splits", label: "Split Rules", icon: SplitIcon },
-    { id: "finance", label: "Finance Companies", icon: Banknote },
-    { id: "products", label: "Products / Services", icon: Package },
-  ]},
-  { id: "payouts", label: "Payouts", tabs: [
-    { id: "calendar", label: "Payout Calendar", icon: CalendarDays },
-    { id: "disputes", label: "Approvals", icon: MessageSquare },
-    { id: "generate", label: "Payments", icon: FileDown },
-    { id: "adjustments", label: "Adjustments", icon: Settings2 },
-  ]},
-  { id: "reports", label: "Reports", tabs: [
-    { id: "reports", label: "Commission Reports", icon: FileBarChart },
-    { id: "yearend", label: "Year-End W-2/1099", icon: FileSpreadsheet },
-    { id: "simulator", label: "Simulator", icon: Calculator },
-  ]},
-  { id: "settings", label: "Settings", tabs: [
-    { id: "company", label: "Company Profile", icon: Building2 },
-    { id: "templates", label: "Invoice Templates", icon: BookTemplate },
-    { id: "import", label: "Import CSV", icon: Upload },
-    { id: "users", label: "User Management", icon: Users2 },
-  ]},
-];
+function makeNavGroups(t: (key: any) => string): NavGroup[] {
+  return [
+    { id: "dashboard", label: t("nav_dashboard"), tabs: [{ id: "dashboard", label: t("tab_dashboard"), icon: LayoutDashboard }] },
+    { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_invoices"), icon: Receipt }] },
+    { id: "team", label: t("nav_team"), tabs: [
+      { id: "agents", label: t("tab_team"), icon: Users },
+      { id: "wallet", label: t("tab_wallet"), icon: Wallet },
+    ]},
+    { id: "compensation", label: t("nav_compensation"), tabs: [
+      { id: "plan", label: t("tab_plan"), icon: Layers },
+      { id: "splits", label: t("tab_splits"), icon: SplitIcon },
+      { id: "finance", label: t("tab_finance"), icon: Banknote },
+      { id: "products", label: t("tab_products"), icon: Package },
+    ]},
+    { id: "payouts", label: t("nav_payouts"), tabs: [
+      { id: "calendar", label: t("tab_calendar"), icon: CalendarDays },
+      { id: "disputes", label: t("tab_approvals"), icon: MessageSquare },
+      { id: "generate", label: t("tab_generate"), icon: FileDown },
+      { id: "adjustments", label: t("tab_adjustments"), icon: Settings2 },
+    ]},
+    { id: "reports", label: t("nav_reports"), tabs: [
+      { id: "reports", label: t("tab_reports"), icon: FileBarChart },
+      { id: "yearend", label: t("tab_year_end"), icon: FileSpreadsheet },
+      { id: "simulator", label: t("tab_simulator"), icon: Calculator },
+    ]},
+    { id: "settings", label: t("nav_settings"), tabs: [
+      { id: "company", label: t("tab_company"), icon: Building2 },
+      { id: "templates", label: t("tab_templates"), icon: BookTemplate },
+      { id: "import", label: t("tab_import"), icon: Upload },
+      { id: "users", label: t("tab_users"), icon: Users2 },
+    ]},
+  ];
+}
 
-const REP_GROUPS: NavGroup[] = [
-  { id: "team", label: "Wallet", tabs: [{ id: "wallet", label: "My Wallet", icon: Wallet }] },
-  { id: "invoices", label: "Invoices", tabs: [{ id: "invoices", label: "My Invoices", icon: Receipt }] },
-  { id: "payouts", label: "Payouts", tabs: [
-    { id: "calendar", label: "My Payouts", icon: CalendarDays },
-    { id: "disputes", label: "My Requests", icon: MessageSquare },
-  ]},
-  { id: "reports", label: "Tools", tabs: [{ id: "simulator", label: "Simulator", icon: Calculator }] },
-];
+function makeRepGroups(t: (key: any) => string): NavGroup[] {
+  return [
+    { id: "team", label: t("nav_wallet"), tabs: [{ id: "wallet", label: t("tab_my_wallet"), icon: Wallet }] },
+    { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_my_invoices"), icon: Receipt }] },
+    { id: "payouts", label: t("nav_payouts"), tabs: [
+      { id: "calendar", label: t("tab_my_payouts"), icon: CalendarDays },
+      { id: "disputes", label: t("tab_my_requests"), icon: MessageSquare },
+    ]},
+    { id: "reports", label: t("nav_tools"), tabs: [{ id: "simulator", label: t("tab_simulator"), icon: Calculator }] },
+  ];
+}
 
 export default function CommissionTool() {
   const s = useStore();
   const t = useT();
+  const navGroups = makeNavGroups(t);
+  const repGroups = makeRepGroups(t);
   const { profile, signOut } = useAuth();
   const { dataLoaded } = useSupabaseSync();
 
@@ -146,7 +152,7 @@ export default function CommissionTool() {
   useEffect(() => {
     if (s.deepLink?.tab) {
       setTab(s.deepLink.tab);
-      const g = NAV_GROUPS.find((g) => g.tabs.some((t) => t.id === s.deepLink!.tab));
+      const g = navGroups.find((g) => g.tabs.some((t) => t.id === s.deepLink!.tab));
       if (g) setGroup(g.id);
     }
   }, [s.deepLink?.ts, s.deepLink?.tab]);
@@ -273,7 +279,7 @@ export default function CommissionTool() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                {profile?.role === "superadmin" && (
+                {profile?.is_superadmin === true && (
                   <>
                     <DropdownMenuItem
                       className="cursor-pointer"
@@ -305,7 +311,7 @@ export default function CommissionTool() {
         ) : (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           {(() => {
-            const groups = isRep ? REP_GROUPS : NAV_GROUPS;
+            const groups = isRep ? repGroups : navGroups;
             const currentGroup = groups.find((g) => g.id === group) ?? groups[0];
             const openRequests = s.disputes.filter(
               (d) => d.status === "submitted" || d.status === "needs_info"
@@ -424,12 +430,14 @@ function DashboardQuickActions({
   const generateTestPdf = () => {
     let inv = s.invoices[0];
     if (!inv) {
-      s.loadDemoData();
-      inv = useStore.getState().invoices[0];
-    }
-    if (!inv) {
-      toast.error(t("err_pdf"));
-      return;
+      if (!isLiveAccount) {
+        s.loadDemoData();
+        inv = useStore.getState().invoices[0];
+      }
+      if (!inv) {
+        toast.error(t("err_pdf"));
+        return;
+      }
     }
     try {
       const fcs = useStore.getState().financeCompanies;
@@ -455,7 +463,7 @@ function DashboardQuickActions({
         </div>
         <Button
           size="lg"
-          className="bg-gradient-duo shadow-orange text-white hover:opacity-90"
+          className="bg-gradient-orange shadow-orange text-white hover:opacity-90"
           onClick={() => onNav("invoices", "invoices")}
         >
           <Plus className="w-4 h-4 mr-2" />

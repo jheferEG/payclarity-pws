@@ -88,7 +88,8 @@ export type Database = {
           id: string
           email: string
           full_name: string | null
-          role: "admin" | "rep" | "accountant" | "superadmin" | null
+          role: "admin" | "rep" | "accountant" | null
+          is_superadmin: boolean
           status: "pending" | "active" | "rejected"
           company_id: string | null
           created_at: string
@@ -98,7 +99,8 @@ export type Database = {
           id: string
           email: string
           full_name?: string | null
-          role?: "admin" | "rep" | "accountant" | "superadmin" | null
+          role?: "admin" | "rep" | "accountant" | null
+          is_superadmin?: boolean
           status?: "pending" | "active" | "rejected"
           company_id?: string | null
           created_at?: string
@@ -108,7 +110,8 @@ export type Database = {
           id?: string
           email?: string
           full_name?: string | null
-          role?: "admin" | "rep" | "accountant" | "superadmin" | null
+          role?: "admin" | "rep" | "accountant" | null
+          is_superadmin?: boolean
           status?: "pending" | "active" | "rejected"
           company_id?: string | null
           created_at?: string
