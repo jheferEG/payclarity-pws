@@ -4,22 +4,15 @@ import { useAuth } from "@/lib/auth-context";
 import type { Profile } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   CheckCircle2, XCircle, Clock, Shield, UserRound, Users2, RefreshCw, KeyRound,
+  Copy, UserX, UserCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type ProfileRow = Profile & { id: string };
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  active: "Active",
-  rejected: "Rejected",
-};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrator",
@@ -32,21 +25,20 @@ export function UserManagementPanel() {
   const [users, setUsers] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteCode, setInviteCode] = useState("");
-  const [newCode, setNewCode] = useState("");
-  const [savingCode, setSavingCode] = useState(false);
 
   async function loadData() {
     setLoading(true);
-    const [{ data: profiles }, { data: config }] = await Promise.all([
+    const [{ data: profiles }, { data: company }] = await Promise.all([
       supabase.from("profiles").select("*")
         .eq("company_id", myProfile?.company_id ?? "")
         .eq("is_superadmin", false)
         .order("created_at", { ascending: true }),
-      supabase.from("company_config").select("invite_code").single(),
+      supabase.from("companies").select("invite_code")
+        .eq("id", myProfile?.company_id ?? "")
+        .single(),
     ]);
     setUsers((profiles as ProfileRow[]) ?? []);
-    setInviteCode(config?.invite_code ?? "");
-    setNewCode(config?.invite_code ?? "");
+    setInviteCode(company?.invite_code ?? "");
     setLoading(false);
   }
 
@@ -73,6 +65,26 @@ export function UserManagementPanel() {
     loadData();
   }
 
+  async function inactivate(userId: string) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "rejected" })
+      .eq("id", userId);
+    if (error) { toast.error("Error al inactivar usuario"); return; }
+    toast.success("Usuario inactivado");
+    loadData();
+  }
+
+  async function reactivate(userId: string, role: string) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "active", role: role as any })
+      .eq("id", userId);
+    if (error) { toast.error("Error al reactivar usuario"); return; }
+    toast.success("Usuario reactivado");
+    loadData();
+  }
+
   async function changeRole(userId: string, role: string) {
     const { error } = await supabase
       .from("profiles")
@@ -83,23 +95,9 @@ export function UserManagementPanel() {
     loadData();
   }
 
-  async function saveInviteCode() {
-    if (!newCode.trim()) { toast.error("Code cannot be empty"); return; }
-    setSavingCode(true);
-    const { error } = await supabase
-      .from("company_config")
-      .update({ invite_code: newCode.trim().toUpperCase() })
-      .eq("id", 1);
-    setSavingCode(false);
-    if (error) { toast.error("Failed to update invite code"); return; }
-    setInviteCode(newCode.trim().toUpperCase());
-    setNewCode(newCode.trim().toUpperCase());
-    toast.success("Invite code updated");
-  }
-
-  const pending = users.filter((u) => u.status === "pending");
-  const active = users.filter((u) => u.status === "active");
-  const rejected = users.filter((u) => u.status === "rejected");
+  const pending  = users.filter((u) => u.status === "pending");
+  const active   = users.filter((u) => u.status === "active");
+  const inactive = users.filter((u) => u.status === "rejected");
 
   if (loading) {
     return (
@@ -111,29 +109,30 @@ export function UserManagementPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Invite Code */}
+      {/* Invite Code — read-only; only superadmin can regenerate it */}
       <Card className="p-5 border border-border">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <KeyRound className="w-4 h-4 text-accent" />
           <h3 className="font-semibold text-sm">Company Registration Code</h3>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Share this code with people who need to create an account. You can change it at any time.
+        <p className="text-sm text-muted-foreground mb-3">
+          Share this code with new team members so they can register. To change it, contact your system administrator.
         </p>
-        <div className="flex gap-2">
-          <Input
-            value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-            className="uppercase tracking-widest font-mono max-w-[220px]"
-            placeholder="COMPANY2024"
-          />
-          <Button onClick={saveInviteCode} disabled={savingCode || newCode === inviteCode} size="sm">
-            {savingCode ? "Saving…" : "Save code"}
-          </Button>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 max-w-[220px] px-3 py-2 rounded-lg bg-muted border border-border font-mono text-sm tracking-widest font-semibold">
+            {inviteCode || "—"}
+          </code>
+          {inviteCode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { navigator.clipboard.writeText(inviteCode); toast.success("Code copied"); }}
+            >
+              <Copy className="w-4 h-4 mr-1.5" />
+              Copy
+            </Button>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Current code: <span className="font-mono font-semibold">{inviteCode}</span>
-        </p>
       </Card>
 
       {/* Pending approvals */}
@@ -162,32 +161,28 @@ export function UserManagementPanel() {
         ) : (
           <div className="space-y-2">
             {active.map((u) => (
-              <ActiveUserRow key={u.id} user={u} myId={myProfile?.id ?? ""} onRoleChange={changeRole} />
+              <ActiveUserRow
+                key={u.id}
+                user={u}
+                myId={myProfile?.id ?? ""}
+                onRoleChange={changeRole}
+                onInactivate={inactivate}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Rejected */}
-      {rejected.length > 0 && (
+      {/* Inactive users */}
+      {inactive.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <XCircle className="w-4 h-4 text-destructive" />
-            <h3 className="font-semibold text-sm">Rejected ({rejected.length})</h3>
+            <UserX className="w-4 h-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Inactive ({inactive.length})</h3>
           </div>
           <div className="space-y-2">
-            {rejected.map((u) => (
-              <Card key={u.id} className="p-4 border border-border opacity-60">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{u.full_name ?? "—"}</p>
-                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => approve(u.id, "rep")}>
-                    Re-activate as Rep
-                  </Button>
-                </div>
-              </Card>
+            {inactive.map((u) => (
+              <ReactivateRow key={u.id} user={u} onReactivate={reactivate} />
             ))}
           </div>
         </div>
@@ -234,12 +229,7 @@ function PendingUserRow({
             <CheckCircle2 className="w-3.5 h-3.5" />
             Approve
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="gap-1"
-            onClick={() => onReject(user.id)}
-          >
+          <Button size="sm" variant="destructive" className="gap-1" onClick={() => onReject(user.id)}>
             <XCircle className="w-3.5 h-3.5" />
             Reject
           </Button>
@@ -249,9 +239,53 @@ function PendingUserRow({
   );
 }
 
+function ReactivateRow({
+  user, onReactivate,
+}: { user: ProfileRow; onReactivate: (id: string, role: string) => void }) {
+  const [role, setRole] = useState("");
+
+  return (
+    <Card className="p-4 border border-border opacity-70">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">{user.full_name ?? "—"}</p>
+          <p className="text-xs text-muted-foreground">{user.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={role} onValueChange={setRole}>
+            <SelectTrigger className="h-8 w-[160px]">
+              <SelectValue placeholder="Reactivar como…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admin">Administrator</SelectItem>
+              <SelectItem value="rep">Sales Rep</SelectItem>
+              <SelectItem value="accountant">Accountant</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+            disabled={!role}
+            onClick={() => onReactivate(user.id, role)}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            Reactivar
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ActiveUserRow({
-  user, myId, onRoleChange,
-}: { user: ProfileRow; myId: string; onRoleChange: (id: string, role: string) => void }) {
+  user, myId, onRoleChange, onInactivate,
+}: {
+  user: ProfileRow;
+  myId: string;
+  onRoleChange: (id: string, role: string) => void;
+  onInactivate: (id: string) => void;
+}) {
   const isMe = user.id === myId;
   const roleIcon = user.role === "admin"
     ? <Shield className="w-3.5 h-3.5 text-accent" />
@@ -277,16 +311,27 @@ function ActiveUserRow({
             {ROLE_LABELS[user.role ?? ""] ?? user.role ?? "No role"}
           </Badge>
           {!isMe && (
-            <Select value={user.role ?? ""} onValueChange={(v) => onRoleChange(user.id, v)}>
-              <SelectTrigger className="h-8 w-[140px]">
-                <SelectValue placeholder="Change role…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Administrator</SelectItem>
-                <SelectItem value="rep">Sales Rep</SelectItem>
-                <SelectItem value="accountant">Accountant</SelectItem>
-              </SelectContent>
-            </Select>
+            <>
+              <Select value={user.role ?? ""} onValueChange={(v) => onRoleChange(user.id, v)}>
+                <SelectTrigger className="h-8 w-[140px]">
+                  <SelectValue placeholder="Change role…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrator</SelectItem>
+                  <SelectItem value="rep">Sales Rep</SelectItem>
+                  <SelectItem value="accountant">Accountant</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={() => onInactivate(user.id)}
+              >
+                <UserX className="w-3.5 h-3.5" />
+                Inactivar
+              </Button>
+            </>
           )}
         </div>
       </div>
