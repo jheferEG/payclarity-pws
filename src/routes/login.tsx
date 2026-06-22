@@ -7,7 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, AlertCircle, Clock, Zap } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Clock, Zap, Globe } from "lucide-react";
+import { useStore } from "@/lib/commission-store";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -21,6 +22,7 @@ type FormValues = z.infer<typeof schema>;
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { language, setLanguage } = useStore();
   const [showPass, setShowPass] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState(false);
@@ -80,7 +82,16 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      {/* Language toggle */}
+      <button
+        onClick={() => setLanguage(language === "es" ? "en" : "es")}
+        className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white text-xs font-semibold hover:bg-white/20 transition-colors"
+      >
+        <Globe className="w-3.5 h-3.5" />
+        {language === "es" ? "EN" : "ES"}
+      </button>
+
       {/* ── Left panel: dark hero ─────────────────────────── */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-hero relative overflow-hidden flex-col justify-between p-12">
         {/* dot grid overlay */}

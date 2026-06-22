@@ -7,8 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sparkles, Eye, EyeOff, AlertCircle, CheckCircle2, HelpCircle } from "lucide-react";
+import { Sparkles, Eye, EyeOff, AlertCircle, CheckCircle2, HelpCircle, Globe } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useStore } from "@/lib/commission-store";
 
 export const Route = createFileRoute("/register")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -36,6 +37,7 @@ type FormValues = z.infer<typeof schema>;
 function RegisterPage() {
   const navigate = useNavigate();
   const { superadmin_invite: saInvite } = Route.useSearch();
+  const { language, setLanguage } = useStore();
   const isSuperadminInvite = !!saInvite;
 
   const [showPass, setShowPass] = useState(false);
@@ -138,7 +140,16 @@ function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4 relative">
+      {/* Language toggle */}
+      <button
+        onClick={() => setLanguage(language === "es" ? "en" : "es")}
+        className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background border border-border text-foreground text-xs font-semibold hover:bg-muted transition-colors"
+      >
+        <Globe className="w-3.5 h-3.5" />
+        {language === "es" ? "EN" : "ES"}
+      </button>
+
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
