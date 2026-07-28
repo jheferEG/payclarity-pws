@@ -1,4 +1,4 @@
--- PayClarity Phase 4b: Splits
+-- CompensaFlow Phase 4b: Splits
 -- Depends on: 001–005
 
 -- ============================================================

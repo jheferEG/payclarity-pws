@@ -65,15 +65,15 @@ type CompanyUser = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active:    "bg-emerald-100 text-emerald-700 border-emerald-200",
-  trial:     "bg-sky-100 text-sky-700 border-sky-200",
-  suspended: "bg-red-100 text-red-700 border-red-200",
+  active:    "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+  trial:     "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-800",
+  suspended: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
 };
 
 const PLAN_COLORS: Record<string, string> = {
-  starter:      "bg-slate-100 text-slate-600",
-  professional: "bg-purple-100 text-purple-700",
-  enterprise:   "bg-amber-100 text-amber-700",
+  starter:      "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+  professional: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400",
+  enterprise:   "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
 };
 
 function fmt(dt: string) {
@@ -350,16 +350,16 @@ export default function SuperadminPanel() {
   const totalUsers = companies.reduce((s, c) => s + (c.user_count ?? 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8]">
+    <div className="min-h-screen bg-[#F0F4F8] dark:bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-sky-200/60 bg-white/95 backdrop-blur-md shadow-sm">
+      <header className="sticky top-0 z-10 border-b border-sky-200/60 dark:border-sky-800/40 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center">
               <ShieldAlert className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold leading-tight">PayClarity — Superadmin</h1>
+              <h1 className="text-base font-bold leading-tight">CompensaFlow — Superadmin</h1>
               <p className="text-[10px] text-muted-foreground hidden sm:block">Panel de control del sistema</p>
             </div>
           </div>
@@ -430,12 +430,12 @@ export default function SuperadminPanel() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Empresas totales",  value: totalCompanies,  icon: Building2,    bg: "bg-sky-50",         color: "text-sky-600" },
-            { label: "Empresas activas",  value: activeCompanies, icon: Activity,     bg: "bg-emerald-50",     color: "text-emerald-600" },
-            { label: "Usuarios totales",  value: totalUsers,      icon: Users,        bg: "bg-violet-50",      color: "text-violet-600" },
+            { label: "Empresas totales",  value: totalCompanies,  icon: Building2,    bg: "bg-sky-50 dark:bg-sky-950/40",         color: "text-sky-600 dark:text-sky-400" },
+            { label: "Empresas activas",  value: activeCompanies, icon: Activity,     bg: "bg-emerald-50 dark:bg-emerald-950/40",     color: "text-emerald-600 dark:text-emerald-400" },
+            { label: "Usuarios totales",  value: totalUsers,      icon: Users,        bg: "bg-violet-50 dark:bg-violet-950/40",      color: "text-violet-600 dark:text-violet-400" },
             { label: "Planes activos",    value: activeCompanies, icon: Package,      bg: "bg-orange-muted",   color: "text-orange" },
           ].map(({ label, value, icon: Icon, bg, color }) => (
-            <div key={label} className="bg-white rounded-xl border border-border p-4 flex items-center gap-3">
+            <div key={label} className="bg-white dark:bg-card rounded-xl border border-border p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${bg} ${color}`}>
                 <Icon className="w-4.5 h-4.5" />
               </div>
@@ -449,7 +449,7 @@ export default function SuperadminPanel() {
 
         {/* Tabs */}
         <div className="flex items-center justify-between">
-          <div className="flex gap-1 bg-white rounded-xl border border-border p-1">
+          <div className="flex gap-1 bg-white dark:bg-card rounded-xl border border-border p-1">
             {(["companies", "users", "superadmins"] as const).map((t) => (
               <button
                 key={t}
@@ -489,7 +489,7 @@ export default function SuperadminPanel() {
 
         {/* ── COMPANIES TAB ───────────────────────────────────────────── */}
         {tab === "companies" && (
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden">
             {loading ? (
               <div className="py-16 text-center text-sm text-muted-foreground">Cargando empresas…</div>
             ) : companies.length === 0 ? (
@@ -525,14 +525,14 @@ export default function SuperadminPanel() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PLAN_COLORS[company.plan] ?? "bg-slate-100 text-slate-600"}`}>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PLAN_COLORS[company.plan] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}>
                             {company.plan}
                           </span>
                         </TableCell>
                         <TableCell>
                           {company.invite_code ? (
                             <div className="flex items-center gap-1.5">
-                              <code className="text-xs bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-mono">
+                              <code className="text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded font-mono">
                                 {company.invite_code}
                               </code>
                               <button
@@ -600,7 +600,7 @@ export default function SuperadminPanel() {
 
         {/* ── USERS TAB ───────────────────────────────────────────────── */}
         {tab === "users" && (
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden">
             {usersLoading ? (
               <div className="py-16 text-center text-sm text-muted-foreground">Cargando usuarios…</div>
             ) : (
@@ -621,7 +621,7 @@ export default function SuperadminPanel() {
                       a.status === "pending" && b.status !== "pending" ? -1 :
                       a.status !== "pending" && b.status === "pending" ?  1 : 0
                     ).map((u) => (
-                      <TableRow key={u.id} className={`hover:bg-muted/20 ${u.status === "pending" ? "bg-amber-50/50" : ""}`}>
+                      <TableRow key={u.id} className={`hover:bg-muted/20 ${u.status === "pending" ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}`}>
                         <TableCell>
                           <p className="font-medium text-sm">{u.full_name ?? u.email}</p>
                           <p className="text-xs text-muted-foreground">{u.email}</p>
@@ -636,9 +636,9 @@ export default function SuperadminPanel() {
                         </TableCell>
                         <TableCell>
                           <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                            u.status === "active"   ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                            u.status === "pending"  ? "bg-amber-100 text-amber-700 border-amber-200" :
-                                                      "bg-red-100 text-red-700 border-red-200"
+                            u.status === "active"   ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" :
+                            u.status === "pending"  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
+                                                      "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
                           }`}>
                             {u.status}
                           </span>
@@ -696,7 +696,7 @@ export default function SuperadminPanel() {
           <div className="space-y-4">
 
             {/* Generate invite link */}
-            <div className="bg-white rounded-xl border border-border p-5">
+            <div className="bg-white dark:bg-card rounded-xl border border-border p-5">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                   <p className="font-semibold text-sm">Invitar nuevo superadmin</p>
@@ -731,7 +731,7 @@ export default function SuperadminPanel() {
             </div>
 
             {/* Superadmin accounts list */}
-            <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden">
               <div className="px-5 py-3 border-b border-border bg-muted/30">
                 <p className="text-sm font-medium">Cuentas superadmin</p>
               </div>
@@ -757,14 +757,14 @@ export default function SuperadminPanel() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold truncate">{sa.full_name ?? sa.email}</p>
                             {isMe && (
-                              <span className="text-[10px] bg-sky-100 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded font-medium">
+                              <span className="text-[10px] bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 px-1.5 py-0.5 rounded font-medium">
                                 Tú
                               </span>
                             )}
                             <Badge className={
-                              sa.status === "active"  ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                              sa.status === "pending" ? "bg-amber-100 text-amber-700 border-amber-200" :
-                                                        "bg-red-100 text-red-700 border-red-200"
+                              sa.status === "active"  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" :
+                              sa.status === "pending" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
+                                                        "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
                             }>
                               {sa.status === "active" ? "Activo" : sa.status === "pending" ? "Pendiente" : "Rechazado"}
                             </Badge>
@@ -777,7 +777,7 @@ export default function SuperadminPanel() {
                           {!isMe && sa.status === "pending" && (
                             <>
                               <Button size="sm" variant="outline"
-                                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 text-xs h-8"
+                                className="text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs h-8"
                                 onClick={() => handleApproveSuperadmin(sa.id)}
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Aprobar
@@ -908,9 +908,9 @@ export default function SuperadminPanel() {
                       </TableCell>
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                          u.status === "active"  ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                          u.status === "pending" ? "bg-amber-100 text-amber-700 border-amber-200" :
-                                                    "bg-red-100 text-red-700 border-red-200"
+                          u.status === "active"  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" :
+                          u.status === "pending" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
+                                                    "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
                         }`}>
                           {u.status}
                         </span>
@@ -970,7 +970,7 @@ export default function SuperadminPanel() {
                 {companies
                   .filter((c) => assignedCompanyIds.includes(c.id))
                   .map((c) => (
-                    <div key={c.id} className="flex items-center justify-between p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                    <div key={c.id} className="flex items-center justify-between p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <div>

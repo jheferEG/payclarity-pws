@@ -1,4 +1,4 @@
--- PayClarity Phase 7: Superadmin / SaaS Multi-tenant Support
+-- CompensaFlow Phase 7: Superadmin / SaaS Multi-tenant Support
 -- Depends on: 001–008
 -- Run in Supabase SQL Editor AFTER previous migrations.
 

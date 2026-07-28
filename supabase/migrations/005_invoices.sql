@@ -1,4 +1,4 @@
--- PayClarity Phase 4a: Invoices
+-- CompensaFlow Phase 4a: Invoices
 -- Depends on: 001–004
 
 -- ============================================================

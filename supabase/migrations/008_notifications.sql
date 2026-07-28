@@ -1,4 +1,4 @@
--- PayClarity Phase 6: Notifications
+-- CompensaFlow Phase 6: Notifications
 -- Depends on: 001–007
 
 -- ============================================================

@@ -17,10 +17,10 @@ const buttonVariants = cva(
           "rounded-xl bg-gradient-cta text-white shadow-btn hover:opacity-90 hover:scale-[1.02] active:scale-[0.98]",
         /* muted blue fill */
         secondary:
-          "rounded-xl bg-secondary text-secondary-foreground border border-sky-200/60 hover:bg-sky-100 hover:border-sky-300 active:scale-[0.98]",
+          "rounded-xl bg-secondary text-secondary-foreground border border-sky-200/60 dark:border-sky-800/60 hover:bg-sky-100 dark:hover:bg-sky-900/40 hover:border-sky-300 dark:hover:border-sky-700 active:scale-[0.98]",
         /* outlined */
         outline:
-          "rounded-xl border-2 border-accent/40 bg-white text-accent hover:bg-accent hover:text-white hover:border-accent active:scale-[0.98]",
+          "rounded-xl border-2 border-accent/40 bg-white dark:bg-transparent text-accent hover:bg-accent hover:text-white hover:border-accent active:scale-[0.98]",
         /* ghost */
         ghost:
           "rounded-lg hover:bg-accent/10 hover:text-accent active:scale-[0.98]",

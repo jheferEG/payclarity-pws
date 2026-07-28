@@ -1,4 +1,4 @@
--- PayClarity Phase 2: Catalog Tables
+-- CompensaFlow Phase 2: Catalog Tables
 -- Depends on: 001_auth_setup.sql, 002_companies.sql
 
 -- ============================================================

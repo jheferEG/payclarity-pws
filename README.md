@@ -1,3 +1,3 @@
-# PayClarity - Commission Management Platform
+# CompensaFlow - Commission Management Platform
 
 Vite SPA with Supabase auth, admin panel, and commission management tools.

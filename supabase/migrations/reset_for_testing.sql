@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  PayClarity — RESET COMPLETO PARA PRUEBAS                          ║
+-- ║  CompensaFlow — RESET COMPLETO PARA PRUEBAS                      ║
 -- ║  Borra usuarios, empresas y todos los datos ingresados.            ║
 -- ║  CONSERVA las cuentas con is_superadmin = true.                    ║
 -- ║                                                                    ║
@@ -21,7 +21,7 @@ begin
   where is_superadmin = true;
 
   raise notice '──────────────────────────────────────────────';
-  raise notice 'RESET PayClarity — iniciando...';
+  raise notice 'RESET CompensaFlow — iniciando...';
   raise notice 'Superadmins protegidos: %',
     coalesce(array_length(superadmin_ids, 1), 0);
 

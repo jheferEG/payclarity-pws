@@ -1,4 +1,4 @@
--- PayClarity Auth Setup Migration
+-- CompensaFlow Auth Setup Migration
 -- Run this in Supabase SQL Editor (Dashboard > SQL Editor > New query)
 
 -- ============================================================

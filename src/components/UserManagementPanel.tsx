@@ -202,11 +202,11 @@ function PendingUserRow({
   const joinedAt = new Date(user.created_at).toLocaleDateString();
 
   return (
-    <Card className="p-4 border border-amber-200 bg-amber-50/30">
+    <Card className="p-4 border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
-            <Clock className="w-4 h-4 text-amber-600" />
+          <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
             <p className="text-sm font-medium">{user.full_name ?? "—"}</p>
@@ -270,7 +270,7 @@ function ReactivateRow({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+            className="h-8 gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
             disabled={!role}
             onClick={() => onReactivate(user.id, role)}
           >

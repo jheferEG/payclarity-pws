@@ -1,4 +1,4 @@
--- PayClarity Phase 1: Companies + Company Linkage
+-- CompensaFlow Phase 1: Companies + Company Linkage
 -- Run this in Supabase SQL Editor after 001_auth_setup.sql
 
 -- ============================================================

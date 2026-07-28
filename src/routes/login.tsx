@@ -110,7 +110,7 @@ function LoginPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-orange shadow-orange flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="text-white text-xl font-bold tracking-tight">PayClarity</span>
+          <span className="text-white text-xl font-bold tracking-tight">CompensaFlow</span>
         </div>
 
         {/* hero copy */}
@@ -155,7 +155,7 @@ function LoginPage() {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-orange shadow-orange mb-4">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">PayClarity</h1>
+            <h1 className="text-2xl font-bold text-foreground">CompensaFlow</h1>
           </div>
 
           {/* heading */}
@@ -267,7 +267,7 @@ function LoginPage() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            © 2026 PayClarity. {T("copyright")}
+            © 2026 CompensaFlow. {T("copyright")}
           </p>
         </div>
       </div>

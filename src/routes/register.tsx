@@ -159,7 +159,7 @@ function RegisterPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-orange shadow-orange mb-4">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">PayClarity</h1>
+          <h1 className="text-2xl font-bold text-foreground">CompensaFlow</h1>
           <p className="text-sm text-muted-foreground mt-1">{T("reg_platform_subtitle")}</p>
         </div>
 
@@ -309,7 +309,7 @@ function RegisterPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          © {new Date().getFullYear()} PayClarity. {T("copyright")}
+          © {new Date().getFullYear()} CompensaFlow. {T("copyright")}
         </p>
       </div>
     </div>

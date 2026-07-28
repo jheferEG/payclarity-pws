@@ -16,7 +16,7 @@ Preferred package manager is **bun** (`bun run dev`, etc.). No test framework is
 
 ## Architecture
 
-**PayClarity PWS** is a commission management SPA deployed on **Vercel**, using TanStack Router (React 19, no SSR) with **Supabase** (PostgreSQL + Auth) as the backend.
+**CompensaFlow** (formerly PayClarity PWS) is a commission management SPA deployed on **Vercel**, using TanStack Router (React 19, no SSR) with **Supabase** (PostgreSQL + Auth) as the backend.
 
 > Migrated in June 2026 from Lovable to a standard Vite SPA by removing `@lovable.dev/vite-tanstack-config`, `@cloudflare/vite-plugin`, `@tanstack/react-start`, and `nitro`. Entry point is `index.html` → `src/main.tsx`. `wrangler.jsonc` is kept for reference only — Cloudflare deployment is inactive.
 
