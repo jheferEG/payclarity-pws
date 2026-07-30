@@ -803,7 +803,7 @@ const D: Dict = {
   cal_stat_paid: { es: "Profit pagado", en: "Paid profit" },
   cal_stat_period: { es: "Total del período", en: "Period payout total" },
   cal_all_paid: { es: "todo pagado", en: "all paid" },
-  cal_approved: { es: "aprobado", en: "approved" },
+  cal_partial: { es: "pago parcial", en: "partially paid" },
   cal_pending: { es: "pendiente", en: "pending" },
 
   // Templates panel

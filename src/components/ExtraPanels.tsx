@@ -1829,15 +1829,16 @@ export function CalendarPanel() {
                 (acc, i) => acc + calcInvoice(i, s.financeCompanies).profit,
                 0
               );
-              const allPaid = list.every((i) => i.paid);
-              const anyApproved = list.some((i) => i.status === "pending" || i.paid);
+              const paidCount = list.filter((i) => i.paid).length;
+              const allPaid = paidCount === list.length;
+              const anyPaid = paidCount > 0 && !allPaid;
               return (
                 <Card key={date} className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div className="font-mono text-sm">{date}</div>
-                      <Badge variant={allPaid ? "default" : anyApproved ? "secondary" : "outline"}>
-                        {allPaid ? t("cal_all_paid") : anyApproved ? t("cal_approved") : t("cal_pending")}
+                      <Badge variant={allPaid ? "default" : anyPaid ? "secondary" : "outline"}>
+                        {allPaid ? t("cal_all_paid") : anyPaid ? t("cal_partial") : t("cal_pending")}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {list.length} invoice(s)
@@ -1857,7 +1858,7 @@ export function CalendarPanel() {
                             <td>{ag?.name || "—"}</td>
                             <td>
                               <Badge variant="outline" className="text-[10px]">
-                                {i.paid ? "paid" : i.status}
+                                {i.paid ? t("status_paid") : t(`status_${i.status}` as any)}
                               </Badge>
                             </td>
                             <td className="text-right font-mono">
