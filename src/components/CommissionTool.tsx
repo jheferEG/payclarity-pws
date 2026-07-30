@@ -13,8 +13,9 @@ import {
   Wallet, Calculator, CalendarDays, BookTemplate, MessageSquare, HelpCircle, Shield, UserRound,
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
-  Moon, Sun, Search, Image as ImageIcon,
+  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -876,10 +877,38 @@ function pickAvatarFile(agentId: string, updateAgent: (id: string, data: Partial
 }
 
 /* ---------- Agents ---------- */
+function w9StatusClass(status: "missing" | "pending" | "valid" | undefined): string {
+  switch (status ?? "missing") {
+    case "valid":
+      return "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:bg-emerald-950/30";
+    case "pending":
+      return "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:bg-amber-950/30";
+    default:
+      return "border-red-300 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-400 dark:bg-red-950/30";
+  }
+}
+
 function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string> }) {
-  const { agents, addAgent, updateAgent, removeAgent, positions } = useStore();
+  const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language } = useStore();
   const t = useT();
+  const isEs = language === "es";
   const [form, setForm] = useState({ name: "", email: "", sponsorId: "", commissionPercent: "", level: "" });
+
+  const readiness = useMemo(() => {
+    if (agents.length === 0) return null;
+    let ready = 0, missingW9 = 0, pendingReview = 0;
+    for (const a of agents) {
+      const hasActiveRequest = disputes.some(
+        (d) =>
+          d.agentId === a.id &&
+          (d.status === "submitted" || d.status === "under_review" || d.status === "needs_info")
+      );
+      if (hasActiveRequest) pendingReview++;
+      else if ((a.w9Status ?? "missing") !== "valid") missingW9++;
+      else ready++;
+    }
+    return { ready, missingW9, pendingReview };
+  }, [agents, disputes]);
 
   const submit = () => {
     if (!form.name.trim()) return toast.error(t("err_name_required"));
@@ -900,7 +929,27 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
   };
 
   return (
-    <SectionCard
+    <div className="space-y-6">
+      {readiness && (
+        <div className="flex flex-wrap gap-2">
+          <div className="inline-flex items-center gap-1.5 text-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-md">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="font-semibold">{readiness.ready}</span>
+            <span>{isEs ? "Listos" : "Ready"}</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 text-sm bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-md">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span className="font-semibold">{readiness.missingW9}</span>
+            <span>{isEs ? "Falta W-9" : "Missing W-9"}</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 text-sm bg-blue-500/10 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-md">
+            <Clock className="w-3.5 h-3.5" />
+            <span className="font-semibold">{readiness.pendingReview}</span>
+            <span>{isEs ? "En revisión" : "Pending Review"}</span>
+          </div>
+        </div>
+      )}
+      <SectionCard
       title={t("sect_team")}
       desc={t("sect_team_desc")}
     >
@@ -994,7 +1043,9 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                   </td>
                   <td>
                     <Select value={a.w9Status ?? "missing"} onValueChange={(v: any) => updateAgent(a.id, { w9Status: v })}>
-                      <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn("h-8 w-28 font-medium", w9StatusClass(a.w9Status))}>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="missing">{t("w9_missing_lbl")}</SelectItem>
                         <SelectItem value="pending">{t("w9_pending_lbl")}</SelectItem>
@@ -1021,7 +1072,8 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
           </table>
         </div>
       )}
-    </SectionCard>
+      </SectionCard>
+    </div>
   );
 }
 
@@ -2086,8 +2138,8 @@ function ProductsPanel() {
   };
   const readPhoto = (file: File | undefined | null, onDone: (dataUrl: string) => void) => {
     if (!file) return;
-    if (file.size > 1024 * 1024) {
-      toast.error(isEs ? "La imagen es muy grande (máx 1MB)." : "Image is too large (max 1MB).");
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(isEs ? "La imagen es muy grande (máx 5MB)." : "Image is too large (max 5MB).");
       return;
     }
     const reader = new FileReader();
@@ -2250,7 +2302,7 @@ function BrandingPanel() {
 
   const onLogoUpload = (file?: File | null) => {
     if (!file) return;
-    if (file.size > 1024 * 1024) {
+    if (file.size > 5 * 1024 * 1024) {
       toast.error(t("brand_logo_too_large"));
       return;
     }

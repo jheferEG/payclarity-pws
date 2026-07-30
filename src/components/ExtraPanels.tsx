@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Wallet, FileDown, Sparkles, Paperclip, X, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Trash2, Wallet, FileDown, Sparkles, Paperclip, X, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore, type Invoice, type Agent } from "@/lib/commission-store";
 import {
@@ -149,7 +149,6 @@ function AICoachCard({ agent }: { agent: Agent }) {
 export function WalletPanel() {
   const t = useT();
   const s = useStore();
-  const isEs = s.language === "es";
   const isAdmin = s.role !== "rep";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const wallets = useMemo(
@@ -171,22 +170,6 @@ export function WalletPanel() {
 
   const current = visibleWallets.find((w) => w.agent.id === selected) || visibleWallets[0];
 
-  const readiness = useMemo(() => {
-    if (!isAdmin || s.agents.length === 0) return null;
-    let ready = 0, missingW9 = 0, pendingReview = 0;
-    for (const a of s.agents) {
-      const hasActiveRequest = s.disputes.some(
-        (d) =>
-          d.agentId === a.id &&
-          (d.status === "submitted" || d.status === "under_review" || d.status === "needs_info")
-      );
-      if (hasActiveRequest) pendingReview++;
-      else if ((a.w9Status ?? "missing") !== "valid") missingW9++;
-      else ready++;
-    }
-    return { ready, missingW9, pendingReview };
-  }, [isAdmin, s.agents, s.disputes]);
-
   if (!visibleWallets.length) {
     return (
       <Section title={isAdmin ? t("wallet_title") : t("wallet_my_title")} desc={t("wallet_desc")}>
@@ -197,25 +180,6 @@ export function WalletPanel() {
 
   return (
     <div className="space-y-6">
-      {readiness && (
-        <div className="flex flex-wrap gap-2">
-          <div className="inline-flex items-center gap-1.5 text-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-md">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span className="font-semibold">{readiness.ready}</span>
-            <span>{isEs ? "Listos" : "Ready"}</span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 text-sm bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-md">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span className="font-semibold">{readiness.missingW9}</span>
-            <span>{isEs ? "Falta W-9" : "Missing W-9"}</span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 text-sm bg-blue-500/10 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-md">
-            <Clock className="w-3.5 h-3.5" />
-            <span className="font-semibold">{readiness.pendingReview}</span>
-            <span>{isEs ? "En revisión" : "Pending Review"}</span>
-          </div>
-        </div>
-      )}
       {current && <AICoachCard agent={current.agent} />}
       <Section
         title={isAdmin ? t("wallet_title") : t("wallet_my_title")}
