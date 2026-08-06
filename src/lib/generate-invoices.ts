@@ -181,7 +181,8 @@ function drawFooter(doc: jsPDF, b: EffectiveBranding) {
 export function buildSaleInvoicePDF(
   c: InvoiceCalc,
   company: Company,
-  agentName: string
+  agentName: string,
+  payout?: AgentPayout | null
 ): jsPDF {
   const inv = c.invoice;
   const b = resolveBranding(company, inv);
@@ -345,6 +346,43 @@ export function buildSaleInvoicePDF(
       },
       styles: { fontSize },
       margin: { left: margin, right: margin },
+    });
+  }
+
+  if (payout) {
+    const effectiveRate = inv.commissionPercentOverride ?? payout.personalRate;
+    const startY = (doc as any).lastAutoTable?.finalY ?? y;
+    const rows: any[] = [
+      ["Compensation level", `${inv.commissionLevel || "—"} (${(effectiveRate * 100).toFixed(2)}%)`],
+      ["Personal commission", fmtMoney(payout.personalCommission, cur)],
+    ];
+    if (payout.overrideTotal > 0) {
+      rows.push(["Downline override", fmtMoney(payout.overrideTotal, cur)]);
+    }
+    if (inv.advanceApplied) {
+      rows.push(["Advance deducted", `- ${fmtMoney(inv.advanceApplied, cur)}`]);
+    }
+    if (payout.taxReserveSuggested > 0) {
+      rows.push([
+        `Suggested tax reserve (${((inv.taxReservePercent ?? 0) * 100).toFixed(0)}%)`,
+        fmtMoney(payout.taxReserveSuggested, cur),
+      ]);
+    }
+    autoTable(doc, {
+      startY: startY + 14,
+      head: [["Your Commission", ""]],
+      body: rows,
+      foot: [
+        [
+          { content: "Estimated payout", styles: { fontStyle: "bold" } },
+          { content: fmtMoney(payout.finalPayable, cur), styles: { fontStyle: "bold" } },
+        ],
+      ],
+      headStyles: { fillColor: brand, textColor: 255 },
+      footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
+      styles: { fontSize },
+      margin: { left: margin, right: margin },
+      columnStyles: { 1: { halign: "right" } },
     });
   }
 
@@ -602,9 +640,10 @@ export function downloadSummary(
 export function buildSaleAndDownload(
   c: InvoiceCalc,
   company: Company,
-  agentName: string
+  agentName: string,
+  payout?: AgentPayout | null
 ) {
-  const doc = buildSaleInvoicePDF(c, company, agentName);
+  const doc = buildSaleInvoicePDF(c, company, agentName, payout);
   doc.save(`${c.invoice.number}_${(c.invoice.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
 }
 

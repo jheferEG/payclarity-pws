@@ -289,7 +289,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => buildSaleAndDownload(c, s.company, wallet.agent.name)}
+                        onClick={() => buildSaleAndDownload(c, s.company, wallet.agent.name, wallet.payout)}
                       >
                         PDF
                       </Button>

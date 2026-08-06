@@ -1193,6 +1193,11 @@ function InvoicesPanel() {
 
   const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
 
+  const payouts = useMemo(
+    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides]
+  );
+
   const [explainId, setExplainId] = useState<string | null>(null);
   const [disputeId, setDisputeId] = useState<string | null>(null);
   const [splitId, setSplitId] = useState<string | null>(null);
@@ -1552,12 +1557,14 @@ function InvoicesPanel() {
                           )}
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
-                            const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—");
+                            const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
+                            const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout);
                             window.open(doc.output("bloburl"), "_blank");
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
-                            buildSaleAndDownload(c, s.company, ag?.name || "—");
+                            const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
+                            buildSaleAndDownload(c, s.company, ag?.name || "—", payout);
                           }}>PDF</Button>
                           <Button variant="ghost" size="sm" title="Timeline / audit log" onClick={() => setTimelineId(inv.id)}><Activity className="w-4 h-4" /></Button>
                           {isAdmin && <Button variant="ghost" size="icon" onClick={() => s.removeInvoice(inv.id)}><Trash2 className="w-4 h-4" /></Button>}
