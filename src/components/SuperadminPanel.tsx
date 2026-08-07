@@ -99,12 +99,12 @@ export default function SuperadminPanel() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   // All users tab
-  const [allUsers, setAllUsers] = useState<(CompanyUser & { company_name: string })[]>([]);
+  const [allUsers, setAllUsers] = useState<(CompanyUser & { company_name: string; company_id: string | null })[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
   // Assign company to admin
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<(CompanyUser & { company_name: string }) | null>(null);
+  const [assignTarget, setAssignTarget] = useState<(CompanyUser & { company_name: string; company_id: string | null }) | null>(null);
   const [assignedCompanyIds, setAssignedCompanyIds] = useState<string[]>([]);
   const [assigning, setAssigning] = useState(false);
 
@@ -158,7 +158,7 @@ export default function SuperadminPanel() {
     setUsersLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role, status, created_at, companies(name)")
+      .select("id, email, full_name, role, status, created_at, company_id, companies(name)")
       .eq("is_superadmin", false)
       .order("created_at", { ascending: false });
     if (error) {
@@ -172,6 +172,7 @@ export default function SuperadminPanel() {
           role: u.role,
           status: u.status,
           created_at: u.created_at,
+          company_id: u.company_id ?? null,
           company_name: u.companies?.name ?? "—",
         }))
       );
@@ -288,13 +289,18 @@ export default function SuperadminPanel() {
     if (tab === "users") loadAllUsers();
   }
 
-  async function openAssign(user: CompanyUser & { company_name: string }) {
+  async function openAssign(user: CompanyUser & { company_name: string; company_id: string | null }) {
     setAssignTarget(user);
     const { data } = await supabase
       .from("user_company_access")
       .select("company_id")
       .eq("user_id", user.id);
-    setAssignedCompanyIds((data ?? []).map((r: any) => r.company_id));
+    const linked = (data ?? []).map((r: any) => r.company_id);
+    // The user's primary company (set at registration) may not have a
+    // matching row in user_company_access — include it so it doesn't show
+    // up as "available to assign" again.
+    const ids = user.company_id ? [...new Set([...linked, user.company_id])] : linked;
+    setAssignedCompanyIds(ids);
     setAssignOpen(true);
   }
 
@@ -326,6 +332,12 @@ export default function SuperadminPanel() {
       .eq("user_id", assignTarget.id)
       .eq("company_id", companyId);
     if (error) { toast.error("Error: " + error.message); setAssigning(false); return; }
+    // The primary company (set at registration) has no row in
+    // user_company_access, so clear it directly to keep state consistent.
+    if (assignTarget.company_id === companyId) {
+      await supabase.from("profiles").update({ company_id: null }).eq("id", assignTarget.id);
+      setAssignTarget((prev) => (prev ? { ...prev, company_id: null } : prev));
+    }
     toast.success(`Empresa "${companyName}" desvinculada`);
     setAssignedCompanyIds((prev) => prev.filter((id) => id !== companyId));
     setAssigning(false);

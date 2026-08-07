@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ComponentProps } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1180,6 +1180,60 @@ function blankInvoice(): Omit<Invoice, "id" | "number"> {
   };
 }
 
+/** Numeric input that lets the user clear the field while typing instead of
+ * snapping back to "0" on every keystroke (Number("") === 0 otherwise). */
+function NumField({
+  value,
+  onChange,
+  className,
+  ...props
+}: {
+  value: number;
+  onChange: (n: number) => void;
+} & Omit<ComponentProps<typeof Input>, "value" | "onChange" | "type">) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <Input
+      {...props}
+      type="number"
+      className={className}
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        if (raw === "" || raw === "-") return;
+        const n = Number(raw);
+        if (!Number.isNaN(n)) onChange(n);
+      }}
+      onBlur={() => {
+        if (text === "" || text === "-") {
+          setText("0");
+          onChange(0);
+        }
+      }}
+    />
+  );
+}
+
+/** Same as NumField but the underlying value is a 0..1 decimal, displayed/typed as a 0..100 percent. */
+function PercentField({
+  value,
+  onChange,
+  ...props
+}: {
+  value: number;
+  onChange: (n: number) => void;
+} & Omit<ComponentProps<typeof Input>, "value" | "onChange" | "type">) {
+  return (
+    <NumField
+      value={Number((value * 100).toFixed(4))}
+      onChange={(n) => onChange(n / 100)}
+      {...props}
+    />
+  );
+}
+
 function InvoicesPanel() {
   const s = useStore();
   const t = useT();
@@ -1191,8 +1245,20 @@ function InvoicesPanel() {
     return myAgentId ? { ...b, agentId: myAgentId } : b;
   });
   const [overrideMode, setOverrideMode] = useState<"percent" | "amount">("percent");
+  const [overrideAmountText, setOverrideAmountText] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
 
   const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
+
+  // If the amount was typed before the commissionable base was known (e.g. sales
+  // amount not filled in yet), (re)apply it once the base becomes usable.
+  useEffect(() => {
+    if (overrideMode !== "amount" || overrideAmountText === "") return;
+    const n = Number(overrideAmountText);
+    if (Number.isNaN(n) || live.commissionableBase <= 0) return;
+    setDraft((d) => ({ ...d, commissionPercentOverride: n / live.commissionableBase }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live.commissionableBase]);
 
   const payouts = useMemo(
     () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
@@ -1219,6 +1285,9 @@ function InvoicesPanel() {
     if (!inv) return;
     setEditing(id);
     setDraft(inv);
+    setOverrideMode("percent");
+    setOverrideAmountText("");
+    setSelectedProductId("");
   };
 
   const save = () => {
@@ -1227,6 +1296,7 @@ function InvoicesPanel() {
     if (!payload.customerName.trim()) return toast.error(t("err_customer_required"));
     if (payload.salesAmount < 0 || payload.productCost < 0) return toast.error(t("err_amounts_negative"));
     if (payload.approvalPercent < 0 || payload.approvalPercent > 1) return toast.error(t("err_approval_range"));
+    if (!isAdmin && !editing) return toast.error(t("err_reps_cannot_create"));
     if (!isAdmin && editing) {
       const existing = s.invoices.find((x) => x.id === editing);
       if (existing && existing.agentId !== myAgentId) return toast.error(t("err_own_invoices"));
@@ -1255,6 +1325,9 @@ function InvoicesPanel() {
     }
     setEditing(null);
     setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
+    setOverrideMode("percent");
+    setOverrideAmountText("");
+    setSelectedProductId("");
   };
 
   const updateLine = (key: "charges" | "credits", i: number, field: "label" | "amount", v: string) => {
@@ -1269,6 +1342,7 @@ function InvoicesPanel() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+      {(isAdmin || editing) && (
       <SectionCard
         title={t(editing ? "sect_invoice_edit" : "sect_invoice_new")}
         desc={t("sect_invoice_desc")}
@@ -1314,28 +1388,49 @@ function InvoicesPanel() {
             </Select>
           </div>
 
+          {s.products.length > 0 && (
+            <div><Label>{s.language === "es" ? "Producto" : "Product"}</Label>
+              <Select
+                value={selectedProductId || "none"}
+                onValueChange={(v) => {
+                  setSelectedProductId(v === "none" ? "" : v);
+                  if (v === "none") return;
+                  const p = s.products.find((x) => x.id === v);
+                  if (p) setDraft({ ...draft, productCost: p.cost });
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— {s.language === "es" ? "Ninguno" : "None"} —</SelectItem>
+                  {s.products.filter((p) => p.active).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {fmtMoney(p.cost, s.company.currency)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div><Label>{t("lbl_sales_amount")}</Label>
-            <Input type="number" step="0.01" value={draft.salesAmount} onChange={(e) => setDraft({ ...draft, salesAmount: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.salesAmount} onChange={(n) => setDraft({ ...draft, salesAmount: n })} />
           </div>
           <div><Label>{t("lbl_product_cost")}</Label>
-            <Input type="number" step="0.01" value={draft.productCost} onChange={(e) => setDraft({ ...draft, productCost: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.productCost} onChange={(n) => setDraft({ ...draft, productCost: n })} />
           </div>
           <div><Label>{t("lbl_approval_pct")}</Label>
-            <Input type="number" step="0.1" value={(draft.approvalPercent * 100).toFixed(2)}
-              onChange={(e) => setDraft({ ...draft, approvalPercent: Number(e.target.value) / 100 })} />
+            <PercentField step="0.1" value={draft.approvalPercent} onChange={(n) => setDraft({ ...draft, approvalPercent: n })} />
           </div>
           <div><Label>{t("lbl_discount")}</Label>
-            <Input type="number" step="0.01" value={draft.discount} onChange={(e) => setDraft({ ...draft, discount: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.discount} onChange={(n) => setDraft({ ...draft, discount: n })} />
           </div>
           <div><Label>{t("lbl_advance_applied")}</Label>
-            <Input type="number" step="0.01" value={draft.advanceApplied} onChange={(e) => setDraft({ ...draft, advanceApplied: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.advanceApplied} onChange={(n) => setDraft({ ...draft, advanceApplied: n })} />
           </div>
           <div><Label>{t("lbl_special_deductions")}</Label>
-            <Input type="number" step="0.01" value={draft.specialDeductions} onChange={(e) => setDraft({ ...draft, specialDeductions: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.specialDeductions} onChange={(n) => setDraft({ ...draft, specialDeductions: n })} />
           </div>
           <div><Label>{t("lbl_tax_reserve_pct")}</Label>
-            <Input type="number" step="0.1" value={(draft.taxReservePercent * 100).toFixed(2)}
-              onChange={(e) => setDraft({ ...draft, taxReservePercent: Number(e.target.value) / 100 })} />
+            <PercentField step="0.1" value={draft.taxReservePercent} onChange={(n) => setDraft({ ...draft, taxReservePercent: n })} />
           </div>
           <div><Label>{t("lbl_sale_type")}</Label>
             <Select value={draft.saleType || "finance"} onValueChange={(v: any) => setDraft({ ...draft, saleType: v })}>
@@ -1350,12 +1445,10 @@ function InvoicesPanel() {
             </Select>
           </div>
           <div><Label>C.C.P.F. % {draft.saleType === "credit_card" ? "" : t("lbl_card_only")}</Label>
-            <Input type="number" step="0.1" value={((draft.ccpfPercent ?? 0.035) * 100).toFixed(2)}
-              onChange={(e) => setDraft({ ...draft, ccpfPercent: Number(e.target.value) / 100 })} />
+            <PercentField step="0.1" value={draft.ccpfPercent ?? 0.035} onChange={(n) => setDraft({ ...draft, ccpfPercent: n })} />
           </div>
           <div><Label>{t("lbl_admin_fee_pct")}</Label>
-            <Input type="number" step="0.1" value={((draft.adminFeePercent ?? 0) * 100).toFixed(2)}
-              onChange={(e) => setDraft({ ...draft, adminFeePercent: Number(e.target.value) / 100 })} />
+            <PercentField step="0.1" value={draft.adminFeePercent ?? 0} onChange={(n) => setDraft({ ...draft, adminFeePercent: n })} />
           </div>
           <div><Label>{t("lbl_dealer_fee")}</Label>
             <Input type="number" step="0.01"
@@ -1364,12 +1457,10 @@ function InvoicesPanel() {
               onChange={(e) => setDraft({ ...draft, dealerFee: e.target.value === "" ? undefined : Number(e.target.value) })} />
           </div>
           <div><Label>{t("lbl_approved_advance")}</Label>
-            <Input type="number" step="0.01" value={draft.approvedAdvanceAmount ?? 0}
-              onChange={(e) => setDraft({ ...draft, approvedAdvanceAmount: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.approvedAdvanceAmount ?? 0} onChange={(n) => setDraft({ ...draft, approvedAdvanceAmount: n })} />
           </div>
           <div><Label>{t("lbl_pending_advance")}</Label>
-            <Input type="number" step="0.01" value={draft.pendingAdvanceBalance ?? 0}
-              onChange={(e) => setDraft({ ...draft, pendingAdvanceBalance: Number(e.target.value) })} />
+            <NumField step="0.01" value={draft.pendingAdvanceBalance ?? 0} onChange={(n) => setDraft({ ...draft, pendingAdvanceBalance: n })} />
           </div>
           <div><Label>{t("lbl_commission_level")}</Label>
             <Input value={draft.commissionLevel ?? ""} readOnly disabled
@@ -1395,7 +1486,19 @@ function InvoicesPanel() {
                 {t("lbl_commission_override")}
               </Label>
                 <div className="flex gap-2">
-                  <Select value={overrideMode} onValueChange={(v: "percent" | "amount") => setOverrideMode(v)}>
+                  <Select
+                    value={overrideMode}
+                    onValueChange={(v: "percent" | "amount") => {
+                      setOverrideMode(v);
+                      if (v === "amount") {
+                        setOverrideAmountText(
+                          draft.commissionPercentOverride != null && live.commissionableBase > 0
+                            ? (draft.commissionPercentOverride * live.commissionableBase).toFixed(2)
+                            : ""
+                        );
+                      }
+                    }}
+                  >
                     <SelectTrigger className="w-20 shrink-0"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="percent">%</SelectItem>
@@ -1418,18 +1521,20 @@ function InvoicesPanel() {
                       type="number"
                       step="1"
                       placeholder={s.language === "es" ? "Monto fijo" : "Flat amount"}
-                      value={
-                        draft.commissionPercentOverride != null && live.commissionableBase > 0
-                          ? (draft.commissionPercentOverride * live.commissionableBase).toFixed(2)
-                          : ""
-                      }
-                      onChange={(e) => setDraft({
-                        ...draft,
-                        commissionPercentOverride:
-                          e.target.value === "" || live.commissionableBase <= 0
-                            ? undefined
-                            : Number(e.target.value) / live.commissionableBase,
-                      })}
+                      value={overrideAmountText}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setOverrideAmountText(raw);
+                        if (raw === "" || raw === "-") {
+                          setDraft({ ...draft, commissionPercentOverride: undefined });
+                          return;
+                        }
+                        const n = Number(raw);
+                        if (Number.isNaN(n)) return;
+                        if (live.commissionableBase > 0) {
+                          setDraft({ ...draft, commissionPercentOverride: n / live.commissionableBase });
+                        }
+                      }}
                     />
                   )}
                 </div>
@@ -1448,11 +1553,13 @@ function InvoicesPanel() {
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? "Update" : "Create invoice"}</Button>
           {editing && (
-            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setOverrideMode("percent"); setOverrideAmountText(""); setSelectedProductId(""); }}>Cancel</Button>
           )}
         </div>
       </SectionCard>
+      )}
 
+      {(isAdmin || editing) && (
       <SectionCard title={t("preview_title")} desc={t("sect_invoice_preview_desc")}>
         <Row k={t("preview_sales")} v={fmtMoney(draft.salesAmount, s.company.currency)} />
         <Row k={t("preview_approval")} v={fmtMoney(live.approvalAmount, s.company.currency)} />
@@ -1530,6 +1637,7 @@ function InvoicesPanel() {
           );
         })()}
       </SectionCard>
+      )}
 
       <div className="lg:col-span-2">
         <SectionCard title={t(isAdmin ? "sect_all_invoices" : "sect_my_invoices_lbl")} desc={t(isAdmin ? "sect_all_invoices_desc" : "sect_my_invoices_desc")}>

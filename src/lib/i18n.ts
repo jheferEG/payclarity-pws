@@ -342,6 +342,7 @@ const D: Dict = {
   err_amounts_negative: { es: "Los montos no pueden ser negativos", en: "Amounts cannot be negative" },
   err_approval_range: { es: "La aprobación debe ser 0–100%", en: "Approval must be 0–100%" },
   err_own_invoices: { es: "Solo puedes editar tus propios invoices", en: "You can only edit your own invoices" },
+  err_reps_cannot_create: { es: "Los vendedores no pueden crear invoices; pídele a un admin que lo cree", en: "Sales reps can't create invoices — ask an admin to create it" },
   err_split_approve: { es: "Aprueba el split antes de marcar el invoice como pagado.", en: "Approve the split commission before marking the invoice paid." },
   err_pdf: { es: "No se pudo generar el PDF", en: "Could not generate PDF" },
   success_rep_added: { es: "Vendedor agregado", en: "Salesperson added" },
