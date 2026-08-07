@@ -1778,7 +1778,7 @@ function PlanPanel() {
   const {
     personalTiers, overrides, setPersonalTiers, setOverrides,
     positions, addPosition, updatePosition, removePosition,
-    financeCompanies, company,
+    financeCompanies, company, language,
   } = useStore();
   const tierErrs = validateTiers(personalTiers);
   const ovErrs = validateOverrides(overrides);
@@ -1795,9 +1795,19 @@ function PlanPanel() {
     setOverrides(next);
   };
 
+  // Levels are matched by name (not id) wherever an agent's level is stored,
+  // so two positions sharing a name silently collide in every level picker.
+  const uniquePositionName = (base: string) => {
+    const existing = new Set(positions.map((p) => p.name.trim().toLowerCase()));
+    if (!existing.has(base.trim().toLowerCase())) return base;
+    let i = 2;
+    while (existing.has(`${base} ${i}`.toLowerCase())) i++;
+    return `${base} ${i}`;
+  };
+
   const addBlankPosition = (name = "New Position") =>
     addPosition({
-      name,
+      name: uniquePositionName(name),
       commissionPercent: 0.08,
       fixedPayout: 0,
       overrideEligible: false,
@@ -1879,7 +1889,21 @@ function PlanPanel() {
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Input className="font-semibold w-56" value={p.name}
-                        onChange={(e) => updatePosition(p.id, { name: e.target.value })} />
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const dup = positions.some(
+                            (x) => x.id !== p.id && x.name.trim().toLowerCase() === v.trim().toLowerCase()
+                          );
+                          if (dup && v.trim() !== "") {
+                            toast.error(
+                              language === "es"
+                                ? `Ya existe un nivel llamado "${v}"`
+                                : `A level named "${v}" already exists`
+                            );
+                            return;
+                          }
+                          updatePosition(p.id, { name: v });
+                        }} />
                       <label className="flex items-center gap-2 text-xs">
                         <Switch checked={p.active} onCheckedChange={(v) => updatePosition(p.id, { active: v })} />
                         {p.active ? t("lbl_active") : t("lbl_inactive")}
