@@ -1190,6 +1190,7 @@ function InvoicesPanel() {
     const b = blankInvoice();
     return myAgentId ? { ...b, agentId: myAgentId } : b;
   });
+  const [overrideMode, setOverrideMode] = useState<"percent" | "amount">("percent");
 
   const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
 
@@ -1393,16 +1394,45 @@ function InvoicesPanel() {
               <div><Label>
                 {t("lbl_commission_override")}
               </Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder={`Default: ${defaultLabel}`}
-                  value={draft.commissionPercentOverride != null ? (draft.commissionPercentOverride * 100).toFixed(2) : ""}
-                  onChange={(e) => setDraft({
-                    ...draft,
-                    commissionPercentOverride: e.target.value === "" ? undefined : Number(e.target.value) / 100,
-                  })}
-                />
+                <div className="flex gap-2">
+                  <Select value={overrideMode} onValueChange={(v: "percent" | "amount") => setOverrideMode(v)}>
+                    <SelectTrigger className="w-20 shrink-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percent">%</SelectItem>
+                      <SelectItem value="amount">{s.company.currency}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {overrideMode === "percent" ? (
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder={`Default: ${defaultLabel}`}
+                      value={draft.commissionPercentOverride != null ? (draft.commissionPercentOverride * 100).toFixed(2) : ""}
+                      onChange={(e) => setDraft({
+                        ...draft,
+                        commissionPercentOverride: e.target.value === "" ? undefined : Number(e.target.value) / 100,
+                      })}
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder={s.language === "es" ? "Monto fijo" : "Flat amount"}
+                      value={
+                        draft.commissionPercentOverride != null && live.commissionableBase > 0
+                          ? (draft.commissionPercentOverride * live.commissionableBase).toFixed(2)
+                          : ""
+                      }
+                      onChange={(e) => setDraft({
+                        ...draft,
+                        commissionPercentOverride:
+                          e.target.value === "" || live.commissionableBase <= 0
+                            ? undefined
+                            : Number(e.target.value) / live.commissionableBase,
+                      })}
+                    />
+                  )}
+                </div>
               </div>
             );
           })()}
