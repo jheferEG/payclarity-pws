@@ -1578,7 +1578,16 @@ function InvoicesPanel() {
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
                         <td className="text-right">
                           <Button variant="ghost" size="sm" onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
-                          <Button variant="ghost" size="sm" title="Explain this commission" onClick={() => setExplainId(inv.id)}><HelpCircle className="w-4 h-4" /></Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-accent hover:text-accent"
+                            title={t("btn_explain_commission")}
+                            onClick={() => setExplainId(inv.id)}
+                          >
+                            <HelpCircle className="w-4 h-4 mr-1" />
+                            {t("btn_explain_commission")}
+                          </Button>
                           <Button variant="ghost" size="sm" title="Request correction" onClick={() => setDisputeId(inv.id)}><MessageSquare className="w-4 h-4" /></Button>
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title="Split commission" onClick={() => setSplitId(inv.id)}>

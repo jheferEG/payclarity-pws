@@ -150,6 +150,7 @@ const D: Dict = {
   btn_add_line: { es: "Agregar línea", en: "Add line" },
   btn_reset_data: { es: "Reiniciar datos", en: "Reset all data" },
   btn_preview: { es: "Vista previa", en: "Preview" },
+  btn_explain_commission: { es: "¿Por qué esta comisión?", en: "Why this commission?" },
   btn_tier: { es: "+ Nivel", en: "+ Tier" },
   btn_level: { es: "+ Nivel", en: "+ Level" },
   btn_xlsx_summary: { es: "Resumen XLSX", en: "XLSX summary" },
