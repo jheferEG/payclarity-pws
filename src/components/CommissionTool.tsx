@@ -1445,7 +1445,13 @@ function InvoicesPanel() {
             </Select>
           </div>
           <div><Label>C.C.P.F. % {draft.saleType === "credit_card" ? "" : t("lbl_card_only")}</Label>
-            <PercentField step="0.1" value={draft.ccpfPercent ?? 0.035} onChange={(n) => setDraft({ ...draft, ccpfPercent: n })} />
+            <PercentField
+              step="0.1"
+              value={draft.ccpfPercent ?? 0.035}
+              onChange={(n) => setDraft({ ...draft, ccpfPercent: n })}
+              disabled={draft.saleType !== "credit_card"}
+              className={draft.saleType !== "credit_card" ? "opacity-50" : ""}
+            />
           </div>
           <div><Label>{t("lbl_admin_fee_pct")}</Label>
             <PercentField step="0.1" value={draft.adminFeePercent ?? 0} onChange={(n) => setDraft({ ...draft, adminFeePercent: n })} />
