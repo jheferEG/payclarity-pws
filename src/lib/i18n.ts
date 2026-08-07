@@ -23,7 +23,7 @@ const D: Dict = {
   nav_tools: { es: "Herramientas", en: "Tools" },
 
   // Quick actions
-  qa_create_invoice: { es: "+ Crear nuevo invoice", en: "+ Create New Invoice" },
+  qa_create_invoice: { es: "Crear nuevo invoice", en: "Create New Invoice" },
   qa_add_rep: { es: "Agregar vendedor", en: "Add Sales Rep" },
   qa_setup_plan: { es: "Configurar plan", en: "Setup Commission Plan" },
   qa_test_pdf: { es: "Generar PDF de prueba", en: "Generate Test PDF" },
