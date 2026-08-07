@@ -13,6 +13,8 @@ export type Agent = {
   paymentMethod?: string;
   taxReservePercent?: number;
   commissionPercent?: number; // default personal commission rate (e.g. 0.08 = 8%)
+  commissionMode?: "percent" | "fixed"; // "fixed" pays fixedCommissionAmount per invoice instead of a %
+  fixedCommissionAmount?: number; // flat $ paid per qualifying invoice when commissionMode === "fixed"
   level?: string;             // commission level label (e.g. Junior Rep, Sales Rep, Manager)
   avatarUrl?: string;         // base64 or URL for profile photo
 };

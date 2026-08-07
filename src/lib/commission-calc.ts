@@ -161,15 +161,21 @@ export function calcPayouts(
     // Default rate: salesperson's own Commission % when set; otherwise volume tier.
     const personalRate =
       a.commissionPercent != null ? a.commissionPercent : rateForVolume(tiers, personalProfit);
+    const usesFixedPayout = a.commissionMode === "fixed" && a.fixedCommissionAmount != null;
     // Sum commission per-invoice so admin per-invoice overrides apply.
     const myInvoices = invoicesByAgent.get(a.id) || [];
     const personalCommission = myInvoices.reduce((sum, c) => {
-      const rate =
-        c.invoice.commissionPercentOverride != null
-          ? c.invoice.commissionPercentOverride
-          : personalRate;
-      return sum + Math.max(0, c.commissionableBase) * rate;
+      if (c.invoice.commissionPercentOverride != null) {
+        return sum + Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride;
+      }
+      if (usesFixedPayout) return sum + (a.fixedCommissionAmount || 0);
+      return sum + Math.max(0, c.commissionableBase) * personalRate;
     }, 0);
+    // When paid a flat amount, report the effective rate (for display only —
+    // e.g. "@ X%" in PDFs/tables) rather than the unused percent/tier rate.
+    const personalRateForDisplay = usesFixedPayout
+      ? (personalBase > 0 ? personalCommission / personalBase : 0)
+      : personalRate;
 
     const dl = collectDownline(a.id, children);
     const downline: DownlineEntry[] = dl.map(({ agent, level }) => {
@@ -193,7 +199,7 @@ export function calcPayouts(
       agent: a,
       invoices: invoicesByAgent.get(a.id) || [],
       personalProfit,
-      personalRate,
+      personalRate: personalRateForDisplay,
       personalCommission,
       downline,
       overrideTotal,

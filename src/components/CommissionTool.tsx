@@ -1018,14 +1018,37 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                     </Select>
                   </td>
                   <td>
-                    <Input
-                      className="h-8 w-20"
-                      type="number"
-                      step="0.1"
-                      value={a.commissionPercent != null ? (a.commissionPercent * 100).toFixed(1) : ""}
-                      onChange={(e) => updateAgent(a.id, { commissionPercent: e.target.value === "" ? undefined : Number(e.target.value) / 100 })}
-                      placeholder="8"
-                    />
+                    <div className="flex gap-1">
+                      <Select
+                        value={a.commissionMode === "fixed" ? "fixed" : "percent"}
+                        onValueChange={(v: "percent" | "fixed") => updateAgent(a.id, { commissionMode: v })}
+                      >
+                        <SelectTrigger className="h-8 w-16 shrink-0"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="fixed">$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {a.commissionMode === "fixed" ? (
+                        <Input
+                          className="h-8 w-20"
+                          type="number"
+                          step="1"
+                          value={a.fixedCommissionAmount ?? ""}
+                          onChange={(e) => updateAgent(a.id, { fixedCommissionAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          placeholder={isEs ? "por invoice" : "per invoice"}
+                        />
+                      ) : (
+                        <Input
+                          className="h-8 w-20"
+                          type="number"
+                          step="0.1"
+                          value={a.commissionPercent != null ? (a.commissionPercent * 100).toFixed(1) : ""}
+                          onChange={(e) => updateAgent(a.id, { commissionPercent: e.target.value === "" ? undefined : Number(e.target.value) / 100 })}
+                          placeholder="8"
+                        />
+                      )}
+                    </div>
                   </td>
                   <td>
                     <Select value={a.level || "none"} onValueChange={(v) => updateAgent(a.id, { level: v === "none" ? "" : v })}>
