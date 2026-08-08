@@ -1219,11 +1219,13 @@ function NumField({
   return (
     <Input
       {...props}
-      type="number"
+      type="text"
+      inputMode="decimal"
       className={className}
       value={text}
       onChange={(e) => {
         const raw = e.target.value;
+        if (raw !== "" && raw !== "-" && !/^-?\d*\.?\d*$/.test(raw)) return;
         setText(raw);
         if (raw === "" || raw === "-") return;
         const n = Number(raw);
@@ -1268,6 +1270,7 @@ function InvoicesPanel() {
     return myAgentId ? { ...b, agentId: myAgentId } : b;
   });
   const [overrideMode, setOverrideMode] = useState<"percent" | "amount">("percent");
+  const [overridePercentText, setOverridePercentText] = useState("");
   const [overrideAmountText, setOverrideAmountText] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
 
@@ -1309,6 +1312,7 @@ function InvoicesPanel() {
     setEditing(id);
     setDraft(inv);
     setOverrideMode("percent");
+    setOverridePercentText(inv.commissionPercentOverride != null ? (inv.commissionPercentOverride * 100).toFixed(2) : "");
     setOverrideAmountText("");
     setSelectedProductId("");
   };
@@ -1349,6 +1353,7 @@ function InvoicesPanel() {
     setEditing(null);
     setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
     setOverrideMode("percent");
+    setOverridePercentText("");
     setOverrideAmountText("");
     setSelectedProductId("");
   };
@@ -1525,6 +1530,12 @@ function InvoicesPanel() {
                             ? (draft.commissionPercentOverride * live.commissionableBase).toFixed(2)
                             : ""
                         );
+                      } else {
+                        setOverridePercentText(
+                          draft.commissionPercentOverride != null
+                            ? (draft.commissionPercentOverride * 100).toFixed(2)
+                            : ""
+                        );
                       }
                     }}
                   >
@@ -1536,23 +1547,31 @@ function InvoicesPanel() {
                   </Select>
                   {overrideMode === "percent" ? (
                     <Input
-                      type="number"
-                      step="0.1"
+                      type="text"
+                      inputMode="decimal"
                       placeholder={`Default: ${defaultLabel}`}
-                      value={draft.commissionPercentOverride != null ? (draft.commissionPercentOverride * 100).toFixed(2) : ""}
-                      onChange={(e) => setDraft({
-                        ...draft,
-                        commissionPercentOverride: e.target.value === "" ? undefined : Number(e.target.value) / 100,
-                      })}
+                      value={overridePercentText}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw !== "" && raw !== "-" && !/^-?\d*\.?\d*$/.test(raw)) return;
+                        setOverridePercentText(raw);
+                        if (raw === "" || raw === "-") {
+                          setDraft({ ...draft, commissionPercentOverride: undefined });
+                          return;
+                        }
+                        const n = Number(raw);
+                        if (!Number.isNaN(n)) setDraft({ ...draft, commissionPercentOverride: n / 100 });
+                      }}
                     />
                   ) : (
                     <Input
-                      type="number"
-                      step="1"
+                      type="text"
+                      inputMode="decimal"
                       placeholder={s.language === "es" ? "Monto fijo" : "Flat amount"}
                       value={overrideAmountText}
                       onChange={(e) => {
                         const raw = e.target.value;
+                        if (raw !== "" && raw !== "-" && !/^-?\d*\.?\d*$/.test(raw)) return;
                         setOverrideAmountText(raw);
                         if (raw === "" || raw === "-") {
                           setDraft({ ...draft, commissionPercentOverride: undefined });
@@ -1582,7 +1601,7 @@ function InvoicesPanel() {
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? "Update" : "Create invoice"}</Button>
           {editing && (
-            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setOverrideMode("percent"); setOverrideAmountText(""); setSelectedProductId(""); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setOverrideMode("percent"); setOverridePercentText(""); setOverrideAmountText(""); setSelectedProductId(""); }}>Cancel</Button>
           )}
         </div>
       </SectionCard>
