@@ -247,12 +247,9 @@ export function buildSaleInvoicePDF(
       `Finance fee (${(c.financeCo.defaultFee * 100).toFixed(2)}%)`,
       fmtMoney(c.financeCo.defaultFee * inv.salesAmount, cur),
     ]);
-  if (inv.adminFeePercent) {
-    chargeRows.push([
-      `Admin fee (${(inv.adminFeePercent * 100).toFixed(2)}%)`,
-      fmtMoney(inv.salesAmount * inv.adminFeePercent, cur),
-    ]);
-  }
+  // Admin fee is intentionally NOT listed here — it doesn't reduce the sale
+  // or c.totalCharges; it's shown instead as a deduction from the seller's
+  // own commission, in the "Your Commission" section below.
   if (inv.saleType === "credit_card") {
     const ccpfPct = inv.ccpfPercent ?? 0.035;
     chargeRows.push([
@@ -306,10 +303,6 @@ export function buildSaleInvoicePDF(
         { content: "Profit", styles: { fontStyle: "bold" } },
         { content: fmtMoney(c.profit, cur), styles: { fontStyle: "bold" } },
       ],
-      [
-        { content: "Commission base", styles: { fontStyle: "bold" } },
-        { content: fmtMoney(c.commissionableBase, cur), styles: { fontStyle: "bold" } },
-      ],
     ],
     theme: "plain",
     margin: { left: pageW / 2, right: margin },
@@ -345,8 +338,8 @@ export function buildSaleInvoicePDF(
       startY: y3 + 6,
       head: [["Participant", "Role", "Split %", "Share"]],
       body: inv.split.participants.map((p) => {
-        const share = Math.max(0, c.commissionableBase) *
-          (inv.commissionPercentOverride ?? 0) * p.splitPercent;
+        const pool = Math.max(0, Math.max(0, c.commissionableBase) * (inv.commissionPercentOverride ?? 0) - c.adminFeeAmount);
+        const share = pool * p.splitPercent;
         return [
           p.displayName || "—",
           p.role === "custom" ? p.customRoleLabel || "Custom" : p.role,
@@ -388,8 +381,11 @@ export function buildSaleInvoicePDF(
     const startY = (doc as any).lastAutoTable?.finalY ?? y;
     const rows: any[] = [
       ["Compensation level", `${inv.commissionLevel || "—"} (${(effectiveRate * 100).toFixed(2)}%)`],
-      ["Personal commission", fmtMoney(payout.personalCommission, cur)],
     ];
+    if (c.adminFeeAmount > 0) {
+      rows.push(["Admin fee (from commission)", `- ${fmtMoney(c.adminFeeAmount, cur)}`]);
+    }
+    rows.push(["Personal commission", fmtMoney(payout.personalCommission, cur)]);
     if (payout.overrideTotal > 0) {
       rows.push(["Downline override", fmtMoney(payout.overrideTotal, cur)]);
     }

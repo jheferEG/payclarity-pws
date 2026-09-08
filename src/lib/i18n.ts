@@ -327,7 +327,6 @@ const D: Dict = {
   preview_grand_total: { es: "Gran total", en: "Grand total" },
   preview_product_cost_lbl: { es: "Costo del producto", en: "Product cost" },
   preview_net_profit: { es: "Profit neto", en: "Net profit" },
-  preview_commission_base: { es: "Base de comisión (admin fee no la reduce)", en: "Commission base (admin fee excluded)" },
   preview_override_total: { es: "Total override", en: "Override total" },
 
   // Simulator results

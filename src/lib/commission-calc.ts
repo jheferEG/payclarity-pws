@@ -19,10 +19,10 @@ export type InvoiceCalc = {
   approvalAmount: number;
   totalCharges: number;
   totalCredits: number;
-  grandTotal: number;        // approval - charges + credits - discount
-  profit: number;            // grandTotal - productCost (true bottom line, admin fee included)
-  adminFeeAmount: number;    // invoice-level admin fee — company overhead, not a commission cost
-  commissionProfit: number;  // profit with the admin fee added back — what compensation is based on
+  grandTotal: number;        // approval - charges + credits - discount (admin fee excluded)
+  profit: number;            // grandTotal - productCost (admin fee excluded)
+  adminFeeAmount: number;    // invoice-level admin fee — deducted from the seller's commission, not from the sale/profit
+  commissionProfit: number;  // = profit (alias kept for callers) — the base commissions/overrides are computed on
   commissionableBase: number; // base used for commission % (commissionProfit or productCost)
 };
 
@@ -37,13 +37,14 @@ export function calcInvoice(
     inv.saleType === "credit_card"
       ? inv.salesAmount * (inv.ccpfPercent ?? 0.035)
       : 0;
+  // The admin fee is deducted directly from the seller's commission (see
+  // calcPayouts), not from the sale/profit — it never enters totalCharges.
   const adminFeeAmount = inv.salesAmount * (inv.adminFeePercent || 0);
   const totalCharges =
     (inv.charges || []).reduce((s, c) => s + Number(c.amount || 0), 0) +
     (fc ? fc.adminFee + fc.defaultFee * inv.salesAmount : 0) +
     dealerFee +
-    ccpf +
-    adminFeeAmount;
+    ccpf;
   const totalCredits = (inv.credits || []).reduce(
     (s, c) => s + Number(c.amount || 0),
     0
@@ -51,11 +52,7 @@ export function calcInvoice(
   const grandTotal =
     approvalAmount - inv.discount - totalCharges + totalCredits;
   const profit = grandTotal - (inv.productCost || 0);
-  // The admin fee is company overhead charged on top of the deal — it
-  // reduces the company's bottom line (`profit`) but must never shrink
-  // what reps/upline are paid on, so it's added back here before it
-  // becomes the base for commissions and overrides.
-  const commissionProfit = profit + adminFeeAmount;
+  const commissionProfit = profit;
   const commissionableBase =
     inv.commissionBase === "product_cost" ? (inv.productCost || 0) : commissionProfit;
   return {
@@ -173,14 +170,17 @@ export function calcPayouts(
     const personalRate =
       a.commissionPercent != null ? a.commissionPercent : rateForVolume(tiers, personalProfit);
     const usesFixedPayout = a.commissionMode === "fixed" && a.fixedCommissionAmount != null;
-    // Sum commission per-invoice so admin per-invoice overrides apply.
+    // Sum commission per-invoice so admin per-invoice overrides apply. The
+    // admin fee comes out of the seller's own commission on that invoice —
+    // it never touches the sale total, profit, or the commission base/rate.
     const myInvoices = invoicesByAgent.get(a.id) || [];
     const personalCommission = myInvoices.reduce((sum, c) => {
-      if (c.invoice.commissionPercentOverride != null) {
-        return sum + Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride;
-      }
-      if (usesFixedPayout) return sum + (a.fixedCommissionAmount || 0);
-      return sum + Math.max(0, c.commissionableBase) * personalRate;
+      const raw = c.invoice.commissionPercentOverride != null
+        ? Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride
+        : usesFixedPayout
+          ? (a.fixedCommissionAmount || 0)
+          : Math.max(0, c.commissionableBase) * personalRate;
+      return sum + Math.max(0, raw - c.adminFeeAmount);
     }, 0);
     // When paid a flat amount, report the effective rate (for display only —
     // e.g. "@ X%" in PDFs/tables) rather than the unused percent/tier rate.

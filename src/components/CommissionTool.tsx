@@ -1723,16 +1723,15 @@ function InvoicesPanel() {
         <Row k={t("preview_grand_total")} v={fmtMoney(live.grandTotal, s.company.currency)} bold />
         <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(draft.productCost, s.company.currency)}`} />
         <Row k={t("preview_net_profit")} v={fmtMoney(live.profit, s.company.currency)} accent bold />
-        {live.adminFeeAmount > 0 && (
-          <Row k={t("preview_commission_base")} v={fmtMoney(live.commissionProfit, s.company.currency)} />
-        )}
         {(() => {
           const ag = s.agents.find((a) => a.id === draft.agentId);
           const rate =
             draft.commissionPercentOverride != null
               ? draft.commissionPercentOverride
               : ag?.commissionPercent ?? 0;
-          const personal = Math.max(0, live.commissionableBase) * rate;
+          // The admin fee never touches the sale/profit above — it comes
+          // straight out of the seller's own commission, right here.
+          const personal = Math.max(0, Math.max(0, live.commissionableBase) * rate - live.adminFeeAmount);
           const overrideMap = new Map(s.overrides.map((o) => [o.level, o.rate]));
           // Overrides flow UPWARD: it's the seller's sponsor chain that earns
           // an override on this sale, not the seller's own downline.
@@ -1767,6 +1766,9 @@ function InvoicesPanel() {
           return (
             <>
               <div className="border-t my-2" />
+              {live.adminFeeAmount > 0 && (
+                <Row k={s.language === "es" ? "Admin fee (de la comisión)" : "Admin fee (from commission)"} v={`- ${fmtMoney(live.adminFeeAmount, s.company.currency)}`} />
+              )}
               <Row k={`${t("preview_personal")} (${(rate * 100).toFixed(2)}%)`} v={fmtMoney(personal, s.company.currency)} />
               {splitRows.length > 0 && (
                 <div className="mt-1 mb-1 pl-3 border-l-2 border-accent/30">

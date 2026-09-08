@@ -710,7 +710,7 @@ export function SplitEditorDialog({
     inv.commissionPercentOverride ??
     s.agents.find((a) => a.id === inv.agentId)?.commissionPercent ??
     0;
-  const pool = Math.max(0, calc.commissionableBase) * personalRate;
+  const pool = Math.max(0, Math.max(0, calc.commissionableBase) * personalRate - calc.adminFeeAmount);
   const total = totalSplitPercent(participants);
   const valid = isSplitValid(participants);
   const split = inv.split ?? null;

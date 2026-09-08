@@ -27,7 +27,7 @@ export function shareForAgent(
   const part = split.participants.find((p) => p.agentId === agentId);
   if (!part) return null;
   const rate = inv.commissionPercentOverride ?? agentRate;
-  const pool = Math.max(0, c.commissionableBase) * rate;
+  const pool = Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
   return { share: pool * part.splitPercent, participant: part };
 }
 
@@ -86,9 +86,10 @@ export function buildWallet(
   const entries: Omit<LedgerEntry, "balance">[] = [];
 
   for (const c of payout.invoices) {
-    const fullCommission =
-      Math.max(0, c.commissionableBase) *
-      (c.invoice.commissionPercentOverride ?? payout.personalRate);
+    const fullCommission = Math.max(
+      0,
+      Math.max(0, c.commissionableBase) * (c.invoice.commissionPercentOverride ?? payout.personalRate) - c.adminFeeAmount
+    );
     const split = c.invoice.split;
     let myShare = fullCommission;
     let splitNote = "";
@@ -377,7 +378,7 @@ export function explainInvoice(
     );
     if (c.adminFeeAmount > 0)
       lines.push(
-        `El admin fee (${m(c.adminFeeAmount)}) es un gasto de la empresa y no reduce la comisión: la base de comisión es ${m(c.commissionProfit)}.`
+        `El admin fee (${m(c.adminFeeAmount)}) no reduce la venta ni el profit — se descuenta directamente de la comisión del vendedor.`
       );
     const baseLabelEs = inv.commissionBase === "product_cost" ? "el costo del producto" : "el profit";
     lines.push(
@@ -465,7 +466,7 @@ export function explainInvoice(
   );
   if (c.adminFeeAmount > 0)
     lines.push(
-      `The admin fee (${m(c.adminFeeAmount)}) is a company expense and does not reduce commission: the commission base is ${m(c.commissionProfit)}.`
+      `The admin fee (${m(c.adminFeeAmount)}) doesn't reduce the sale or the profit — it's deducted directly from the seller's commission.`
     );
   const baseLabelEn = inv.commissionBase === "product_cost" ? "product cost" : "profit";
   lines.push(
@@ -671,7 +672,9 @@ export function computeInvolved(
   upline.reverse(); // topmost sponsor first
 
   const rate = inv.commissionPercentOverride ?? seller.commissionPercent ?? 0;
-  const personal = Math.max(0, c.commissionableBase) * rate;
+  // Admin fee comes straight out of the seller's own commission — never
+  // out of the sale/profit or the overrides paid on it.
+  const personal = Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
   const splits = inv.split?.participants ?? [];
 
   const rows: InvolvedRow[] = upline.map((u) => ({
