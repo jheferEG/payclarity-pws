@@ -893,8 +893,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
   const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language } = useStore();
   const t = useT();
   const isEs = language === "es";
-  const [form, setForm] = useState({ name: "", email: "", sponsorId: "", commissionPercent: "", level: "" });
-  const [formCommissionMode, setFormCommissionMode] = useState<"percent" | "fixed">("fixed");
+  const [form, setForm] = useState({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "" });
 
   const readiness = useMemo(() => {
     if (agents.length === 0) return null;
@@ -916,21 +915,21 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
     if (!form.name.trim()) return toast.error(t("err_name_required"));
     if (!form.email.trim()) return toast.error(t("err_email_required"));
     // Sponsor is optional — the top of the tree (first rep / owner) has no upline.
-    const valRaw = form.commissionPercent.trim();
-    if (valRaw === "" || isNaN(Number(valRaw))) return toast.error(t("err_commission_required"));
+    const fixedRaw = form.fixedAmount.trim();
+    const pctRaw = form.percentValue.trim();
+    if (fixedRaw === "" && pctRaw === "") return toast.error(t("err_commission_required"));
     if (!form.level.trim()) return toast.error(t("err_level_required"));
+    // Only one of the two fields is expected to be filled — $ wins if both are.
     addAgent({
       name: form.name.trim(),
       email: form.email.trim(),
       sponsorId: form.sponsorId || null,
-      commissionMode: formCommissionMode,
-      ...(formCommissionMode === "fixed"
-        ? { fixedCommissionAmount: Number(valRaw), commissionPercent: undefined }
-        : { commissionPercent: Number(valRaw) / 100, fixedCommissionAmount: undefined }),
+      ...(fixedRaw !== ""
+        ? { commissionMode: "fixed" as const, fixedCommissionAmount: Number(fixedRaw), commissionPercent: undefined }
+        : { commissionMode: "percent" as const, commissionPercent: Number(pctRaw) / 100, fixedCommissionAmount: undefined }),
       level: form.level.trim(),
     });
-    setForm({ name: "", email: "", sponsorId: "", commissionPercent: "", level: "" });
-    setFormCommissionMode("fixed");
+    setForm({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "" });
     toast.success(t("success_rep_added"));
   };
 
@@ -975,23 +974,23 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
             </SelectContent>
           </Select>
         </div>
-        <div><Label>{t("lbl_commission_pct")} *</Label>
-          <div className="flex gap-1">
-            <Select value={formCommissionMode} onValueChange={(v: "percent" | "fixed") => setFormCommissionMode(v)}>
-              <SelectTrigger className="w-14 shrink-0"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="percent">%</SelectItem>
-                <SelectItem value="fixed">$</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              step={formCommissionMode === "fixed" ? "1" : "0.1"}
-              value={form.commissionPercent}
-              onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })}
-              placeholder={formCommissionMode === "fixed" ? (isEs ? "por invoice" : "per invoice") : "8"}
-            />
-          </div>
+        <div><Label>{t("lbl_commission_pct")} $ *</Label>
+          <Input
+            type="number"
+            step="1"
+            value={form.fixedAmount}
+            onChange={(e) => setForm({ ...form, fixedAmount: e.target.value })}
+            placeholder={isEs ? "por invoice" : "per invoice"}
+          />
+        </div>
+        <div><Label>{t("lbl_commission_pct")} % *</Label>
+          <Input
+            type="number"
+            step="0.1"
+            value={form.percentValue}
+            onChange={(e) => setForm({ ...form, percentValue: e.target.value })}
+            placeholder="8"
+          />
         </div>
         <div><Label>{t("lbl_level")} *</Label>
           <Select value={form.level || "none"} onValueChange={(v) => setForm({ ...form, level: v === "none" ? "" : v })}>
@@ -1051,51 +1050,38 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                     </Select>
                   </td>
                   <td>
-                    {(() => {
-                      // Show $ by default for every row unless this agent has
-                      // an explicit mode saved — switching the toggle to %
-                      // still reveals whatever percent they already had.
-                      const effectiveMode: "percent" | "fixed" = a.commissionMode ?? "fixed";
-                      return (
+                    {/* Two separate fields — whichever one is filled in is
+                        the one used; typing into either sets the mode. */}
                     <div className="flex gap-1">
-                      <Select
-                        value={effectiveMode}
-                        onValueChange={(v: "percent" | "fixed") => updateAgent(a.id, { commissionMode: v })}
-                      >
-                        <SelectTrigger className="h-8 w-16 shrink-0"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percent">%</SelectItem>
-                          <SelectItem value="fixed">$</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {effectiveMode === "fixed" ? (
-                        <Input
-                          className="h-8 w-20"
+                      <div className="flex items-center h-8 rounded-md border border-input overflow-hidden">
+                        <span className="px-1.5 text-xs text-muted-foreground bg-muted h-full flex items-center">$</span>
+                        <input
+                          className="h-full w-16 px-1 text-sm bg-transparent outline-none"
                           type="number"
                           step="1"
                           value={a.fixedCommissionAmount ?? ""}
                           onChange={(e) => updateAgent(a.id, {
-                            // Persist the mode explicitly — it may only have
-                            // been the visual default until now, and the
-                            // payout calc requires commissionMode === "fixed".
                             commissionMode: "fixed",
                             fixedCommissionAmount: e.target.value === "" ? undefined : Number(e.target.value),
                           })}
                           placeholder={isEs ? "por invoice" : "per invoice"}
                         />
-                      ) : (
-                        <Input
-                          className="h-8 w-20"
+                      </div>
+                      <div className="flex items-center h-8 rounded-md border border-input overflow-hidden">
+                        <input
+                          className="h-full w-14 px-1 text-sm bg-transparent outline-none"
                           type="number"
                           step="0.1"
                           value={a.commissionPercent != null ? (a.commissionPercent * 100).toFixed(1) : ""}
-                          onChange={(e) => updateAgent(a.id, { commissionPercent: e.target.value === "" ? undefined : Number(e.target.value) / 100 })}
+                          onChange={(e) => updateAgent(a.id, {
+                            commissionMode: "percent",
+                            commissionPercent: e.target.value === "" ? undefined : Number(e.target.value) / 100,
+                          })}
                           placeholder="8"
                         />
-                      )}
+                        <span className="px-1.5 text-xs text-muted-foreground bg-muted h-full flex items-center">%</span>
+                      </div>
                     </div>
-                      );
-                    })()}
                   </td>
                   <td>
                     <Select value={a.level || "none"} onValueChange={(v) => updateAgent(a.id, { level: v === "none" ? "" : v })}>
