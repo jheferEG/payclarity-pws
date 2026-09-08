@@ -4,7 +4,7 @@ import type {
   Payment, Adjustment, Dispute, RequestEvent, Notification, NotificationKind,
   PersonalTier, OverrideLevel, Company, W9Status,
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
-  Product, CompensationPosition,
+  Product, CompensationPosition, PayoutDocument,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -253,6 +253,49 @@ export function paymentToRow(p: Payment, companyId: string) {
     reference: p.reference,
     scheduled_date: p.scheduledDate ?? undefined,
     status: p.status ?? undefined,
+  };
+}
+
+// ─── PAYOUT DOCUMENTS ────────────────────────────────────────────────────────
+
+export function adaptPayoutDocument(row: Tables<"payout_documents">): PayoutDocument {
+  return {
+    id: row.id,
+    number: row.number,
+    invoiceId: row.invoice_id,
+    agentId: row.agent_id,
+    roleLabel: row.role_label,
+    description: row.description,
+    amount: Number(row.amount),
+    status: row.status,
+    scheduledDate: row.scheduled_date,
+    rejectedReason: row.rejected_reason,
+    deliveredAt: row.delivered_at,
+    pdfVersions: row.pdf_versions,
+    lastPdfAt: row.last_pdf_at,
+    lastPdfBy: row.last_pdf_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function payoutDocumentToRow(d: PayoutDocument, companyId: string) {
+  return {
+    id: d.id,
+    company_id: companyId,
+    number: d.number,
+    invoice_id: d.invoiceId,
+    agent_id: d.agentId,
+    role_label: d.roleLabel,
+    description: d.description,
+    amount: d.amount,
+    status: d.status,
+    scheduled_date: d.scheduledDate,
+    rejected_reason: d.rejectedReason,
+    delivered_at: d.deliveredAt,
+    pdf_versions: d.pdfVersions,
+    last_pdf_at: d.lastPdfAt,
+    last_pdf_by: d.lastPdfBy,
   };
 }
 

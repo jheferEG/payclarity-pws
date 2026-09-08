@@ -210,6 +210,66 @@ export type Database = {
         }
         Relationships: []
       }
+      payout_documents: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          invoice_id: string
+          agent_id: string
+          role_label: string
+          description: string
+          amount: number
+          status: "pending" | "approved" | "rejected" | "paid"
+          scheduled_date: string | null
+          rejected_reason: string | null
+          delivered_at: string | null
+          pdf_versions: number
+          last_pdf_at: string | null
+          last_pdf_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          invoice_id: string
+          agent_id: string
+          role_label?: string
+          description?: string
+          amount?: number
+          status?: "pending" | "approved" | "rejected" | "paid"
+          scheduled_date?: string | null
+          rejected_reason?: string | null
+          delivered_at?: string | null
+          pdf_versions?: number
+          last_pdf_at?: string | null
+          last_pdf_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          invoice_id?: string
+          agent_id?: string
+          role_label?: string
+          description?: string
+          amount?: number
+          status?: "pending" | "approved" | "rejected" | "paid"
+          scheduled_date?: string | null
+          rejected_reason?: string | null
+          delivered_at?: string | null
+          pdf_versions?: number
+          last_pdf_at?: string | null
+          last_pdf_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       adjustments: {
         Row: {
           id: string

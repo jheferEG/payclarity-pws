@@ -9,6 +9,7 @@ import {
   adaptFinanceCo, financeCoToRow,
   adaptInvoice, invoiceCoreToRow,
   adaptPayment, paymentToRow,
+  adaptPayoutDocument, payoutDocumentToRow,
   adaptAdjustment, adjustmentToRow,
   adaptDispute, disputeToRow,
   adaptNotification, notificationToRow,
@@ -53,6 +54,7 @@ export function useSupabaseSync() {
         financeCompanies: [],
         invoices: [],
         payments: [],
+        payoutDocuments: [],
         adjustments: [],
         disputes: [],
         notifications: [],
@@ -72,6 +74,7 @@ export function useSupabaseSync() {
         { data: fcs },
         { data: invoices },
         { data: payments },
+        { data: payoutDocuments },
         { data: adjustments },
         { data: disputes },
         { data: notifications },
@@ -90,6 +93,7 @@ export function useSupabaseSync() {
           .select("*, invoice_line_items(*), invoice_splits(*, invoice_split_participants(*))")
           .order("date", { ascending: false }),
         supabase.from("payments").select("*"),
+        supabase.from("payout_documents").select("*"),
         supabase.from("adjustments").select("*"),
         supabase.from("disputes").select("*, dispute_events(*)"),
         supabase.from("notifications").select("*").order("at", { ascending: false }),
@@ -107,6 +111,7 @@ export function useSupabaseSync() {
         // cast needed: TS codegen doesn't model nested select relations
         invoices: ((invoices ?? []) as any[]).map(adaptInvoice),
         payments: (payments ?? []).map(adaptPayment),
+        payoutDocuments: (payoutDocuments ?? []).map(adaptPayoutDocument),
         adjustments: (adjustments ?? []).map(adaptAdjustment),
         disputes: ((disputes ?? []) as any[]).map(adaptDispute),
         notifications: (notifications ?? []).map(adaptNotification),
@@ -245,6 +250,13 @@ export function useSupabaseSync() {
         prev.payments, next.payments,
         (p) => supabase.from("payments").upsert(paymentToRow(p, companyId), { onConflict: "id" }),
         (p) => supabase.from("payments").delete().eq("id", p.id),
+      );
+
+      // Payout documents
+      syncItems(
+        prev.payoutDocuments, next.payoutDocuments,
+        (d) => supabase.from("payout_documents").upsert(payoutDocumentToRow(d, companyId), { onConflict: "id" }),
+        (d) => supabase.from("payout_documents").delete().eq("id", d.id),
       );
 
       // Adjustments
