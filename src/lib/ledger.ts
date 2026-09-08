@@ -640,7 +640,7 @@ export function computeCoachInsight(
 
 /* -------- Who this invoice pays: seller's upline (overrides) + seller/split -------- */
 
-export type InvolvedRow = { name: string; role: string; amount: number };
+export type InvolvedRow = { name: string; role: string; amount: number; agentId: string | null };
 
 /** Everyone this invoice pays: the seller's sponsor chain (who earn an
  *  override on this profit — topmost sponsor first), then the seller
@@ -678,6 +678,7 @@ export function computeInvolved(
     name: u.agent.name,
     role: `Override L${u.level} (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`,
     amount: Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0),
+    agentId: u.agent.id,
   }));
 
   if (splits.length > 0) {
@@ -687,10 +688,11 @@ export function computeInvolved(
         name: p.displayName || "—",
         role: `${roleName} (${(p.splitPercent * 100).toFixed(0)}%)`,
         amount: personal * p.splitPercent,
+        agentId: p.agentId,
       });
     }
   } else {
-    rows.push({ name: seller.name, role: lang === "es" ? "Vendedor" : "Salesperson", amount: personal });
+    rows.push({ name: seller.name, role: lang === "es" ? "Vendedor" : "Salesperson", amount: personal, agentId: seller.id });
   }
 
   return rows;

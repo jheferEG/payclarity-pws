@@ -228,6 +228,32 @@ export type Payment = {
   status?: "scheduled" | "paid";
 };
 
+/** One private payout statement, generated per (invoice, recipient) — the
+ *  seller, each split participant, and each override recipient on that
+ *  sale all get their own, so nobody sees anyone else's numbers. Admin
+ *  approves/rejects, schedules, and marks paid (which posts a matching
+ *  Payment so the rep's Wallet stays the single source of truth). */
+export type PayoutDocumentStatus = "pending" | "approved" | "rejected" | "paid";
+
+export type PayoutDocument = {
+  id: string;
+  number: string; // "PD-000001"
+  invoiceId: string;
+  agentId: string;
+  roleLabel: string; // e.g. "Manager", "Senior Rep" — the recipient's position/level
+  description: string; // e.g. "Level 1 override — 5.00% of net profit"
+  amount: number; // this invoice's share owed to this recipient
+  status: PayoutDocumentStatus;
+  scheduledDate: string | null;
+  rejectedReason: string | null;
+  deliveredAt: string | null;
+  pdfVersions: number;
+  lastPdfAt: string | null;
+  lastPdfBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type RequestStatus =
   | "submitted"
   | "under_review"
@@ -404,6 +430,18 @@ type State = {
   addPayment: (p: Omit<Payment, "id">) => void;
   updatePayment: (id: string, patch: Partial<Payment>) => void;
   removePayment: (id: string) => void;
+
+  payoutDocuments: PayoutDocument[];
+  generatePayoutDocuments: (
+    invoiceId: string,
+    rows: { name: string; role: string; amount: number; agentId: string | null }[]
+  ) => void;
+  approvePayoutDocument: (id: string) => void;
+  rejectPayoutDocument: (id: string, reason: string) => void;
+  schedulePayoutDocument: (id: string, date: string) => void;
+  markPayoutDocumentPaid: (id: string) => void;
+  recordPayoutDocumentDelivery: (id: string) => void;
+  regeneratePayoutDocument: (id: string, by: string) => void;
 
   addDispute: (
     d: Omit<
@@ -955,6 +993,99 @@ export const useStore = create<State>()(
       })),
       removePayment: (id) => set((s) => ({ payments: s.payments.filter((x) => x.id !== id) })),
 
+      payoutDocuments: [],
+      generatePayoutDocuments: (invoiceId, rows) => set((s) => {
+        let docs = [...s.payoutDocuments];
+        let seq = docs.length;
+        for (const row of rows) {
+          if (!row.agentId) continue;
+          const idx = docs.findIndex((d) => d.invoiceId === invoiceId && d.agentId === row.agentId);
+          const roleLabel = s.agents.find((a) => a.id === row.agentId)?.level ?? "";
+          if (idx >= 0) {
+            docs[idx] = {
+              ...docs[idx],
+              roleLabel,
+              description: row.role,
+              amount: row.amount,
+              updatedAt: new Date().toISOString(),
+            };
+          } else {
+            seq++;
+            docs.push({
+              id: uid(),
+              number: `PD-${String(seq).padStart(6, "0")}`,
+              invoiceId,
+              agentId: row.agentId,
+              roleLabel,
+              description: row.role,
+              amount: row.amount,
+              status: "pending",
+              scheduledDate: null,
+              rejectedReason: null,
+              deliveredAt: null,
+              pdfVersions: 0,
+              lastPdfAt: null,
+              lastPdfBy: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+        // Drop documents for recipients no longer involved in this invoice
+        // (e.g. the split changed) — but only while still pending, so an
+        // already approved/rejected/paid document is never silently lost.
+        const currentAgentIds = new Set(rows.map((r) => r.agentId).filter((x): x is string => !!x));
+        docs = docs.filter((d) => d.invoiceId !== invoiceId || currentAgentIds.has(d.agentId) || d.status !== "pending");
+        return { payoutDocuments: docs };
+      }),
+      approvePayoutDocument: (id) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id ? { ...d, status: "approved", rejectedReason: null, updatedAt: new Date().toISOString() } : d
+        ),
+      })),
+      rejectPayoutDocument: (id, reason) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id ? { ...d, status: "rejected", rejectedReason: reason, updatedAt: new Date().toISOString() } : d
+        ),
+      })),
+      schedulePayoutDocument: (id, date) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id ? { ...d, scheduledDate: date, updatedAt: new Date().toISOString() } : d
+        ),
+      })),
+      recordPayoutDocumentDelivery: (id) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id ? { ...d, deliveredAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : d
+        ),
+      })),
+      regeneratePayoutDocument: (id, by) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id
+            ? { ...d, pdfVersions: d.pdfVersions + 1, lastPdfAt: new Date().toISOString(), lastPdfBy: by, updatedAt: new Date().toISOString() }
+            : d
+        ),
+      })),
+      markPayoutDocumentPaid: (id) => set((s) => {
+        const doc = s.payoutDocuments.find((d) => d.id === id);
+        if (!doc) return {};
+        const inv = s.invoices.find((i) => i.id === doc.invoiceId);
+        return {
+          payoutDocuments: s.payoutDocuments.map((d) =>
+            d.id === id ? { ...d, status: "paid", updatedAt: new Date().toISOString() } : d
+          ),
+          payments: [...s.payments, {
+            id: uid(),
+            agentId: doc.agentId,
+            date: new Date().toISOString().slice(0, 10),
+            amount: doc.amount,
+            method: "Payout document",
+            notes: `${doc.number}${inv ? ` · ${inv.number}` : ""} — ${doc.description}`,
+            reference: doc.number,
+            status: "paid" as const,
+          }],
+        };
+      }),
+
       addDispute: (d) => {
         const id = uid();
         set((s) => {
@@ -1220,6 +1351,7 @@ export const useStore = create<State>()(
           splitTemplates: defaultSplitTemplates(),
           splitRules: [],
           products: [],
+          payoutDocuments: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ComponentProps } from "react";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Invoice, type LineItem } from "@/lib/commission-store";
+import { useStore, type Invoice, type LineItem, type PayoutDocument } from "@/lib/commission-store";
 import {
   calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers,
 } from "@/lib/commission-calc";
@@ -36,7 +37,7 @@ import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
   buildOverridePDF,
   downloadAllCommissionPDFs, downloadSummary, makeBrandingSnapshot, INVOICE_TEMPLATES,
-  downloadAllInvoiceStatements, downloadInvoiceMasterSummary,
+  downloadAllInvoiceStatements, downloadInvoiceMasterSummary, buildInvoicePayoutStatementPDF,
 } from "@/lib/generate-invoices";
 import {
   WalletPanel, SimulatorPanel, CalendarPanel, TemplatesPanel, DisputesPanel,
@@ -1368,10 +1369,11 @@ function InvoicesPanel() {
     const personal = Math.max(0, live.commissionableBase) * rate;
     const splits = draft.split?.participants ?? [];
 
-    const rows: { name: string; role: string; amount: number }[] = upline.map((u) => ({
+    const rows: { name: string; role: string; amount: number; agentId: string | null }[] = upline.map((u) => ({
       name: u.agent.name,
       role: `Override L${u.level} (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`,
       amount: Math.max(0, live.commissionProfit) * (overrideMap.get(u.level) || 0),
+      agentId: u.agent.id,
     }));
 
     if (splits.length > 0) {
@@ -1380,10 +1382,11 @@ function InvoicesPanel() {
           name: p.displayName || "—",
           role: `${roleLabel(p.role, p.customRoleLabel)} (${(p.splitPercent * 100).toFixed(0)}%)`,
           amount: personal * p.splitPercent,
+          agentId: p.agentId,
         });
       }
     } else {
-      rows.push({ name: seller.name, role: s.language === "es" ? "Vendedor" : "Salesperson", amount: personal });
+      rows.push({ name: seller.name, role: s.language === "es" ? "Vendedor" : "Salesperson", amount: personal, agentId: seller.id });
     }
 
     return rows;
@@ -1394,7 +1397,6 @@ function InvoicesPanel() {
   const [splitId, setSplitId] = useState<string | null>(null);
   const [timelineId, setTimelineId] = useState<string | null>(null);
   const [involvedOpen, setInvolvedOpen] = useState(false);
-  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1898,60 +1900,7 @@ function InvoicesPanel() {
       <SplitEditorDialog invoiceId={splitId} open={!!splitId} onClose={() => setSplitId(null)} />
       <InvoiceTimelineDialog invoiceId={timelineId} open={!!timelineId} onClose={() => setTimelineId(null)} />
 
-      <Dialog open={!!payoutDocsId} onOpenChange={(o) => !o && setPayoutDocsId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{s.language === "es" ? "Documentos de pago" : "Payout documents"}</DialogTitle>
-            <DialogDescription>
-              {s.language === "es"
-                ? "Un documento privado por cada persona, o un resumen consolidado para contabilidad."
-                : "A private document per person, or one consolidated summary for accounting."}
-            </DialogDescription>
-          </DialogHeader>
-          {(() => {
-            const inv = s.invoices.find((i) => i.id === payoutDocsId);
-            if (!inv) return null;
-            const c = calcInvoice(inv, s.financeCompanies);
-            const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language);
-            return (
-              <>
-                <div className="space-y-2 max-h-[45vh] overflow-y-auto">
-                  {rows.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      {s.language === "es" ? "Nadie está involucrado en este invoice todavía." : "No one is involved in this invoice yet."}
-                    </p>
-                  ) : (
-                    rows.map((row, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 border border-border rounded-md p-3">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{row.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{row.role}</p>
-                        </div>
-                        <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <DialogFooter className="gap-2 sm:gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={rows.length === 0}
-                    onClick={() => downloadInvoiceMasterSummary(rows, c, s.company)}
-                  >
-                    {s.language === "es" ? "Resumen maestro" : "Master summary"}
-                  </Button>
-                  <Button
-                    disabled={rows.length === 0}
-                    onClick={() => downloadAllInvoiceStatements(rows, c, s.company, inv.taxReservePercent)}
-                  >
-                    {s.language === "es" ? "Generar todos" : "Generate all"}
-                  </Button>
-                </DialogFooter>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      <PayoutDocumentsDialog invoiceId={payoutDocsId} open={!!payoutDocsId} onClose={() => setPayoutDocsId(null)} />
 
       <Dialog open={involvedOpen} onOpenChange={setInvolvedOpen}>
         <DialogContent className="max-w-lg">
@@ -1977,8 +1926,17 @@ function InvoicesPanel() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
-                    <Button size="sm" variant="outline" onClick={() => setPreviewIdx(i)}>
-                      {s.language === "es" ? "Ver invoice" : "View invoice"}
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const pdf = buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                      window.open(pdf.output("bloburl"), "_blank");
+                    }}>
+                      <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => {
+                      const pdf = buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                      pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
+                    }}>
+                      {s.language === "es" ? "Descargar" : "Download"}
                     </Button>
                   </div>
                 </div>
@@ -1990,45 +1948,203 @@ function InvoicesPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={previewIdx != null} onOpenChange={(o) => !o && setPreviewIdx(null)}>
-        <DialogContent className="max-w-md">
-          {previewIdx != null && involved[previewIdx] && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{involved[previewIdx].name}</DialogTitle>
-                <DialogDescription>
-                  {s.language === "es" ? "Vista del invoice que le llega" : "Invoice overview they receive"} — {draft.customerName || (s.language === "es" ? "este cliente" : "this customer")}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-1 text-sm">
-                <Row k={t("preview_sales")} v={fmtMoney(draft.salesAmount, s.company.currency)} />
-                <Row k={t("preview_approval")} v={fmtMoney(live.approvalAmount, s.company.currency)} />
-                <Row k={t("lbl_discount")} v={`- ${fmtMoney(draft.discount, s.company.currency)}`} />
-                <Row k={t("preview_total_charges")} v={`- ${fmtMoney(live.totalCharges, s.company.currency)}`} />
-                <Row k={t("preview_total_credits")} v={`+ ${fmtMoney(live.totalCredits, s.company.currency)}`} />
-                <div className="border-t my-2" />
-                <Row k={t("preview_grand_total")} v={fmtMoney(live.grandTotal, s.company.currency)} bold />
-                <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(draft.productCost, s.company.currency)}`} />
-                <Row k={t("preview_net_profit")} v={fmtMoney(live.profit, s.company.currency)} accent bold />
-              </div>
-              <div className="rounded-xl bg-accent/5 border border-accent/20 p-4 space-y-1 text-sm mt-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-accent">{involved[previewIdx].role}</p>
-                <p className="text-muted-foreground">
-                  {s.language === "es" ? "Recibirá de este invoice:" : "Will receive from this invoice:"}
-                </p>
-                <p className="text-2xl font-bold text-accent">
-                  {fmtMoney(involved[previewIdx].amount, s.company.currency)}
-                </p>
-              </div>
-            </>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewIdx(null)}>{s.language === "es" ? "Cerrar" : "Close"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
+  );
+}
+
+function PayoutDocumentsDialog({
+  invoiceId, open, onClose,
+}: { invoiceId: string | null; open: boolean; onClose: () => void }) {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const inv = invoiceId ? s.invoices.find((i) => i.id === invoiceId) : null;
+  const c = inv ? calcInvoice(inv, s.financeCompanies) : null;
+  const involvedRows = inv && c ? computeInvolved(inv, c, s.agents, s.overrides, s.language) : [];
+
+  // Keep this invoice's payout documents in sync with its current
+  // split/overrides every time the dialog is opened.
+  useEffect(() => {
+    if (open && inv && involvedRows.length > 0) {
+      s.generatePayoutDocuments(inv.id, involvedRows);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, invoiceId]);
+
+  const docs = inv ? s.payoutDocuments.filter((d) => d.invoiceId === inv.id) : [];
+  const pending = docs.filter((d) => d.status === "pending");
+  const fmt = (n: number) => fmtMoney(n, s.company.currency);
+
+  const STATUS_LABEL: Record<PayoutDocument["status"], string> = {
+    pending: isEs ? "esperando aprobación" : "awaiting approval",
+    approved: isEs ? "aprobado" : "approved",
+    rejected: isEs ? "rechazado" : "rejected",
+    paid: isEs ? "pagado" : "paid",
+  };
+  const statusVariant = (st: PayoutDocument["status"]): "default" | "outline" | "destructive" | "secondary" =>
+    st === "approved" ? "default" : st === "rejected" ? "destructive" : st === "paid" ? "secondary" : "outline";
+
+  const regen = (doc: PayoutDocument) => {
+    if (!inv || !c) return;
+    const row = involvedRows.find((r) => r.agentId === doc.agentId);
+    if (!row) return;
+    const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent);
+    window.open(pdf.output("bloburl"), "_blank");
+    s.regeneratePayoutDocument(doc.id, s.currentUserName);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <DialogTitle>{isEs ? "Documentos de pago" : "Payout documents"}</DialogTitle>
+              <DialogDescription className="mt-1">
+                {isEs
+                  ? "Un invoice crea una transacción maestra y un documento de pago privado para cada persona que cobra — vendedor, overrides y participantes de split — cada uno con su propio documento, estado e historial de PDF."
+                  : "One sale creates one master transaction and a separate payout document for every entitled recipient — split participants, override recipients and custom payees each get their own document, status and PDF history."}
+              </DialogDescription>
+            </div>
+            {inv && c && (
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant="outline" disabled={involvedRows.length === 0}
+                  onClick={() => downloadInvoiceMasterSummary(involvedRows, c, s.company)}>
+                  <FileBarChart className="w-4 h-4 mr-1" />{isEs ? "Resumen maestro" : "Master summary"}
+                </Button>
+                <Button size="sm" disabled={involvedRows.length === 0}
+                  onClick={() => downloadAllInvoiceStatements(involvedRows, c, s.company, inv.taxReservePercent)}>
+                  <FileDown className="w-4 h-4 mr-1" />{isEs ? "Generar todos" : "Generate All"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogHeader>
+
+        {inv && (
+          <div className="space-y-4">
+            {pending.length > 0 && (
+              <Card className="p-3 border-amber-400/50 bg-amber-500/5">
+                <p className="text-sm font-semibold">{isEs ? "Requiere aprobación del administrador" : "Manager approval required"}</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {isEs
+                    ? "Los pagos se liberan solo después de que un administrador aprueba cada documento."
+                    : "Payments release only after a manager approves each payout document."}
+                </p>
+                <div className="space-y-1.5">
+                  {pending.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="truncate">
+                        <span className="font-medium">{s.agents.find((a) => a.id === d.agentId)?.name ?? "—"}</span>
+                        <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono">{fmt(d.amount)}</span>
+                        <Button size="sm" onClick={() => s.approvePayoutDocument(d.id)}>{isEs ? "Aprobar" : "Approve"}</Button>
+                        <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <div className="space-y-3">
+              {docs.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  {isEs ? "Nadie está involucrado en este invoice todavía." : "No one is involved in this invoice yet."}
+                </p>
+              ) : docs.map((d) => {
+                const ag = s.agents.find((a) => a.id === d.agentId);
+                return (
+                  <Card key={d.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{ag?.name ?? "—"}</span>
+                        {d.roleLabel && <Badge variant="outline">{d.roleLabel}</Badge>}
+                      </div>
+                      <Badge variant={statusVariant(d.status)}>{STATUS_LABEL[d.status]}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {d.number} · {isEs ? "venta" : "sale"} {inv.number} · {d.description}
+                    </p>
+                    {d.rejectedReason && (
+                      <p className="text-xs text-destructive mt-1">{isEs ? "Motivo del rechazo" : "Rejection reason"}: {d.rejectedReason}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {d.pdfVersions > 0
+                        ? `${isEs ? "Último PDF" : "Latest PDF"} v${d.pdfVersions} · ${d.lastPdfBy ?? "—"} · ${d.lastPdfAt ? new Date(d.lastPdfAt).toLocaleString() : ""}`
+                        : (isEs ? "Ningún PDF generado todavía" : "No PDF generated yet")}
+                    </p>
+                    {d.deliveredAt && (
+                      <p className="text-xs text-emerald-600 mt-1">{isEs ? "Entregado" : "Delivered"} {new Date(d.deliveredAt).toLocaleString()}</p>
+                    )}
+                    <p className="text-2xl font-bold mt-2">{fmt(d.amount)}</p>
+                    <p className="text-xs text-muted-foreground -mt-1">{isEs ? "pago final" : "final payable"}</p>
+
+                    {rejectingId === d.id && (
+                      <div className="flex gap-2 mt-2">
+                        <Input
+                          className="h-8"
+                          placeholder={isEs ? "Motivo del rechazo" : "Rejection reason"}
+                          value={rejectReason}
+                          onChange={(e) => setRejectReason(e.target.value)}
+                        />
+                        <Button size="sm" variant="destructive" onClick={() => {
+                          s.rejectPayoutDocument(d.id, rejectReason.trim() || (isEs ? "Sin motivo" : "No reason given"));
+                          setRejectingId(null); setRejectReason("");
+                        }}>
+                          {isEs ? "Confirmar" : "Confirm"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setRejectingId(null); setRejectReason(""); }}>
+                          {isEs ? "Cancelar" : "Cancel"}
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      <Button size="sm" variant="outline" onClick={() => regen(d)}>
+                        <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Regenerar PDF" : "Regenerate PDF"}
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={d.status === "approved" || d.status === "paid"}
+                        onClick={() => s.approvePayoutDocument(d.id)}>
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />{isEs ? "Aprobar" : "Approve"}
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={d.status === "rejected" || d.status === "paid"}
+                        onClick={() => setRejectingId(d.id)}>
+                        {isEs ? "Rechazar" : "Reject"}
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="date"
+                          className="h-8 text-xs border border-input rounded-md px-1.5 bg-transparent"
+                          value={d.scheduledDate ?? ""}
+                          onChange={(e) => s.schedulePayoutDocument(d.id, e.target.value)}
+                        />
+                      </div>
+                      <Button size="sm" variant="outline" disabled={d.status !== "approved"}
+                        onClick={() => s.markPayoutDocumentPaid(d.id)}>
+                        {isEs ? "Marcar pagado" : "Mark paid"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => s.recordPayoutDocumentDelivery(d.id)}>
+                        {d.deliveredAt ? (isEs ? "Entregado ✓" : "Delivered ✓") : (isEs ? "Registrar entrega" : "Record delivery")}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{isEs ? "Cerrar" : "Close"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
