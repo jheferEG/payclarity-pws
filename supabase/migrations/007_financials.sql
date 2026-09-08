@@ -1,4 +1,4 @@
--- CompensaFlow Phase 5: Payments, Adjustments, Disputes
+-- Transpare Phase 5: Payments, Adjustments, Disputes
 -- Depends on: 001–006
 
 -- ============================================================

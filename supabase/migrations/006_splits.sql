@@ -1,4 +1,4 @@
--- CompensaFlow Phase 4b: Splits
+-- Transpare Phase 4b: Splits
 -- Depends on: 001–005
 
 -- ============================================================

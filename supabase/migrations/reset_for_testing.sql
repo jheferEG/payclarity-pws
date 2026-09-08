@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  CompensaFlow — RESET COMPLETO PARA PRUEBAS                      ║
+-- ║  Transpare — RESET COMPLETO PARA PRUEBAS                         ║
 -- ║  Borra usuarios, empresas y todos los datos ingresados.            ║
 -- ║  CONSERVA las cuentas con is_superadmin = true.                    ║
 -- ║                                                                    ║
@@ -21,7 +21,7 @@ begin
   where is_superadmin = true;
 
   raise notice '──────────────────────────────────────────────';
-  raise notice 'RESET CompensaFlow — iniciando...';
+  raise notice 'RESET Transpare — iniciando...';
   raise notice 'Superadmins protegidos: %',
     coalesce(array_length(superadmin_ids, 1), 0);
 

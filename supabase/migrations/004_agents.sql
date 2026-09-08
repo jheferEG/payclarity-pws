@@ -1,4 +1,4 @@
--- CompensaFlow Phase 3: Agents
+-- Transpare Phase 3: Agents
 -- Depends on: 001_auth_setup.sql, 002_companies.sql
 
 -- ============================================================

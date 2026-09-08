@@ -1,4 +1,4 @@
--- CompensaFlow Phase 6: Notifications
+-- Transpare Phase 6: Notifications
 -- Depends on: 001–007
 
 -- ============================================================

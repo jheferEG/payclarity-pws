@@ -1,4 +1,4 @@
--- CompensaFlow Phase 4a: Invoices
+-- Transpare Phase 4a: Invoices
 -- Depends on: 001–004
 
 -- ============================================================

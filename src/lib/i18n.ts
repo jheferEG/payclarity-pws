@@ -5,7 +5,7 @@ export type Lang = "es" | "en";
 type Dict = Record<string, { es: string; en: string }>;
 
 const D: Dict = {
-  app_title: { es: "CompensaFlow", en: "CompensaFlow" },
+  app_title: { es: "Transpare", en: "Transpare" },
   app_subtitle: {
     es: "Comisiones claras. Pagos simples. Control total.",
     en: "Clear commissions. Simple payouts. Total control.",

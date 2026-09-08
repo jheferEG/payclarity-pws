@@ -371,7 +371,7 @@ export default function SuperadminPanel() {
               <ShieldAlert className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold leading-tight">CompensaFlow — Superadmin</h1>
+              <h1 className="text-base font-bold leading-tight">Transpare — Superadmin</h1>
               <p className="text-[10px] text-muted-foreground hidden sm:block">Panel de control del sistema</p>
             </div>
           </div>

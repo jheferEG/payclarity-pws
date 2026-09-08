@@ -1,4 +1,4 @@
--- CompensaFlow Phase 2: Catalog Tables
+-- Transpare Phase 2: Catalog Tables
 -- Depends on: 001_auth_setup.sql, 002_companies.sql
 
 -- ============================================================
