@@ -392,6 +392,15 @@ type State = {
   updateInvoice: (id: string, i: Partial<Invoice>) => void;
   removeInvoice: (id: string) => void;
 
+  // In-progress "New/Edit invoice" form — kept here (not component state) so
+  // switching tabs, or reloading the page, doesn't wipe out unsaved work.
+  invoiceDraft: Omit<Invoice, "id" | "number"> | null;
+  invoiceDraftEditingId: string | null;
+  invoiceDraftProductId: string;
+  setInvoiceDraft: (d: Omit<Invoice, "id" | "number"> | null) => void;
+  setInvoiceDraftEditingId: (id: string | null) => void;
+  setInvoiceDraftProductId: (id: string) => void;
+
   addPayment: (p: Omit<Payment, "id">) => void;
   updatePayment: (id: string, patch: Partial<Payment>) => void;
   removePayment: (id: string) => void;
@@ -918,6 +927,13 @@ export const useStore = create<State>()(
           adjustments: s.adjustments.filter((x) => x.invoiceId !== id),
         })),
 
+      invoiceDraft: null,
+      invoiceDraftEditingId: null,
+      invoiceDraftProductId: "",
+      setInvoiceDraft: (invoiceDraft) => set({ invoiceDraft }),
+      setInvoiceDraftEditingId: (invoiceDraftEditingId) => set({ invoiceDraftEditingId }),
+      setInvoiceDraftProductId: (invoiceDraftProductId) => set({ invoiceDraftProductId }),
+
       addPayment: (p) => set((s) => {
         const agentName = s.agents.find((a) => a.id === p.agentId)?.name ?? "Un rep";
         return {
@@ -1204,6 +1220,9 @@ export const useStore = create<State>()(
           splitTemplates: defaultSplitTemplates(),
           splitRules: [],
           products: [],
+          invoiceDraft: null,
+          invoiceDraftEditingId: null,
+          invoiceDraftProductId: "",
           invoiceDate: new Date().toISOString().slice(0, 10),
           periodLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
           nextPayoutDate: todayPlus(14),

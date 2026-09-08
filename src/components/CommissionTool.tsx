@@ -1310,18 +1310,34 @@ function InvoicesPanel() {
   const t = useT();
   const isAdmin = s.role !== "rep";
   const myAgentId = s.role === "rep" ? s.activeAgentId : null;
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Omit<Invoice, "id" | "number">>(() => {
-    const b = blankInvoice();
-    return myAgentId ? { ...b, agentId: myAgentId } : b;
-  });
+  // Kept in the (persisted) store rather than component state, so switching
+  // tabs — or reloading the page — never wipes out an invoice in progress.
+  const editing = s.invoiceDraftEditingId;
+  const setEditing = s.setInvoiceDraftEditingId;
+  const draft = s.invoiceDraft ?? (myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
+  const setDraft = s.setInvoiceDraft;
+  useEffect(() => {
+    if (s.invoiceDraft == null) setDraft(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [overrideMode, setOverrideMode] = useState<"percent" | "amount">("amount");
   const [overridePercentText, setOverridePercentText] = useState("");
   const [overrideAmountText, setOverrideAmountText] = useState("");
-  const [selectedProductId, setSelectedProductId] = useState("");
+  const selectedProductId = s.invoiceDraftProductId;
+  const setSelectedProductId = s.setInvoiceDraftProductId;
   const selectedProduct = s.products.find((p) => p.id === selectedProductId) ?? null;
 
   const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
+
+  // Restore the override $ textbox from a draft recovered after a tab
+  // switch/reload — draft.commissionPercentOverride survives, but the
+  // formatted textbox is local UI state and needs to be reconstructed once.
+  useEffect(() => {
+    if (draft.commissionPercentOverride != null && live.commissionableBase > 0) {
+      setOverrideAmountText((draft.commissionPercentOverride * live.commissionableBase).toFixed(2));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // If the amount was typed before the commissionable base was known (e.g. sales
   // amount not filled in yet), (re)apply it once the base becomes usable.
@@ -1329,7 +1345,7 @@ function InvoicesPanel() {
     if (overrideMode !== "amount" || overrideAmountText === "") return;
     const n = Number(overrideAmountText);
     if (Number.isNaN(n) || live.commissionableBase <= 0) return;
-    setDraft((d) => ({ ...d, commissionPercentOverride: n / live.commissionableBase }));
+    setDraft({ ...draft, commissionPercentOverride: n / live.commissionableBase });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live.commissionableBase]);
 
