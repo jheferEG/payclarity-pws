@@ -1552,7 +1552,16 @@ function InvoicesPanel() {
                 setSelectedProductId(v === "none" ? "" : v);
                 if (v === "none") return;
                 const p = s.products.find((x) => x.id === v);
-                if (p) setDraft({ ...draft, productCost: p.cost, salesAmount: p.price });
+                if (p) {
+                  setDraft({
+                    ...draft,
+                    // Don't clobber a cost already defaulted from the rep's
+                    // commission rule with a product that has no cost of its
+                    // own configured in the catalog.
+                    productCost: p.cost > 0 ? p.cost : draft.productCost,
+                    salesAmount: p.price,
+                  });
+                }
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
