@@ -1020,7 +1020,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
               <tr>
                 <th className="py-2 w-10"></th>
                 <th className="py-2">{t("th_name")}</th><th>{t("th_email")}</th><th>{t("th_sponsor")}</th>
-                <th>{t("th_commission")}</th><th>{t("th_level")}</th>
+                <th>{entryMode === "fixed" ? t("lbl_product_cost_rule") : t("th_commission")}</th><th>{t("th_level")}</th>
                 <th>{t("th_state")}</th><th>{t("th_w9")}</th><th>{t("th_tax_pct")}</th><th>{t("th_pay_method")}</th>
                 <th className="w-12"></th>
               </tr>
