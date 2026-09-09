@@ -1503,10 +1503,10 @@ function InvoicesPanel() {
             <Select value={draft.agentId} onValueChange={(v) => {
               const ag = s.agents.find((a) => a.id === v);
               // Costo de producto ← this rep's own commission rule (Equipo tab).
-              const productCostDefault =
-                ag?.commissionMode === "fixed" && ag.fixedCommissionAmount != null
-                  ? ag.fixedCommissionAmount
-                  : undefined;
+              // The $ field is what matters here, regardless of which mode
+              // the agent's row is currently set to — both fields are always
+              // visible/editable now, so a filled-in $ value should count.
+              const productCostDefault = ag?.fixedCommissionAmount != null ? ag.fixedCommissionAmount : undefined;
               // Override comisión (Admin) ← their position's Pago Fijo (USD)
               // (Compensación tab) — always a flat $ amount, still editable.
               const pos = s.positions.find((p) => p.name === ag?.level && p.active);
