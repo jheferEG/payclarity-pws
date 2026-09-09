@@ -214,6 +214,10 @@ export type Company = {
   footerText: string;
   disclaimerText: string;
   invoiceTemplate: InvoiceTemplateId;
+  // Chosen once in the Setup Wizard: whether reps' pay is entered as a flat
+  // $ (per invoice — doubles as "Costo del producto") or as a %. Only the
+  // matching field is shown across the app, instead of both at once.
+  commissionEntryMode: "fixed" | "percent";
 };
 
 export type Payment = {
@@ -555,6 +559,7 @@ const defaults = {
     disclaimerText:
       "All amounts are subject to verification. Tax reserves are suggestions, not official tax advice.",
     invoiceTemplate: "classic",
+    commissionEntryMode: "fixed",
   } as Company,
   personalTiers: [
     { minVolume: 0, rate: 0.05 },
@@ -1554,6 +1559,7 @@ export const useStore = create<State>()(
             disclaimerText:
               "All amounts are subject to verification. Tax reserves are suggestions, not official tax advice.",
             invoiceTemplate: "classic",
+            commissionEntryMode: "fixed",
             ...persisted.company,
           };
         }

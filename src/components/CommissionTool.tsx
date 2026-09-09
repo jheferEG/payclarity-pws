@@ -891,7 +891,8 @@ function w9StatusClass(status: "missing" | "pending" | "valid" | undefined): str
 }
 
 function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string> }) {
-  const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language } = useStore();
+  const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language, company } = useStore();
+  const entryMode = company.commissionEntryMode ?? "fixed";
   const t = useT();
   const isEs = language === "es";
   const [form, setForm] = useState({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "" });
@@ -975,24 +976,27 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
             </SelectContent>
           </Select>
         </div>
-        <div><Label>{t("lbl_commission_pct")} $ *</Label>
-          <Input
-            type="number"
-            step="1"
-            value={form.fixedAmount}
-            onChange={(e) => setForm({ ...form, fixedAmount: e.target.value })}
-            placeholder={isEs ? "por invoice" : "per invoice"}
-          />
-        </div>
-        <div><Label>{t("lbl_commission_pct")} % *</Label>
-          <Input
-            type="number"
-            step="0.1"
-            value={form.percentValue}
-            onChange={(e) => setForm({ ...form, percentValue: e.target.value })}
-            placeholder="8"
-          />
-        </div>
+        {entryMode === "fixed" ? (
+          <div><Label>{t("lbl_product_cost_rule")} *</Label>
+            <Input
+              type="number"
+              step="1"
+              value={form.fixedAmount}
+              onChange={(e) => setForm({ ...form, fixedAmount: e.target.value })}
+              placeholder={isEs ? "por invoice" : "per invoice"}
+            />
+          </div>
+        ) : (
+          <div><Label>{t("lbl_commission_pct")} % *</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={form.percentValue}
+              onChange={(e) => setForm({ ...form, percentValue: e.target.value })}
+              placeholder="8"
+            />
+          </div>
+        )}
         <div><Label>{t("lbl_level")} *</Label>
           <Select value={form.level || "none"} onValueChange={(v) => setForm({ ...form, level: v === "none" ? "" : v })}>
             <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
@@ -1051,9 +1055,10 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                     </Select>
                   </td>
                   <td>
-                    {/* Two separate fields — whichever one is filled in is
-                        the one used; typing into either sets the mode. */}
+                    {/* Only the company's chosen mode ($ or %) shows — set
+                        once in the Setup Wizard, under Company settings. */}
                     <div className="flex gap-1">
+                      {entryMode === "fixed" ? (
                       <div className="flex items-center h-8 rounded-md border border-input overflow-hidden">
                         <span className="px-1.5 text-xs text-muted-foreground bg-muted h-full flex items-center">$</span>
                         <input
@@ -1068,6 +1073,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                           placeholder={isEs ? "por invoice" : "per invoice"}
                         />
                       </div>
+                      ) : (
                       <div className="flex items-center h-8 rounded-md border border-input overflow-hidden">
                         <input
                           className="h-full w-14 px-1 text-sm bg-transparent outline-none"
@@ -1082,6 +1088,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                         />
                         <span className="px-1.5 text-xs text-muted-foreground bg-muted h-full flex items-center">%</span>
                       </div>
+                      )}
                     </div>
                   </td>
                   <td>

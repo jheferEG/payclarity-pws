@@ -223,6 +223,7 @@ const D: Dict = {
   lbl_email: { es: "Email", en: "Email" },
   lbl_sponsor: { es: "Patrocinador (upline)", en: "Sponsor (upline)" },
   lbl_commission_pct: { es: "Plan de compensación", en: "Compensation Plan" },
+  lbl_product_cost_rule: { es: "Costo del producto", en: "Product cost" },
   lbl_level: { es: "Nivel", en: "Level" },
   lbl_date: { es: "Fecha", en: "Date" },
   lbl_status: { es: "Estado", en: "Status" },

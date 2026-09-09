@@ -432,7 +432,6 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
 
   const [agentDraft, setAgentDraft] = useState({ name: "", email: "", commissionPercent: "", level: "" });
-  const [agentCommissionMode, setAgentCommissionMode] = useState<"percent" | "fixed">("fixed");
   const [financeDraft, setFinanceDraft] = useState({ name: "", defaultFee: 0.05, dealerFee: 0, adminFee: 0 });
   const [tierRate, setTierRate] = useState(8);
   const [ovRate, setOvRate] = useState(2);
@@ -621,6 +620,26 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
         {step === 2 && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{t("sect_team_desc")}</p>
+            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-3 space-y-1.5">
+              <Label className="text-xs font-semibold">
+                {es ? "¿Cómo se paga la comisión en tu equipo?" : "How does your team get paid commission?"}
+              </Label>
+              <Select
+                value={s.company.commissionEntryMode ?? "fixed"}
+                onValueChange={(v: "percent" | "fixed") => s.setCompany({ commissionEntryMode: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">{es ? "Monto fijo $ por invoice (costo del producto)" : "Flat $ per invoice (product cost)"}</SelectItem>
+                  <SelectItem value="percent">{es ? "Porcentaje % del profit" : "% of profit"}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {es
+                  ? "Esto decide qué campo aparece en toda la app — solo se puede cambiar aquí."
+                  : "This decides which field shows up across the app — only changeable here."}
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>{t("lbl_name")} *</Label>
                 <Input value={agentDraft.name}
@@ -630,23 +649,15 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 <Input value={agentDraft.email}
                   onChange={(e) => setAgentDraft({ ...agentDraft, email: e.target.value })} placeholder="ana@empresa.com" />
               </div>
-              <div><Label>{t("lbl_commission_pct")} *</Label>
-                <div className="flex gap-1">
-                  <Select value={agentCommissionMode} onValueChange={(v: "percent" | "fixed") => setAgentCommissionMode(v)}>
-                    <SelectTrigger className="w-14 shrink-0"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percent">%</SelectItem>
-                      <SelectItem value="fixed">$</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    step={agentCommissionMode === "fixed" ? "1" : "0.1"}
-                    value={agentDraft.commissionPercent}
-                    onChange={(e) => setAgentDraft({ ...agentDraft, commissionPercent: e.target.value })}
-                    placeholder={agentCommissionMode === "fixed" ? (es ? "por invoice" : "per invoice") : "8"}
-                  />
-                </div>
+              <div>
+                <Label>{(s.company.commissionEntryMode ?? "fixed") === "fixed" ? t("lbl_product_cost_rule") : t("lbl_commission_pct")} *</Label>
+                <Input
+                  type="number"
+                  step={(s.company.commissionEntryMode ?? "fixed") === "fixed" ? "1" : "0.1"}
+                  value={agentDraft.commissionPercent}
+                  onChange={(e) => setAgentDraft({ ...agentDraft, commissionPercent: e.target.value })}
+                  placeholder={(s.company.commissionEntryMode ?? "fixed") === "fixed" ? (es ? "por invoice" : "per invoice") : "8"}
+                />
               </div>
               <div><Label>{t("lbl_level")}</Label>
                 <Select value={agentDraft.level || "none"} onValueChange={(v) => setAgentDraft({ ...agentDraft, level: v === "none" ? "" : v })}>
@@ -662,18 +673,18 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
             </div>
             <Button variant="outline" size="sm" onClick={() => {
               if (!agentDraft.name.trim()) return toast.error(t("err_name_required"));
+              const mode = s.company.commissionEntryMode ?? "fixed";
               const valRaw = agentDraft.commissionPercent;
               s.addAgent({
                 name: agentDraft.name.trim(), email: agentDraft.email.trim(),
                 sponsorId: null,
-                commissionMode: agentCommissionMode,
-                ...(agentCommissionMode === "fixed"
+                commissionMode: mode,
+                ...(mode === "fixed"
                   ? { fixedCommissionAmount: Number(valRaw) || 0, commissionPercent: undefined }
                   : { commissionPercent: (Number(valRaw) || 8) / 100, fixedCommissionAmount: undefined }),
                 level: agentDraft.level,
               });
               setAgentDraft({ name: "", email: "", commissionPercent: "", level: "" });
-              setAgentCommissionMode("fixed");
               toast.success(t("success_rep_added"));
             }}>
               <Plus className="w-3 h-3 mr-2" />{t("btn_add")}

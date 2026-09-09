@@ -27,6 +27,7 @@ export function adaptCompany(row: Tables<"companies">): Partial<Company> {
     footerText: row.footer_text,
     disclaimerText: row.disclaimer_text,
     invoiceTemplate: row.invoice_template as Company["invoiceTemplate"],
+    commissionEntryMode: (row.commission_entry_mode as Company["commissionEntryMode"]) ?? "fixed",
   };
 }
 
@@ -45,6 +46,7 @@ export function companyToRow(c: Company) {
     footer_text: c.footerText,
     disclaimer_text: c.disclaimerText,
     invoice_template: c.invoiceTemplate,
+    commission_entry_mode: c.commissionEntryMode,
   };
 }
 

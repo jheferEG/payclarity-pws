@@ -30,6 +30,7 @@ export type Database = {
           footer_text: string
           disclaimer_text: string
           invoice_template: string
+          commission_entry_mode: string
           invoice_date: string | null
           period_label: string
           next_payout_date: string | null
@@ -52,6 +53,7 @@ export type Database = {
           footer_text?: string
           disclaimer_text?: string
           invoice_template?: string
+          commission_entry_mode?: string
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null
@@ -74,6 +76,7 @@ export type Database = {
           footer_text?: string
           disclaimer_text?: string
           invoice_template?: string
+          commission_entry_mode?: string
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null
