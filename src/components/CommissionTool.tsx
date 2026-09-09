@@ -1398,6 +1398,11 @@ function InvoicesPanel() {
   const [timelineId, setTimelineId] = useState<string | null>(null);
   const [involvedOpen, setInvolvedOpen] = useState(false);
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
 
   useEffect(() => {
     const dl = s.deepLink;
@@ -1930,7 +1935,7 @@ function InvoicesPanel() {
                     <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
                     <Button size="sm" variant="outline" onClick={() => {
                       const pdf = buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
-                      window.open(pdf.output("bloburl"), "_blank");
+                      setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
                     }}>
                       <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
                     </Button>
@@ -1947,6 +1952,27 @@ function InvoicesPanel() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInvolvedOpen(false)}>{s.language === "es" ? "Cerrar" : "Close"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+        <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{pdfPreview?.name}</DialogTitle>
+            <DialogDescription>
+              {s.language === "es" ? "Vista previa del PDF que le llega." : "Preview of the PDF they receive."}
+            </DialogDescription>
+          </DialogHeader>
+          {pdfPreview && (
+            <iframe
+              src={pdfPreview.url}
+              title={pdfPreview.name}
+              className="w-full flex-1 rounded-md border border-border"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closePdfPreview}>{s.language === "es" ? "Cerrar" : "Close"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
