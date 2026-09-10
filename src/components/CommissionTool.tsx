@@ -1789,13 +1789,17 @@ function InvoicesPanel() {
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
                     <Button size="sm" variant="outline" onClick={() => {
-                      const pdf = buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                      const pdf = isAdmin
+                        ? buildSaleInvoicePDF(live, s.company, s.agents.find((a) => a.id === draft.agentId)?.name || "—", null, [row], s.company.commissionEntryMode)
+                        : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
                       setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
                     }}>
                       <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => {
-                      const pdf = buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                      const pdf = isAdmin
+                        ? buildSaleInvoicePDF(live, s.company, s.agents.find((a) => a.id === draft.agentId)?.name || "—", null, [row], s.company.commissionEntryMode)
+                        : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
                       pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
                     }}>
                       {s.language === "es" ? "Descargar" : "Download"}
@@ -1878,7 +1882,11 @@ function PayoutDocumentsDialog({
     if (!inv || !c) return;
     const row = involvedRows.find((r) => r.agentId === doc.agentId);
     if (!row) return;
-    const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent);
+    // Full invoice format (same as the main PDF), scoped to just this
+    // person's own row in "Who gets paid on this sale" — admin sees the
+    // whole deal's context, but each recipient's document stays private.
+    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
     setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
     s.regeneratePayoutDocument(doc.id, s.currentUserName);
   };
@@ -1995,7 +2003,7 @@ function PayoutDocumentsDialog({
 
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <Button size="sm" variant="outline" onClick={() => regen(d)}>
-                        <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Regenerar PDF" : "Regenerate PDF"}
+                        <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver PDF" : "View PDF"}
                       </Button>
                       <Button size="sm" variant="outline" disabled={d.status === "approved" || d.status === "paid"}
                         onClick={() => s.approvePayoutDocument(d.id)}>
@@ -2040,7 +2048,7 @@ function PayoutDocumentsDialog({
         <DialogHeader>
           <DialogTitle>{pdfPreview?.name}</DialogTitle>
           <DialogDescription>
-            {isEs ? "Vista previa del PDF regenerado." : "Preview of the regenerated PDF."}
+            {isEs ? "Vista previa del PDF." : "Preview of the PDF."}
           </DialogDescription>
         </DialogHeader>
         {pdfPreview && (
