@@ -1314,34 +1314,11 @@ function InvoicesPanel() {
     if (s.invoiceDraft == null) setDraft(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [overrideMode, setOverrideMode] = useState<"percent" | "amount">("amount");
-  const [overridePercentText, setOverridePercentText] = useState("");
-  const [overrideAmountText, setOverrideAmountText] = useState("");
   const selectedProductId = s.invoiceDraftProductId;
   const setSelectedProductId = s.setInvoiceDraftProductId;
   const selectedProduct = s.products.find((p) => p.id === selectedProductId) ?? null;
 
   const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
-
-  // Restore the override $ textbox from a draft recovered after a tab
-  // switch/reload — draft.commissionPercentOverride survives, but the
-  // formatted textbox is local UI state and needs to be reconstructed once.
-  useEffect(() => {
-    if (draft.commissionPercentOverride != null && live.commissionableBase > 0) {
-      setOverrideAmountText((draft.commissionPercentOverride * live.commissionableBase).toFixed(2));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // If the amount was typed before the commissionable base was known (e.g. sales
-  // amount not filled in yet), (re)apply it once the base becomes usable.
-  useEffect(() => {
-    if (overrideMode !== "amount" || overrideAmountText === "") return;
-    const n = Number(overrideAmountText);
-    if (Number.isNaN(n) || live.commissionableBase <= 0) return;
-    setDraft({ ...draft, commissionPercentOverride: n / live.commissionableBase });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live.commissionableBase]);
 
   const payouts = useMemo(
     () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
@@ -1392,16 +1369,6 @@ function InvoicesPanel() {
     if (!inv) return;
     setEditing(id);
     setDraft(inv);
-    setOverrideMode("amount");
-    setOverridePercentText(inv.commissionPercentOverride != null ? (inv.commissionPercentOverride * 100).toFixed(2) : "");
-    if (inv.commissionPercentOverride != null) {
-      const c = calcInvoice(inv, s.financeCompanies);
-      setOverrideAmountText(
-        c.commissionableBase > 0 ? (inv.commissionPercentOverride * c.commissionableBase).toFixed(2) : ""
-      );
-    } else {
-      setOverrideAmountText("");
-    }
     setSelectedProductId("");
   };
 
@@ -1441,9 +1408,6 @@ function InvoicesPanel() {
     }
     setEditing(null);
     setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
-    setOverrideMode("amount");
-    setOverridePercentText("");
-    setOverrideAmountText("");
     setSelectedProductId("");
   };
 
@@ -1485,28 +1449,13 @@ function InvoicesPanel() {
               // the agent's row is currently set to — both fields are always
               // visible/editable now, so a filled-in $ value should count.
               const productCostDefault = ag?.fixedCommissionAmount != null ? ag.fixedCommissionAmount : undefined;
-              // Override comisión (Admin) ← their position's Pago Fijo (USD)
-              // (Compensación tab) — always a flat $ amount, still editable.
-              const pos = s.positions.find((p) => p.name === ag?.level && p.active);
-              const overrideDefault = pos && pos.fixedPayout > 0 ? pos.fixedPayout : null;
               const nextProductCost = productCostDefault ?? draft.productCost;
-              // commissionableBase depends on sales amount/product cost, not
-              // agentId, so it's safe to convert the override default right
-              // now using the (possibly just-changed) product cost; otherwise
-              // the existing effect (keyed on commissionableBase) applies it
-              // once sales amount/product cost are filled in.
-              const base = draft.salesAmount * (draft.approvalPercent || 0) - nextProductCost;
               setDraft({
                 ...draft,
                 agentId: v,
                 commissionLevel: ag?.level ?? draft.commissionLevel ?? "",
                 productCost: nextProductCost,
-                commissionPercentOverride:
-                  overrideDefault != null && base > 0 ? overrideDefault / base : undefined,
               });
-              setOverrideMode("amount");
-              setOverridePercentText("");
-              setOverrideAmountText(overrideDefault != null ? String(overrideDefault) : "");
             }} disabled={!isAdmin}>
               <SelectTrigger><SelectValue placeholder={t("lbl_select_ellipsis")} /></SelectTrigger>
               <SelectContent>
@@ -1633,39 +1582,6 @@ function InvoicesPanel() {
               </SelectContent>
             </Select>
           </div>
-          {isAdmin && (() => {
-            return (
-              <div><Label>
-                {t("lbl_commission_override")}
-              </Label>
-                <div className="flex gap-2">
-                  <span className="w-20 shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-muted text-sm text-muted-foreground">
-                    {s.company.currency}
-                  </span>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder={s.language === "es" ? "Monto fijo" : "Flat amount"}
-                    value={overrideAmountText}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw !== "" && raw !== "-" && !/^-?\d*\.?\d*$/.test(raw)) return;
-                      setOverrideAmountText(raw);
-                      if (raw === "" || raw === "-") {
-                        setDraft({ ...draft, commissionPercentOverride: undefined });
-                        return;
-                      }
-                      const n = Number(raw);
-                      if (Number.isNaN(n)) return;
-                      if (live.commissionableBase > 0) {
-                        setDraft({ ...draft, commissionPercentOverride: n / live.commissionableBase });
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })()}
           <div className="flex items-end gap-2">
             <Switch checked={draft.paid} onCheckedChange={(v) => setDraft({ ...draft, paid: v })} disabled={!isAdmin} />
             <span className="text-sm">{t("lbl_paid_flag")} {isAdmin ? "" : t("lbl_admin_only")}</span>
@@ -1678,7 +1594,7 @@ function InvoicesPanel() {
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
           {editing && (
-            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setOverrideMode("amount"); setOverridePercentText(""); setOverrideAmountText(""); setSelectedProductId(""); }}>{t("btn_cancel")}</Button>
+            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); }}>{t("btn_cancel")}</Button>
           )}
           {isAdmin && draft.agentId && (
             <Button variant="outline" onClick={() => setInvolvedOpen(true)}>

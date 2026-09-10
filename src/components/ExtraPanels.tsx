@@ -546,23 +546,23 @@ export function ExplainDialog({
   const effectiveRate = payout ? (inv.commissionPercentOverride ?? payout.personalRate) : null;
   const reservePct = inv.taxReservePercent ?? ag?.taxReservePercent ?? 0;
   const reserveAmt = payout ? payout.taxReserveSuggested : 0;
-  const finalAmt = payout ? payout.finalPayable : null;
 
-  // Build natural-language bullets
+  // Build natural-language bullets — dollar amounts only; the 20% tax
+  // reserve recommendation further below is the one deliberate exception.
   const bullets: string[] = [];
   if (isEs) {
     bullets.push(`Vendiste ${inv.customerName ? `a ${inv.customerName}` : "esta venta"} por un total de ${m(inv.salesAmount)}.`);
     if (inv.productCost) bullets.push(`El costo del producto fue ${m(inv.productCost)}, que se descontó del profit.`);
     if (c.financeCo && inv.saleType === "finance") {
-      bullets.push(`${c.financeCo.name} aprobó el ${pct(inv.approvalPercent)} de la venta — es decir, ${m(c.approvalAmount)} aprobados.`);
+      bullets.push(`${c.financeCo.name} aprobó ${m(c.approvalAmount)} de la venta.`);
       const feeTotal = c.financeCo.defaultFee * inv.salesAmount + c.financeCo.adminFee;
       if (feeTotal > 0) bullets.push(`La financiera cobró comisión más tarifas por un total de ${m(feeTotal)}.`);
     } else if (inv.approvalPercent < 1) {
-      bullets.push(`Se aprobó el ${pct(inv.approvalPercent)} de la venta — ${m(c.approvalAmount)}.`);
+      bullets.push(`Se aprobó ${m(c.approvalAmount)} de la venta.`);
     }
     if (dealerFeeVal > 0) bullets.push(`Se aplicó una tarifa dealer de ${m(dealerFeeVal)}.`);
-    if (adminFeeVal > 0) bullets.push(`Se aplicó una tarifa admin del ${pct(inv.adminFeePercent || 0)}, que equivale a ${m(adminFeeVal)}.`);
-    if (ccpfVal > 0) bullets.push(`Se sumó un cargo por pago con tarjeta del ${pct(inv.ccpfPercent ?? 0.035)}, equivalente a ${m(ccpfVal)}.`);
+    if (adminFeeVal > 0) bullets.push(`Se aplicó una tarifa admin de ${m(adminFeeVal)} — se descuenta de la comisión, no de la venta.`);
+    if (ccpfVal > 0) bullets.push(`Se sumó un cargo por pago con tarjeta de ${m(ccpfVal)}.`);
     if (inv.discount) bullets.push(`Se aplicó un descuento de ${m(inv.discount)} sobre la venta.`);
     if (inv.charges.length) inv.charges.forEach((ch) => bullets.push(`Se agregó el cargo "${ch.label || "cargo extra"}" por ${m(ch.amount)}.`));
     if (inv.credits.length) inv.credits.forEach((cr) => bullets.push(`Se sumó un crédito "${cr.label || "crédito"}" de ${m(cr.amount)} a tu favor.`));
@@ -571,15 +571,15 @@ export function ExplainDialog({
     bullets.push(`You sold ${inv.customerName ? `to ${inv.customerName}` : "this deal"} for ${m(inv.salesAmount)}.`);
     if (inv.productCost) bullets.push(`The product cost was ${m(inv.productCost)}, which was deducted from the profit.`);
     if (c.financeCo && inv.saleType === "finance") {
-      bullets.push(`${c.financeCo.name} approved ${pct(inv.approvalPercent)} of the sale — ${m(c.approvalAmount)} approved.`);
+      bullets.push(`${c.financeCo.name} approved ${m(c.approvalAmount)} of the sale.`);
       const feeTotal = c.financeCo.defaultFee * inv.salesAmount + c.financeCo.adminFee;
       if (feeTotal > 0) bullets.push(`The lender charged a combined fee of ${m(feeTotal)}.`);
     } else if (inv.approvalPercent < 1) {
-      bullets.push(`${pct(inv.approvalPercent)} of the sale was approved — ${m(c.approvalAmount)}.`);
+      bullets.push(`${m(c.approvalAmount)} of the sale was approved.`);
     }
     if (dealerFeeVal > 0) bullets.push(`A dealer fee of ${m(dealerFeeVal)} was applied.`);
-    if (adminFeeVal > 0) bullets.push(`An admin fee of ${pct(inv.adminFeePercent || 0)} was applied, totaling ${m(adminFeeVal)}.`);
-    if (ccpfVal > 0) bullets.push(`A ${pct(inv.ccpfPercent ?? 0.035)} credit card processing fee was added: ${m(ccpfVal)}.`);
+    if (adminFeeVal > 0) bullets.push(`An admin fee of ${m(adminFeeVal)} was applied — it's deducted from the commission, not the sale.`);
+    if (ccpfVal > 0) bullets.push(`A credit card processing fee of ${m(ccpfVal)} was added.`);
     if (inv.discount) bullets.push(`A discount of ${m(inv.discount)} was applied to the sale.`);
     if (inv.charges.length) inv.charges.forEach((ch) => bullets.push(`The charge "${ch.label || "extra charge"}" was added for ${m(ch.amount)}.`));
     if (inv.credits.length) inv.credits.forEach((cr) => bullets.push(`A credit "${cr.label || "credit"}" of ${m(cr.amount)} was added in your favor.`));
@@ -647,16 +647,10 @@ export function ExplainDialog({
               {reservePct > 0 && (
                 <p>
                   {isEs
-                    ? `Recomendamos apartar el ${pct(reservePct)} para impuestos, que serían ${m(reserveAmt)}.`
-                    : `We recommend setting aside ${pct(reservePct)} for taxes — that's ${m(reserveAmt)}.`}
+                    ? `Recomendación: aparta el ${pct(reservePct)} para impuestos, que serían ${m(reserveAmt)}.`
+                    : `Recommendation: set aside ${pct(reservePct)} for taxes — that's ${m(reserveAmt)}.`}
                 </p>
               )}
-              <div className="border-t border-accent/20 pt-3 flex items-center justify-between">
-                <p className="font-semibold">
-                  {isEs ? "Tu pago estimado:" : "Your estimated payout:"}
-                </p>
-                <span className="text-xl font-bold text-accent">{m(finalAmt ?? 0)}</span>
-              </div>
             </div>
           )}
         </div>
