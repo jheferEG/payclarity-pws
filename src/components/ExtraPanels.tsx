@@ -218,6 +218,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
   const s = useStore();
   const cur = s.company.currency;
   const p = wallet.payout;
+  const isFixed = s.company.commissionEntryMode === "fixed";
 
   const [pay, setPay] = useState({
     amount: 0, method: "Bank transfer", reference: "", notes: "",
@@ -244,7 +245,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
   };
 
   const downloadCommissionPDF = () => {
-    const doc = buildAgentCommissionPDF(p, s.company, s.invoiceDate, s.periodLabel);
+    const doc = buildAgentCommissionPDF(p, s.company, s.invoiceDate, s.periodLabel, s.company.commissionEntryMode);
     doc.save(`commission_${wallet.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
@@ -324,10 +325,10 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground uppercase">
                 <tr>
-                  <th className="py-1">{t("th_agent")}</th>
+                  <th className="py-1">{isFixed ? (s.language === "es" ? "Vendedor" : "Seller") : t("th_agent")}</th>
                   <th>{t("th_level")}</th>
-                  <th className="text-right">Profit</th>
-                  <th className="text-right">{t("th_rate")}</th>
+                  {!isFixed && <th className="text-right">Profit</th>}
+                  {!isFixed && <th className="text-right">{t("th_rate")}</th>}
                   <th className="text-right">{t("th_override_col")}</th>
                 </tr>
               </thead>
@@ -336,8 +337,8 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                   <tr key={i} className="border-t border-border/60">
                     <td className="py-1">{d.agent.name}</td>
                     <td>L{d.level}</td>
-                    <td className="text-right font-mono">{fmtMoney(d.profit, cur)}</td>
-                    <td className="text-right font-mono">{(d.rate * 100).toFixed(2)}%</td>
+                    {!isFixed && <td className="text-right font-mono">{fmtMoney(d.profit, cur)}</td>}
+                    {!isFixed && <td className="text-right font-mono">{(d.rate * 100).toFixed(2)}%</td>}
                     <td className="text-right font-mono">{fmtMoney(d.override, cur)}</td>
                   </tr>
                 ))}

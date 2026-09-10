@@ -381,8 +381,10 @@ export function buildAgentCommissionPDF(
   p: AgentPayout,
   company: Company,
   invoiceDate: string,
-  period: string
+  period: string,
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): jsPDF {
+  const isFixed = commissionEntryMode === "fixed";
   const b = resolveBranding(company);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -425,39 +427,55 @@ export function buildAgentCommissionPDF(
 
   autoTable(doc, {
     startY: y,
-    head: [["Personal commission", "Profit", "Rate", "Amount"]],
-    body: [
-      [
-        "Sum of own profits",
-        fmtMoney(p.personalProfit, cur),
-        `${(p.personalRate * 100).toFixed(2)}%`,
-        fmtMoney(p.personalCommission, cur),
-      ],
-    ],
+    head: isFixed
+      ? [["Personal commission", "Amount"]]
+      : [["Personal commission", "Profit", "Rate", "Amount"]],
+    body: isFixed
+      ? [["Sale minus product cost minus fee", fmtMoney(p.personalCommission, cur)]]
+      : [
+          [
+            "Sum of own profits",
+            fmtMoney(p.personalProfit, cur),
+            `${(p.personalRate * 100).toFixed(2)}%`,
+            fmtMoney(p.personalCommission, cur),
+          ],
+        ],
     headStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255 },
     styles: { fontSize: 9 },
     margin: { left: margin, right: margin },
-    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+    columnStyles: isFixed
+      ? { 1: { halign: "right" } }
+      : { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
   });
   y = (doc as any).lastAutoTable.finalY + 10;
 
   if (p.downline.length) {
     autoTable(doc, {
       startY: y,
-      head: [["Downline override", "Level", "Profit", "Rate", "Override"]],
-      body: p.downline.map((d) => [
-        d.agent.name,
-        `L${d.level}`,
-        fmtMoney(d.profit, cur),
-        `${(d.rate * 100).toFixed(2)}%`,
-        fmtMoney(d.override, cur),
-      ]),
-      foot: [["Override total", "", "", "", fmtMoney(p.overrideTotal, cur)]],
+      head: isFixed
+        ? [["Downline override", "Level", "Override"]]
+        : [["Downline override", "Level", "Profit", "Rate", "Override"]],
+      body: p.downline.map((d) =>
+        isFixed
+          ? [d.agent.name, `L${d.level}`, fmtMoney(d.override, cur)]
+          : [
+              d.agent.name,
+              `L${d.level}`,
+              fmtMoney(d.profit, cur),
+              `${(d.rate * 100).toFixed(2)}%`,
+              fmtMoney(d.override, cur),
+            ]
+      ),
+      foot: isFixed
+        ? [["Override total", "", fmtMoney(p.overrideTotal, cur)]]
+        : [["Override total", "", "", "", fmtMoney(p.overrideTotal, cur)]],
       headStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255 },
       footStyles: { fillColor: [235, 240, 250], textColor: 20, fontStyle: "bold" },
       styles: { fontSize: 9 },
       margin: { left: margin, right: margin },
-      columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+      columnStyles: isFixed
+        ? { 2: { halign: "right" } }
+        : { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
     });
     y = (doc as any).lastAutoTable.finalY + 10;
   }
@@ -500,8 +518,10 @@ export function buildOverridePDF(
   p: AgentPayout,
   company: Company,
   invoiceDate: string,
-  period: string
+  period: string,
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): jsPDF {
+  const isFixed = commissionEntryMode === "fixed";
   const b = resolveBranding(company);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -529,24 +549,34 @@ export function buildOverridePDF(
   // Downline table
   autoTable(doc, {
     startY: y,
-    head: [["Downline Rep", "Level", `Profit (${cur})`, "Override Rate", `Override (${cur})`]],
-    body: p.downline.map((d) => [
-      d.agent.name,
-      `Level ${d.level}`,
-      fmtMoney(d.profit, cur),
-      `${(d.rate * 100).toFixed(2)}%`,
-      fmtMoney(d.override, cur),
-    ]),
-    foot: [["", "", "", "Total Override", fmtMoney(p.overrideTotal, cur)]],
+    head: isFixed
+      ? [["Downline Rep", "Level", `Override (${cur})`]]
+      : [["Downline Rep", "Level", `Profit (${cur})`, "Override Rate", `Override (${cur})`]],
+    body: p.downline.map((d) =>
+      isFixed
+        ? [d.agent.name, `Level ${d.level}`, fmtMoney(d.override, cur)]
+        : [
+            d.agent.name,
+            `Level ${d.level}`,
+            fmtMoney(d.profit, cur),
+            `${(d.rate * 100).toFixed(2)}%`,
+            fmtMoney(d.override, cur),
+          ]
+    ),
+    foot: isFixed
+      ? [["", "Total Override", fmtMoney(p.overrideTotal, cur)]]
+      : [["", "", "", "Total Override", fmtMoney(p.overrideTotal, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255, fontStyle: "bold" },
     styles: { fontSize: 9 },
     margin: { left: margin, right: margin },
-    columnStyles: {
-      2: { halign: "right" },
-      3: { halign: "right" },
-      4: { halign: "right" },
-    },
+    columnStyles: isFixed
+      ? { 2: { halign: "right" } }
+      : {
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+        },
   });
   y = (doc as any).lastAutoTable.finalY + 20;
 
@@ -585,11 +615,12 @@ export function downloadAllCommissionPDFs(
   payouts: AgentPayout[],
   company: Company,
   invoiceDate: string,
-  period: string
+  period: string,
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ) {
   for (const p of payouts) {
     if (p.grossPayout <= 0) continue;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, period);
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, period, commissionEntryMode);
     doc.save(`commission_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   }
 }

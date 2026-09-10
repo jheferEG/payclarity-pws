@@ -2563,31 +2563,38 @@ function CompanyPanel() {
 
 /* ---------- Generate ---------- */
 function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> }) {
-  const { company, invoiceDate, periodLabel } = useStore();
+  const { company, invoiceDate, periodLabel, language } = useStore();
   const t = useT();
+  const isFixed = company.commissionEntryMode === "fixed";
   const total = payouts.reduce((a, p) => a + p.finalPayable, 0);
   const payable = payouts.filter((p) => p.grossPayout > 0);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
 
   const previewOne = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p) return;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel);
-    window.open(doc.output("bloburl"), "_blank");
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
+    setPdfPreview({ name: `commission_${p.agent.name}`, url: doc.output("bloburl").toString() });
   };
   const downloadOne = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p) return;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel);
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
     doc.save(`commission_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
   const downloadOverride = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p || !p.downline.length) return;
-    const doc = buildOverridePDF(p, company, invoiceDate, periodLabel);
+    const doc = buildOverridePDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
     doc.save(`override_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
   return (
+    <>
     <SectionCard
       title={t("sect_payouts")}
       desc={t("sect_payouts_desc")}
@@ -2636,7 +2643,9 @@ function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> })
                     <td className="text-right font-mono">{fmtMoney(p.personalProfit, company.currency)}</td>
                     <td className="text-right font-mono">
                       {fmtMoney(p.personalCommission, company.currency)}
-                      <div className="text-[10px] text-muted-foreground">@ {(p.personalRate * 100).toFixed(1)}%</div>
+                      {!isFixed && (
+                        <div className="text-[10px] text-muted-foreground">@ {(p.personalRate * 100).toFixed(1)}%</div>
+                      )}
                     </td>
                     <td className="text-right font-mono">{fmtMoney(p.overrideTotal, company.currency)}</td>
                     <td className="text-right font-mono">{fmtMoney(p.advanceApplied, company.currency)}</td>
@@ -2663,6 +2672,28 @@ function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> })
         </div>
       )}
     </SectionCard>
+
+    <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+      <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{pdfPreview?.name}</DialogTitle>
+          <DialogDescription>
+            {language === "es" ? "Vista previa del PDF." : "PDF preview."}
+          </DialogDescription>
+        </DialogHeader>
+        {pdfPreview && (
+          <iframe
+            src={pdfPreview.url}
+            title={pdfPreview.name}
+            className="w-full flex-1 rounded-md border border-border"
+          />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={closePdfPreview}>{language === "es" ? "Cerrar" : "Close"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

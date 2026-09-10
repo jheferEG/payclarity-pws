@@ -182,6 +182,9 @@ export function calcPayouts(
   // Cost-cascade overrides are per-invoice (they depend on that specific
   // sale's chain), so they're accumulated separately from the % model.
   const cascadeOverrideByAgent = new Map<string, number>();
+  // Per-sponsor breakdown of who below them generated each override, so the
+  // wallet/PDF can still show a line-by-line table in $ mode (no % involved).
+  const cascadeDetailByAgent = new Map<string, Map<string, { level: number; amount: number }>>();
 
   for (const c of calced) {
     const a = c.invoice.agentId;
@@ -200,6 +203,10 @@ export function calcPayouts(
     if (commissionEntryMode === "fixed") {
       for (const row of costCascade(a, c.invoice.productCost || 0, agents)) {
         cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + row.amount);
+        if (!cascadeDetailByAgent.has(row.agentId)) cascadeDetailByAgent.set(row.agentId, new Map());
+        const bySeller = cascadeDetailByAgent.get(row.agentId)!;
+        const prev = bySeller.get(a) || { level: row.level, amount: 0 };
+        bySeller.set(a, { level: row.level, amount: prev.amount + row.amount });
       }
     }
   }
@@ -239,7 +246,15 @@ export function calcPayouts(
 
     const dl = collectDownline(a.id, children);
     const downline: DownlineEntry[] = commissionEntryMode === "fixed"
-      ? [] // cost-cascade overrides aren't a per-downline-agent rate — see overrideTotal below
+      ? Array.from(cascadeDetailByAgent.get(a.id)?.entries() || [])
+          .map(([sellerId, v]) => {
+            const sellerAgent = agents.find((ag) => ag.id === sellerId);
+            return sellerAgent
+              ? { agent: sellerAgent, level: v.level, profit: 0, rate: 0, override: v.amount }
+              : null;
+          })
+          .filter((x): x is DownlineEntry => x !== null)
+          .sort((x, y) => x.level - y.level || y.override - x.override)
       : dl.map(({ agent, level }) => {
           const profit = Math.max(0, profitByAgent.get(agent.id) || 0);
           const rate = overrideMap.get(level) || 0;
