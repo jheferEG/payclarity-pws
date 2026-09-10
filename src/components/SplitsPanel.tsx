@@ -710,7 +710,9 @@ export function SplitEditorDialog({
     inv.commissionPercentOverride ??
     s.agents.find((a) => a.id === inv.agentId)?.commissionPercent ??
     0;
-  const pool = Math.max(0, Math.max(0, calc.commissionableBase) * personalRate - calc.adminFeeAmount);
+  const pool = s.company.commissionEntryMode === "fixed"
+    ? Math.max(0, Math.max(0, calc.commissionableBase) - calc.adminFeeAmount)
+    : Math.max(0, Math.max(0, calc.commissionableBase) * personalRate - calc.adminFeeAmount);
   const total = totalSplitPercent(participants);
   const valid = isSplitValid(participants);
   const split = inv.split ?? null;
@@ -732,7 +734,7 @@ export function SplitEditorDialog({
     if (!fresh) return;
     const freshCalc = calcInvoice(fresh, s.financeCompanies);
     const ag = s.agents.find((a) => a.id === fresh.agentId);
-    const rows = computeInvolved(fresh, freshCalc, s.agents, s.overrides, s.language);
+    const rows = computeInvolved(fresh, freshCalc, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
     const doc = buildSaleInvoicePDF(freshCalc, s.company, ag?.name ?? "—", null, rows);
     const fileName = `${fresh.number}_${(fresh.customerName || "invoice").replace(/\s+/g, "_")}_v${(fresh.pdfHistory?.length ?? 0) + 1}.pdf`;
     doc.save(fileName);
@@ -765,7 +767,7 @@ export function SplitEditorDialog({
     };
     const c = calcInvoice(historicalInvoice, s.financeCompanies);
     const ag = s.agents.find((a) => a.id === inv.agentId);
-    const rows = computeInvolved(historicalInvoice, c, s.agents, s.overrides, s.language);
+    const rows = computeInvolved(historicalInvoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
     const doc = buildSaleInvoicePDF(c, s.company, ag?.name ?? "—", null, rows);
     doc.save(record.fileName);
     toast.success(`Downloaded ${record.fileName}`);

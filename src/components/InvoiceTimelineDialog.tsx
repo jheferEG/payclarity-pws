@@ -106,8 +106,8 @@ export function InvoiceTimelineDialog({
   const involved = useMemo(() => {
     if (!inv) return [];
     const c = calcInvoice(inv, s.financeCompanies);
-    return computeInvolved(inv, c, s.agents, s.overrides, s.language);
-  }, [inv, s.financeCompanies, s.agents, s.overrides, s.language]);
+    return computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+  }, [inv, s.financeCompanies, s.agents, s.overrides, s.language, s.company.commissionEntryMode]);
 
   const allEntries = useMemo<TimelineEntry[]>(() => {
     if (!inv) return [];

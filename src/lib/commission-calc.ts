@@ -101,6 +101,40 @@ export type AgentPayout = {
   pendingBalance: number;
 };
 
+/** Cost-cascade compensation (used when the company's commission entry
+ *  mode is "fixed" — every agent's own $ field is a product-cost tier,
+ *  not a flat payout). Walking up the sponsor chain from the seller,
+ *  each sponsor's override = the product cost of the person one level
+ *  below them minus their own product cost — never a percentage. */
+export function costCascade(
+  sellerId: string,
+  sellerProductCost: number,
+  agents: Agent[]
+): { agentId: string; level: number; amount: number }[] {
+  const seller = agents.find((a) => a.id === sellerId);
+  if (!seller) return [];
+  const chain: { agent: Agent; level: number }[] = [];
+  const visited = new Set<string>([seller.id]);
+  let cursor: Agent = seller;
+  let level = 1;
+  while (cursor.sponsorId && !visited.has(cursor.sponsorId)) {
+    const sponsor = agents.find((a) => a.id === cursor.sponsorId);
+    if (!sponsor) break;
+    visited.add(sponsor.id);
+    chain.push({ agent: sponsor, level });
+    cursor = sponsor;
+    level++;
+  }
+  const results: { agentId: string; level: number; amount: number }[] = [];
+  let belowCost = sellerProductCost;
+  for (const { agent, level: lvl } of chain) {
+    const ownCost = agent.fixedCommissionAmount ?? 0;
+    results.push({ agentId: agent.id, level: lvl, amount: Math.max(0, belowCost - ownCost) });
+    belowCost = ownCost;
+  }
+  return results;
+}
+
 function buildChildren(agents: Agent[]): Map<string | null, Agent[]> {
   const m = new Map<string | null, Agent[]>();
   for (const a of agents) {
@@ -134,7 +168,8 @@ export function calcPayouts(
   invoices: Invoice[],
   financeCompanies: FinanceCompany[],
   tiers: PersonalTier[],
-  overrides: OverrideLevel[]
+  overrides: OverrideLevel[],
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): AgentPayout[] {
   const calced = invoices.map((i) => calcInvoice(i, financeCompanies));
   const profitByAgent = new Map<string, number>();
@@ -144,6 +179,9 @@ export function calcPayouts(
   const reservePctByAgent = new Map<string, number>();
   const paidStatus = new Map<string, boolean>();
   const invoicesByAgent = new Map<string, InvoiceCalc[]>();
+  // Cost-cascade overrides are per-invoice (they depend on that specific
+  // sale's chain), so they're accumulated separately from the % model.
+  const cascadeOverrideByAgent = new Map<string, number>();
 
   for (const c of calced) {
     const a = c.invoice.agentId;
@@ -158,6 +196,12 @@ export function calcPayouts(
     if (!invoicesByAgent.has(a)) invoicesByAgent.set(a, []);
     invoicesByAgent.get(a)!.push(c);
     paidStatus.set(a, (paidStatus.get(a) ?? true) && c.invoice.paid);
+
+    if (commissionEntryMode === "fixed") {
+      for (const row of costCascade(a, c.invoice.productCost || 0, agents)) {
+        cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + row.amount);
+      }
+    }
   }
 
   const overrideMap = new Map(overrides.map((o) => [o.level, o.rate]));
@@ -175,26 +219,35 @@ export function calcPayouts(
     // it never touches the sale total, profit, or the commission base/rate.
     const myInvoices = invoicesByAgent.get(a.id) || [];
     const personalCommission = myInvoices.reduce((sum, c) => {
+      // Company-wide $ mode: no percentages anywhere — personal commission
+      // is always sale minus the seller's own product cost minus the fee,
+      // unless admin typed a manual $ override for this specific invoice.
       const raw = c.invoice.commissionPercentOverride != null
         ? Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride
-        : usesFixedPayout
-          ? (a.fixedCommissionAmount || 0)
-          : Math.max(0, c.commissionableBase) * personalRate;
+        : commissionEntryMode === "fixed"
+          ? Math.max(0, c.commissionableBase)
+          : usesFixedPayout
+            ? (a.fixedCommissionAmount || 0)
+            : Math.max(0, c.commissionableBase) * personalRate;
       return sum + Math.max(0, raw - c.adminFeeAmount);
     }, 0);
     // When paid a flat amount, report the effective rate (for display only —
     // e.g. "@ X%" in PDFs/tables) rather than the unused percent/tier rate.
-    const personalRateForDisplay = usesFixedPayout
+    const personalRateForDisplay = (usesFixedPayout || commissionEntryMode === "fixed")
       ? (personalBase > 0 ? personalCommission / personalBase : 0)
       : personalRate;
 
     const dl = collectDownline(a.id, children);
-    const downline: DownlineEntry[] = dl.map(({ agent, level }) => {
-      const profit = Math.max(0, profitByAgent.get(agent.id) || 0);
-      const rate = overrideMap.get(level) || 0;
-      return { agent, level, profit, rate, override: profit * rate };
-    });
-    const overrideTotal = downline.reduce((s, d) => s + d.override, 0);
+    const downline: DownlineEntry[] = commissionEntryMode === "fixed"
+      ? [] // cost-cascade overrides aren't a per-downline-agent rate — see overrideTotal below
+      : dl.map(({ agent, level }) => {
+          const profit = Math.max(0, profitByAgent.get(agent.id) || 0);
+          const rate = overrideMap.get(level) || 0;
+          return { agent, level, profit, rate, override: profit * rate };
+        });
+    const overrideTotal = commissionEntryMode === "fixed"
+      ? (cascadeOverrideByAgent.get(a.id) || 0)
+      : downline.reduce((s, d) => s + d.override, 0);
 
     const grossPayout = personalCommission + overrideTotal;
     const advanceApplied = advanceByAgent.get(a.id) || 0;

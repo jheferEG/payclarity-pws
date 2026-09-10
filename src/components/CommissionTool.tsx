@@ -394,8 +394,8 @@ export default function CommissionTool() {
 
   void s; // reserved
   const payouts = useMemo(
-    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides]
+    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode]
   );
   const totalPayout = payouts.reduce((a, c) => a + c.grossPayout, 0);
   const totalSales = s.invoices.reduce((a, x) => a + Number(x.salesAmount || 0), 0);
@@ -1344,60 +1344,26 @@ function InvoicesPanel() {
   }, [live.commissionableBase]);
 
   const payouts = useMemo(
-    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides]
+    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode]
   );
 
   // Everyone this invoice pays: the seller's upline chain (who earn an
   // override on this profit — topmost sponsor first), then the seller
-  // themselves, split by participant when the invoice has a split.
+  // themselves, split by participant when the invoice has a split. Reuses
+  // the same computeInvolved as Payout Documents/PDFs so the preview never
+  // disagrees with what actually gets generated.
   const involved = useMemo(() => {
-    const seller = s.agents.find((a) => a.id === draft.agentId);
-    if (!seller) return [];
-    const overrideMap = new Map(s.overrides.map((o) => [o.level, o.rate]));
-    const upline: { agent: typeof seller; level: number }[] = [];
-    const visited = new Set<string>([seller.id]);
-    let cursor = seller;
-    let level = 1;
-    while (cursor.sponsorId && !visited.has(cursor.sponsorId)) {
-      const sponsor = s.agents.find((a) => a.id === cursor.sponsorId);
-      if (!sponsor) break;
-      visited.add(sponsor.id);
-      upline.push({ agent: sponsor, level });
-      cursor = sponsor;
-      level++;
-    }
-    upline.reverse(); // topmost sponsor first, matching the chain of command
-
-    const rate =
-      draft.commissionPercentOverride != null
-        ? draft.commissionPercentOverride
-        : seller.commissionPercent ?? 0;
-    const personal = Math.max(0, live.commissionableBase) * rate;
-    const splits = draft.split?.participants ?? [];
-
-    const rows: { name: string; role: string; amount: number; agentId: string | null }[] = upline.map((u) => ({
-      name: u.agent.name,
-      role: `Override L${u.level} (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`,
-      amount: Math.max(0, live.commissionProfit) * (overrideMap.get(u.level) || 0),
-      agentId: u.agent.id,
-    }));
-
-    if (splits.length > 0) {
-      for (const p of splits) {
-        rows.push({
-          name: p.displayName || "—",
-          role: `${roleLabel(p.role, p.customRoleLabel)} (${(p.splitPercent * 100).toFixed(0)}%)`,
-          amount: personal * p.splitPercent,
-          agentId: p.agentId,
-        });
-      }
-    } else {
-      rows.push({ name: seller.name, role: s.language === "es" ? "Vendedor" : "Salesperson", amount: personal, agentId: seller.id });
-    }
-
-    return rows;
-  }, [draft.agentId, draft.commissionPercentOverride, draft.split, live.commissionableBase, live.commissionProfit, s.agents, s.overrides, s.language]);
+    if (!draft.agentId) return [];
+    return computeInvolved(
+      { ...(draft as Invoice), id: "tmp", number: "—" },
+      live,
+      s.agents,
+      s.overrides,
+      s.language,
+      s.company.commissionEntryMode
+    );
+  }, [draft.agentId, draft.commissionPercentOverride, draft.split, draft.productCost, live, s.agents, s.overrides, s.language, s.company.commissionEntryMode]);
 
   const [explainId, setExplainId] = useState<string | null>(null);
   const [disputeId, setDisputeId] = useState<string | null>(null);
@@ -1736,41 +1702,20 @@ function InvoicesPanel() {
         <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(draft.productCost, s.company.currency)}`} />
         <Row k={t("preview_net_profit")} v={fmtMoney(live.profit, s.company.currency)} accent bold />
         {(() => {
+          const isFixed = s.company.commissionEntryMode === "fixed";
           const ag = s.agents.find((a) => a.id === draft.agentId);
-          const rate =
-            draft.commissionPercentOverride != null
-              ? draft.commissionPercentOverride
-              : ag?.commissionPercent ?? 0;
-          // The admin fee never touches the sale/profit above — it comes
-          // straight out of the seller's own commission, right here.
-          const personal = Math.max(0, Math.max(0, live.commissionableBase) * rate - live.adminFeeAmount);
-          const overrideMap = new Map(s.overrides.map((o) => [o.level, o.rate]));
-          // Overrides flow UPWARD: it's the seller's sponsor chain that earns
-          // an override on this sale, not the seller's own downline.
-          const upline: { name: string; level: number; rate: number }[] = [];
-          const visited = new Set<string>([draft.agentId]);
-          let cursor = s.agents.find((a) => a.id === draft.agentId);
-          let lvl = 1;
-          while (cursor?.sponsorId && !visited.has(cursor.sponsorId)) {
-            const sponsor = s.agents.find((a) => a.id === cursor!.sponsorId);
-            if (!sponsor) break;
-            visited.add(sponsor.id);
-            upline.push({ name: sponsor.name, level: lvl, rate: overrideMap.get(lvl) || 0 });
-            cursor = sponsor;
-            lvl++;
-          }
-          upline.reverse(); // topmost sponsor first
-          const downline = upline;
-          const overrideTotal = downline.reduce(
-            (sum, d) => sum + Math.max(0, live.commissionProfit) * d.rate,
-            0
-          );
+          const rate = draft.commissionPercentOverride != null ? draft.commissionPercentOverride : ag?.commissionPercent ?? 0;
+          // Derived straight from `involved` — the same computeInvolved()
+          // used by Payout Documents and every generated PDF — so this
+          // preview can never disagree with what actually gets produced.
+          const overrideRows = involved.filter((r) => r.role.startsWith("Override"));
+          const shareRows = involved.filter((r) => !r.role.startsWith("Override"));
+          const personal = shareRows.reduce((s2, r) => s2 + r.amount, 0);
+          const overrideTotal = overrideRows.reduce((s2, r) => s2 + r.amount, 0);
           const splits = draft.split?.participants ?? [];
-          const splitRows = splits.map((p) => ({
-            name: p.displayName || "—",
-            pct: p.splitPercent,
-            share: personal * p.splitPercent,
-          }));
+          const splitRows = shareRows.length > 1
+            ? shareRows.map((r, i) => ({ name: r.name, pct: splits[i]?.splitPercent ?? 0, share: r.amount }))
+            : [];
           const gross = personal + overrideTotal;
           const netPay = gross - (draft.advanceApplied || 0) - (draft.specialDeductions || 0);
           const reserve = Math.max(0, netPay) * (draft.taxReservePercent || 0);
@@ -1781,24 +1726,20 @@ function InvoicesPanel() {
               {live.adminFeeAmount > 0 && (
                 <Row k={s.language === "es" ? "Admin fee (de la comisión)" : "Admin fee (from commission)"} v={`- ${fmtMoney(live.adminFeeAmount, s.company.currency)}`} />
               )}
-              <Row k={`${t("preview_personal")} (${(rate * 100).toFixed(2)}%)`} v={fmtMoney(personal, s.company.currency)} />
+              <Row k={isFixed ? t("preview_personal") : `${t("preview_personal")} (${(rate * 100).toFixed(2)}%)`} v={fmtMoney(personal, s.company.currency)} />
               {splitRows.length > 0 && (
                 <div className="mt-1 mb-1 pl-3 border-l-2 border-accent/30">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("preview_splits")}</div>
                   {splitRows.map((r, i) => (
-                    <Row key={i} k={`  ${r.name} (${(r.pct * 100).toFixed(0)}%)`} v={fmtMoney(r.share, s.company.currency)} />
+                    <Row key={i} k={isFixed ? `  ${r.name}` : `  ${r.name} (${(r.pct * 100).toFixed(0)}%)`} v={fmtMoney(r.share, s.company.currency)} />
                   ))}
                 </div>
               )}
-              {downline.length > 0 && (
+              {overrideRows.length > 0 && (
                 <div className="mt-1 mb-1 pl-3 border-l-2 border-primary/30">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("preview_overrides")}</div>
-                  {downline.map((d, i) => (
-                    <Row
-                      key={i}
-                      k={`  ${d.name} L${d.level} (${(d.rate * 100).toFixed(2)}%)`}
-                      v={fmtMoney(Math.max(0, live.commissionProfit) * d.rate, s.company.currency)}
-                    />
+                  {overrideRows.map((r, i) => (
+                    <Row key={i} k={`  ${r.name} · ${r.role}`} v={fmtMoney(r.amount, s.company.currency)} />
                   ))}
                   <Row k={`  ${t("preview_override_total")}`} v={fmtMoney(overrideTotal, s.company.currency)} bold />
                 </div>
@@ -1807,7 +1748,7 @@ function InvoicesPanel() {
               <Row k={t("preview_deductions")} v={`- ${fmtMoney(draft.specialDeductions || 0, s.company.currency)}`} />
               <div className="border-t my-2" />
               <Row k={t("preview_net")} v={fmtMoney(netPay, s.company.currency)} bold />
-              <Row k={`${t("preview_reserve")} (${((draft.taxReservePercent || 0) * 100).toFixed(1)}%)`} v={`- ${fmtMoney(reserve, s.company.currency)}`} />
+              <Row k={isFixed ? t("preview_reserve") : `${t("preview_reserve")} (${((draft.taxReservePercent || 0) * 100).toFixed(1)}%)`} v={`- ${fmtMoney(reserve, s.company.currency)}`} />
               <Row k={t("preview_final")} v={fmtMoney(final, s.company.currency)} accent bold />
             </>
           );
@@ -1881,14 +1822,14 @@ function InvoicesPanel() {
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
-                            const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language);
+                            const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                             const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout, rows);
                             window.open(doc.output("bloburl"), "_blank");
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
-                            const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language);
+                            const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                             buildSaleAndDownload(c, s.company, ag?.name || "—", payout, rows);
                           }}>PDF</Button>
                           {isAdmin && (
@@ -1997,7 +1938,7 @@ function PayoutDocumentsDialog({
 
   const inv = invoiceId ? s.invoices.find((i) => i.id === invoiceId) : null;
   const c = inv ? calcInvoice(inv, s.financeCompanies) : null;
-  const involvedRows = inv && c ? computeInvolved(inv, c, s.agents, s.overrides, s.language) : [];
+  const involvedRows = inv && c ? computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode) : [];
 
   // Keep this invoice's payout documents in sync with its current
   // split/overrides every time the dialog is opened.

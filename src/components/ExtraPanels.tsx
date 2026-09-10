@@ -113,9 +113,10 @@ function AICoachCard({ agent }: { agent: Agent }) {
         s.personalTiers,
         s.overrides,
         s.language,
-        s.company.currency
+        s.company.currency,
+        s.company.commissionEntryMode
       ),
-    [agent, s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.language, s.company.currency]
+    [agent, s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.language, s.company.currency, s.company.commissionEntryMode]
   );
   if (!insight) return null;
   const Icon = insight.kind === "negative" ? TrendingDown : insight.kind === "positive" ? TrendingUp : Sparkles;
@@ -163,9 +164,10 @@ export function WalletPanel() {
         s.overrides,
         s.payments,
         s.disputes,
-        s.adjustments
+        s.adjustments,
+        s.company.commissionEntryMode
       ),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.adjustments]
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.adjustments, s.company.commissionEntryMode]
   );
   const visibleWallets = isAdmin ? wallets : wallets.filter((w) => w.agent.id === myAgentId);
   const [selected, setSelected] = useState<string>("");
@@ -530,7 +532,7 @@ export function ExplainDialog({
   if (!inv) return null;
   const c = calcInvoice(inv, s.financeCompanies);
   const ag = s.agents.find((a) => a.id === inv.agentId) || null;
-  const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides);
+  const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
   const payout = payouts.find((p) => p.agent.id === inv.agentId) || null;
   const isEs = lang === "es";
   const cur = s.company.currency;
@@ -618,9 +620,13 @@ export function ExplainDialog({
                 {isEs ? "Tu comisión" : "Your commission"}
               </p>
               <p>
-                {isEs
-                  ? `Tu nivel de compensación es ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), así que tu comisión personal sobre el profit es:`
-                  : `Your compensation level is ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), so your personal commission on the profit is:`}
+                {s.company.commissionEntryMode === "fixed"
+                  ? (isEs
+                      ? `Tu nivel de compensación es ${inv.commissionLevel || ag?.level || "—"}, así que tu comisión personal sobre esta venta es:`
+                      : `Your compensation level is ${inv.commissionLevel || ag?.level || "—"}, so your personal commission on this sale is:`)
+                  : (isEs
+                      ? `Tu nivel de compensación es ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), así que tu comisión personal sobre el profit es:`
+                      : `Your compensation level is ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), so your personal commission on the profit is:`)}
                 {" "}<span className="font-bold text-accent text-base">{m(payout.personalCommission)}</span>
               </p>
               {payout.overrideTotal > 0 && (

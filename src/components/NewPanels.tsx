@@ -87,7 +87,7 @@ export function DashboardPanel({ profileAvatars = {} }: { profileAvatars?: Recor
       sales += Number(inv.salesAmount || 0);
       profit += c.profit;
     }
-    const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides);
+    const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
     const commissions = payouts.reduce((a, p) => a + p.personalCommission, 0);
     const overridesTotal = payouts.reduce((a, p) => a + p.overrideTotal, 0);
     const tax = payouts.reduce((a, p) => a + p.taxReserveSuggested, 0);
@@ -216,12 +216,12 @@ export function ReportsPanel() {
   const cur = s.company.currency;
 
   const payouts = useMemo(
-    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides]
+    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode]
   );
   const wallets = useMemo(
-    () => buildAllWallets(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.adjustments),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes]
+    () => buildAllWallets(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.adjustments, s.company.commissionEntryMode),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.company.commissionEntryMode]
   );
 
   const exportCommissions = () => {
@@ -323,7 +323,7 @@ export function YearEnd1099Panel() {
     const end = `${year}-12-31`;
     const invoicesY = s.invoices.filter((i) => i.date >= start && i.date <= end);
     const paymentsY = s.payments.filter((p) => p.date >= start && p.date <= end);
-    const payouts = calcPayouts(s.agents, invoicesY, s.financeCompanies, s.personalTiers, s.overrides);
+    const payouts = calcPayouts(s.agents, invoicesY, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
 
     return s.agents.map((a) => {
       const p = payouts.find((x) => x.agent.id === a.id);

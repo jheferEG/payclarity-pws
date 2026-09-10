@@ -8,7 +8,7 @@ import type {
   Payment,
   SplitParticipant,
 } from "./commission-store";
-import { calcInvoice, calcPayouts, fmtMoney, type AgentPayout, type InvoiceCalc } from "./commission-calc";
+import { calcInvoice, calcPayouts, costCascade, fmtMoney, type AgentPayout, type InvoiceCalc } from "./commission-calc";
 import type { FinanceCompany, OverrideLevel, PersonalTier } from "./commission-store";
 import type { Lang } from "./i18n";
 
@@ -18,7 +18,8 @@ export function shareForAgent(
   inv: Invoice,
   c: InvoiceCalc,
   agentRate: number,
-  agentId: string
+  agentId: string,
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): { share: number; participant: SplitParticipant } | null {
   const split: InvoiceSplit | null | undefined = inv.split;
   if (!split || split.participants.length === 0) return null;
@@ -26,8 +27,12 @@ export function shareForAgent(
   if (Math.abs(total - 1) > 0.0001) return null; // invalid splits ignored
   const part = split.participants.find((p) => p.agentId === agentId);
   if (!part) return null;
-  const rate = inv.commissionPercentOverride ?? agentRate;
-  const pool = Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
+  const raw = inv.commissionPercentOverride != null
+    ? Math.max(0, c.commissionableBase) * inv.commissionPercentOverride
+    : commissionEntryMode === "fixed"
+      ? Math.max(0, c.commissionableBase)
+      : Math.max(0, c.commissionableBase) * agentRate;
+  const pool = Math.max(0, raw - c.adminFeeAmount);
   return { share: pool * part.splitPercent, participant: part };
 }
 
@@ -74,7 +79,8 @@ export function buildWallet(
   disputes: Dispute[],
   adjustments: Adjustment[] = [],
   allInvoices?: Invoice[],
-  allFinanceCompanies?: FinanceCompany[]
+  allFinanceCompanies?: FinanceCompany[],
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): AgentWallet {
   const agentPayments = payments.filter((p) => p.agentId === agent.id);
   // A "scheduled" payment is a promise, not money sent yet — don't count it
@@ -86,10 +92,12 @@ export function buildWallet(
   const entries: Omit<LedgerEntry, "balance">[] = [];
 
   for (const c of payout.invoices) {
-    const fullCommission = Math.max(
-      0,
-      Math.max(0, c.commissionableBase) * (c.invoice.commissionPercentOverride ?? payout.personalRate) - c.adminFeeAmount
-    );
+    const rawCommission = c.invoice.commissionPercentOverride != null
+      ? Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride
+      : commissionEntryMode === "fixed"
+        ? Math.max(0, c.commissionableBase)
+        : Math.max(0, c.commissionableBase) * payout.personalRate;
+    const fullCommission = Math.max(0, rawCommission - c.adminFeeAmount);
     const split = c.invoice.split;
     let myShare = fullCommission;
     let splitNote = "";
@@ -152,7 +160,9 @@ export function buildWallet(
       const c = calcInvoice(inv, allFinanceCompanies);
       // use rate of primary rep (override > rate > 0); we don't know rate so use override or 0 fallback
       const rate = inv.commissionPercentOverride ?? agent.commissionPercent ?? 0;
-      const fullCommission = Math.max(0, c.commissionableBase) * rate;
+      const fullCommission = commissionEntryMode === "fixed"
+        ? Math.max(0, c.commissionableBase)
+        : Math.max(0, c.commissionableBase) * rate;
       const myShare = fullCommission * part.splitPercent;
       if (myShare > 0) {
         entries.push({
@@ -168,15 +178,29 @@ export function buildWallet(
     }
   }
 
-  for (const d of payout.downline) {
-    entries.push({
-      date: payout.invoices[payout.invoices.length - 1]?.invoice.date || new Date().toISOString().slice(0, 10),
-      type: "override",
-      description: `L${d.level} override on ${d.agent.name}`,
-      debit: d.override,
-      credit: 0,
-      refLabel: d.agent.name,
-    });
+  if (commissionEntryMode === "fixed") {
+    // Cost-cascade overrides are computed per-invoice, not per downline
+    // agent — payout.overrideTotal already has the right number.
+    if (payout.overrideTotal > 0) {
+      entries.push({
+        date: new Date().toISOString().slice(0, 10),
+        type: "override",
+        description: `Cost-cascade override`,
+        debit: payout.overrideTotal,
+        credit: 0,
+      });
+    }
+  } else {
+    for (const d of payout.downline) {
+      entries.push({
+        date: payout.invoices[payout.invoices.length - 1]?.invoice.date || new Date().toISOString().slice(0, 10),
+        type: "override",
+        description: `L${d.level} override on ${d.agent.name}`,
+        debit: d.override,
+        credit: 0,
+        refLabel: d.agent.name,
+      });
+    }
   }
 
   if (payout.taxReserveSuggested > 0) {
@@ -260,12 +284,13 @@ export function buildAllWallets(
   overrides: OverrideLevel[],
   payments: Payment[],
   disputes: Dispute[],
-  adjustments: Adjustment[] = []
+  adjustments: Adjustment[] = [],
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): AgentWallet[] {
-  const payouts = calcPayouts(agents, invoices, financeCompanies, tiers, overrides);
+  const payouts = calcPayouts(agents, invoices, financeCompanies, tiers, overrides, commissionEntryMode);
   return agents.map((a) => {
     const p = payouts.find((x) => x.agent.id === a.id)!;
-    return buildWallet(a, p, payments, disputes, adjustments, invoices, financeCompanies);
+    return buildWallet(a, p, payments, disputes, adjustments, invoices, financeCompanies, commissionEntryMode);
   });
 }
 
@@ -530,7 +555,8 @@ export function computeCoachInsight(
   tiers: PersonalTier[],
   overrides: OverrideLevel[],
   lang: Lang = "en",
-  currency = "USD"
+  currency = "USD",
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): CoachInsight | null {
   const isEs = lang === "es";
   const cur = monthRange(0);
@@ -540,8 +566,8 @@ export function computeCoachInsight(
   const curInvoices = invoices.filter((i) => inRange(i.date, cur));
   const prevInvoices = invoices.filter((i) => inRange(i.date, prev));
 
-  const curPayouts = calcPayouts(agents, curInvoices, financeCompanies, tiers, overrides);
-  const prevPayouts = calcPayouts(agents, prevInvoices, financeCompanies, tiers, overrides);
+  const curPayouts = calcPayouts(agents, curInvoices, financeCompanies, tiers, overrides, commissionEntryMode);
+  const prevPayouts = calcPayouts(agents, prevInvoices, financeCompanies, tiers, overrides, commissionEntryMode);
   const curP = curPayouts.find((p) => p.agent.id === agent.id);
   const prevP = prevPayouts.find((p) => p.agent.id === agent.id);
   if (!curP || !prevP) return null;
@@ -651,7 +677,8 @@ export function computeInvolved(
   c: InvoiceCalc,
   agents: Agent[],
   overrides: OverrideLevel[],
-  lang: Lang = "en"
+  lang: Lang = "en",
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): InvolvedRow[] {
   const seller = agents.find((a) => a.id === inv.agentId);
   if (!seller) return [];
@@ -671,16 +698,25 @@ export function computeInvolved(
   }
   upline.reverse(); // topmost sponsor first
 
+  // Company-wide $ mode: no percentages anywhere. Personal commission is
+  // sale minus the seller's own product cost minus the admin fee; each
+  // sponsor's override is a cost-cascade difference, not a rate.
   const rate = inv.commissionPercentOverride ?? seller.commissionPercent ?? 0;
-  // Admin fee comes straight out of the seller's own commission — never
-  // out of the sale/profit or the overrides paid on it.
-  const personal = Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
+  const personal = commissionEntryMode === "fixed"
+    ? Math.max(0, Math.max(0, c.commissionableBase) - c.adminFeeAmount)
+    : Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
   const splits = inv.split?.participants ?? [];
+
+  const cascadeByAgent = commissionEntryMode === "fixed"
+    ? new Map(costCascade(seller.id, inv.productCost || 0, agents).map((r) => [r.agentId, r.amount]))
+    : null;
 
   const rows: InvolvedRow[] = upline.map((u) => ({
     name: u.agent.name,
-    role: `Override L${u.level} (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`,
-    amount: Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0),
+    role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
+    amount: cascadeByAgent
+      ? (cascadeByAgent.get(u.agent.id) || 0)
+      : Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0),
     agentId: u.agent.id,
   }));
 

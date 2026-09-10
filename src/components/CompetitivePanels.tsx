@@ -55,10 +55,10 @@ export function AdjustmentsPanel() {
     if (!form.agentId || !form.amount || form.amount <= 0) return null;
     const agent = s.agents.find((a) => a.id === form.agentId);
     if (!agent) return null;
-    const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides);
+    const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
     const payout = payouts.find((p) => p.agent.id === agent.id);
     if (!payout) return null;
-    const before = buildWallet(agent, payout, s.payments, s.disputes, s.adjustments);
+    const before = buildWallet(agent, payout, s.payments, s.disputes, s.adjustments, undefined, undefined, s.company.commissionEntryMode);
     const simAdj: Adjustment = {
       id: "__preview__",
       agentId: agent.id,
@@ -70,9 +70,9 @@ export function AdjustmentsPanel() {
       createdBy: "admin",
       createdAt: new Date().toISOString(),
     };
-    const after = buildWallet(agent, payout, s.payments, s.disputes, [...s.adjustments, simAdj]);
+    const after = buildWallet(agent, payout, s.payments, s.disputes, [...s.adjustments, simAdj], undefined, undefined, s.company.commissionEntryMode);
     return { before: before.pendingBalance, after: after.pendingBalance };
-  }, [form.agentId, form.amount, form.kind, form.date, s.agents, s.invoices, s.payments, s.disputes, s.adjustments, s.financeCompanies, s.personalTiers, s.overrides]);
+  }, [form.agentId, form.amount, form.kind, form.date, s.agents, s.invoices, s.payments, s.disputes, s.adjustments, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode]);
 
   if (!isAdmin) {
     return (
@@ -468,7 +468,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
       const agents = useStore.getState().agents;
       const c = calcInvoice(inv, fcs);
       const agentName = agents.find((a) => a.id === inv!.agentId)?.name || "—";
-      const rows = computeInvolved(inv, c, agents, useStore.getState().overrides, s.language);
+      const rows = computeInvolved(inv, c, agents, useStore.getState().overrides, s.language, company.commissionEntryMode);
       buildSaleAndDownload(c, company, agentName, null, rows);
       toast.success(t("success_pdf"));
     } catch (e: any) {
