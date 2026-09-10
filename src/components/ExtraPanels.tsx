@@ -532,8 +532,11 @@ export function ExplainDialog({
   if (!inv) return null;
   const c = calcInvoice(inv, s.financeCompanies);
   const ag = s.agents.find((a) => a.id === inv.agentId) || null;
-  const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
-  const payout = payouts.find((p) => p.agent.id === inv.agentId) || null;
+  // This invoice's own numbers only — never the agent's all-time totals,
+  // which is what payout.personalCommission from calcPayouts would give.
+  const involvedRows = computeInvolved(inv, c, s.agents, s.overrides, lang, s.company.commissionEntryMode);
+  const sellerRow = involvedRows.find((r) => r.agentId === inv.agentId) ?? null;
+  const personalCommission = sellerRow?.amount ?? 0;
   const isEs = lang === "es";
   const cur = s.company.currency;
   const m = (n: number) => fmtMoney(n, cur);
@@ -543,9 +546,9 @@ export function ExplainDialog({
   const dealerFeeVal = inv.dealerFee != null ? inv.dealerFee : c.financeCo?.dealerFee ?? 0;
   const ccpfVal = inv.saleType === "credit_card" ? inv.salesAmount * (inv.ccpfPercent ?? 0.035) : 0;
   const adminFeeVal = inv.salesAmount * (inv.adminFeePercent || 0);
-  const effectiveRate = payout ? (inv.commissionPercentOverride ?? payout.personalRate) : null;
+  const effectiveRate = inv.commissionPercentOverride ?? ag?.commissionPercent ?? 0;
   const reservePct = inv.taxReservePercent ?? ag?.taxReservePercent ?? 0;
-  const reserveAmt = payout ? payout.taxReserveSuggested : 0;
+  const reserveAmt = Math.max(0, personalCommission) * reservePct;
 
   // Build natural-language bullets — dollar amounts only; the 20% tax
   // reserve recommendation further below is the one deliberate exception.
@@ -613,8 +616,9 @@ export function ExplainDialog({
             ))}
           </ul>
 
-          {/* Commission summary box */}
-          {payout && effectiveRate !== null && (
+          {/* Commission summary box — this invoice's own share, not the
+              agent's all-time total across every sale they've made. */}
+          {sellerRow && (
             <div className="rounded-xl bg-accent/5 border border-accent/20 p-4 space-y-2 text-sm">
               <p className="font-medium text-accent">
                 {isEs ? "Tu comisión" : "Your commission"}
@@ -627,15 +631,8 @@ export function ExplainDialog({
                   : (isEs
                       ? `Tu nivel de compensación es ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), así que tu comisión personal sobre el profit es:`
                       : `Your compensation level is ${inv.commissionLevel || ag?.level || "—"} (${pct(effectiveRate)}), so your personal commission on the profit is:`)}
-                {" "}<span className="font-bold text-accent text-base">{m(payout.personalCommission)}</span>
+                {" "}<span className="font-bold text-accent text-base">{m(personalCommission)}</span>
               </p>
-              {payout.overrideTotal > 0 && (
-                <p>
-                  {isEs
-                    ? `Además, como tienes reps en tu downline, ganaste un override adicional de ${m(payout.overrideTotal)}.`
-                    : `You also earned a ${m(payout.overrideTotal)} downline override from your team.`}
-                </p>
-              )}
               {inv.advanceApplied ? (
                 <p>
                   {isEs
