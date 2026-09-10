@@ -1740,7 +1740,7 @@ function InvoicesPanel() {
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                             const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout, rows, s.company.commissionEntryMode);
-                            window.open(doc.output("bloburl"), "_blank");
+                            setPdfPreview({ name: `${inv.number} — ${ag?.name || "—"}`, url: doc.output("bloburl").toString() });
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
