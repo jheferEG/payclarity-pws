@@ -469,7 +469,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
       const c = calcInvoice(inv, fcs);
       const agentName = agents.find((a) => a.id === inv!.agentId)?.name || "—";
       const rows = computeInvolved(inv, c, agents, useStore.getState().overrides, s.language, company.commissionEntryMode);
-      buildSaleAndDownload(c, company, agentName, null, rows);
+      buildSaleAndDownload(c, company, agentName, null, rows, company.commissionEntryMode);
       toast.success(t("success_pdf"));
     } catch (e: any) {
       toast.error(e?.message || t("err_pdf"));

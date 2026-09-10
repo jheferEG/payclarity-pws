@@ -1823,14 +1823,14 @@ function InvoicesPanel() {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout, rows);
+                            const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout, rows, s.company.commissionEntryMode);
                             window.open(doc.output("bloburl"), "_blank");
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            buildSaleAndDownload(c, s.company, ag?.name || "—", payout, rows);
+                            buildSaleAndDownload(c, s.company, ag?.name || "—", payout, rows, s.company.commissionEntryMode);
                           }}>PDF</Button>
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Documentos de pago" : "Payout documents"} onClick={() => setPayoutDocsId(inv.id)}>

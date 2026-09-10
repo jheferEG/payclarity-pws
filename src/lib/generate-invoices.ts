@@ -185,7 +185,8 @@ export function buildSaleInvoicePDF(
   company: Company,
   agentName: string,
   payout?: AgentPayout | null,
-  involved?: InvoiceInvolvedRow[]
+  involved?: InvoiceInvolvedRow[],
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ): jsPDF {
   const inv = c.invoice;
   const b = resolveBranding(company, inv);
@@ -310,26 +311,6 @@ export function buildSaleInvoicePDF(
     columnStyles: { 1: { halign: "right" } },
   });
 
-  if (tpl === "detailed-commission") {
-    const y2 = (doc as any).lastAutoTable.finalY + 14;
-    autoTable(doc, {
-      startY: y2,
-      head: [["Commission Detail", "Value"]],
-      body: [
-        ["Commission level", inv.commissionLevel || "—"],
-        ["Commission base", inv.commissionBase || "profit"],
-        [
-          "Commission %",
-          `${(((inv.commissionPercentOverride ?? 0) || 0) * 100).toFixed(2)}% (override)`,
-        ],
-      ],
-      headStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255 },
-      styles: { fontSize },
-      margin: { left: margin, right: margin },
-      columnStyles: { 1: { halign: "right" } },
-    });
-  }
-
   if (inv.split && inv.split.participants.length > 0) {
     const y3 = (doc as any).lastAutoTable?.finalY ?? y;
     const total = inv.split.participants.reduce((sum, p) => sum + (p.splitPercent || 0), 0);
@@ -338,7 +319,12 @@ export function buildSaleInvoicePDF(
       startY: y3 + 6,
       head: [["Participant", "Role", "Split %", "Share"]],
       body: inv.split.participants.map((p) => {
-        const pool = Math.max(0, Math.max(0, c.commissionableBase) * (inv.commissionPercentOverride ?? 0) - c.adminFeeAmount);
+        const raw = inv.commissionPercentOverride != null
+          ? Math.max(0, c.commissionableBase) * inv.commissionPercentOverride
+          : commissionEntryMode === "fixed"
+            ? Math.max(0, c.commissionableBase)
+            : 0;
+        const pool = Math.max(0, raw - c.adminFeeAmount);
         const share = pool * p.splitPercent;
         return [
           p.displayName || "—",
@@ -376,45 +362,6 @@ export function buildSaleInvoicePDF(
     });
   }
 
-  if (payout) {
-    const effectiveRate = inv.commissionPercentOverride ?? payout.personalRate;
-    const startY = (doc as any).lastAutoTable?.finalY ?? y;
-    const rows: any[] = [
-      ["Compensation level", `${inv.commissionLevel || "—"} (${(effectiveRate * 100).toFixed(2)}%)`],
-    ];
-    if (c.adminFeeAmount > 0) {
-      rows.push(["Admin fee (from commission)", `- ${fmtMoney(c.adminFeeAmount, cur)}`]);
-    }
-    rows.push(["Personal commission", fmtMoney(payout.personalCommission, cur)]);
-    if (payout.overrideTotal > 0) {
-      rows.push(["Downline override", fmtMoney(payout.overrideTotal, cur)]);
-    }
-    if (inv.advanceApplied) {
-      rows.push(["Advance deducted", `- ${fmtMoney(inv.advanceApplied, cur)}`]);
-    }
-    if (payout.taxReserveSuggested > 0) {
-      rows.push([
-        `Suggested tax reserve (${((inv.taxReservePercent ?? 0) * 100).toFixed(0)}%)`,
-        fmtMoney(payout.taxReserveSuggested, cur),
-      ]);
-    }
-    autoTable(doc, {
-      startY: startY + 14,
-      head: [["Your Commission", ""]],
-      body: rows,
-      foot: [
-        [
-          { content: "Estimated payout", styles: { fontStyle: "bold" } },
-          { content: fmtMoney(payout.finalPayable, cur), styles: { fontStyle: "bold" } },
-        ],
-      ],
-      headStyles: { fillColor: brand, textColor: 255 },
-      footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
-      styles: { fontSize },
-      margin: { left: margin, right: margin },
-      columnStyles: { 1: { halign: "right" } },
-    });
-  }
 
   drawFooter(doc, b);
   return doc;
@@ -672,9 +619,10 @@ export function buildSaleAndDownload(
   company: Company,
   agentName: string,
   payout?: AgentPayout | null,
-  involved?: InvoiceInvolvedRow[]
+  involved?: InvoiceInvolvedRow[],
+  commissionEntryMode: "fixed" | "percent" = "percent"
 ) {
-  const doc = buildSaleInvoicePDF(c, company, agentName, payout, involved);
+  const doc = buildSaleInvoicePDF(c, company, agentName, payout, involved, commissionEntryMode);
   doc.save(`${c.invoice.number}_${(c.invoice.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
 }
 

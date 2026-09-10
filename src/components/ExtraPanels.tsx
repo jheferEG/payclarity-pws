@@ -302,7 +302,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => buildSaleAndDownload(c, s.company, wallet.agent.name, wallet.payout, computeInvolved(c.invoice, c, s.agents, s.overrides, s.language))}
+                        onClick={() => buildSaleAndDownload(c, s.company, wallet.agent.name, wallet.payout, computeInvolved(c.invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode), s.company.commissionEntryMode)}
                       >
                         PDF
                       </Button>
@@ -1405,8 +1405,8 @@ function ApprovalsQueuePanel() {
                             variant="ghost"
                             onClick={() => {
                               const c = calcInvoice(inv, s.financeCompanies);
-                              const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language);
-                              const doc = buildSaleInvoicePDF(c, s.company, agName, null, rows);
+                              const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+                              const doc = buildSaleInvoicePDF(c, s.company, agName, null, rows, s.company.commissionEntryMode);
                               doc.save(`${inv.number}_recalculated.pdf`);
                               toast.success(t("disp_pdf_regen"));
                             }}

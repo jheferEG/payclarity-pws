@@ -735,7 +735,7 @@ export function SplitEditorDialog({
     const freshCalc = calcInvoice(fresh, s.financeCompanies);
     const ag = s.agents.find((a) => a.id === fresh.agentId);
     const rows = computeInvolved(fresh, freshCalc, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-    const doc = buildSaleInvoicePDF(freshCalc, s.company, ag?.name ?? "—", null, rows);
+    const doc = buildSaleInvoicePDF(freshCalc, s.company, ag?.name ?? "—", null, rows, s.company.commissionEntryMode);
     const fileName = `${fresh.number}_${(fresh.customerName || "invoice").replace(/\s+/g, "_")}_v${(fresh.pdfHistory?.length ?? 0) + 1}.pdf`;
     doc.save(fileName);
     s.appendInvoicePdfRecord(fresh.id, {
@@ -768,7 +768,7 @@ export function SplitEditorDialog({
     const c = calcInvoice(historicalInvoice, s.financeCompanies);
     const ag = s.agents.find((a) => a.id === inv.agentId);
     const rows = computeInvolved(historicalInvoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-    const doc = buildSaleInvoicePDF(c, s.company, ag?.name ?? "—", null, rows);
+    const doc = buildSaleInvoicePDF(c, s.company, ag?.name ?? "—", null, rows, s.company.commissionEntryMode);
     doc.save(record.fileName);
     toast.success(`Downloaded ${record.fileName}`);
   };
