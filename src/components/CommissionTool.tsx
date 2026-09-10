@@ -1015,13 +1015,18 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
 
       {agents.length === 0 ? <Empty msg={t("empty_no_reps")} /> : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          {/* No w-full here on purpose — with table-layout:auto, a 100%-wide
+              table distributes leftover space across every column, which
+              blows a huge gap between narrow columns like the $ cost input
+              and the level select. Letting the table size to its content
+              keeps adjacent columns visually next to each other. */}
+          <table className="text-sm">
             <thead className="text-left text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="py-2 w-10"></th>
-                <th className="py-2">{t("th_name")}</th><th>{t("th_email")}</th><th>{t("th_sponsor")}</th>
-                <th>{entryMode === "fixed" ? t("lbl_product_cost_rule") : t("th_commission")}</th><th>{t("th_level")}</th>
-                <th>{t("th_state")}</th><th>{t("th_w9")}</th><th>{t("th_tax_pct")}</th><th>{t("th_pay_method")}</th>
+                <th className="py-2 px-2">{t("th_name")}</th><th className="px-2">{t("th_email")}</th><th className="px-2">{t("th_sponsor")}</th>
+                <th className="px-2">{entryMode === "fixed" ? t("lbl_product_cost_rule") : t("th_commission")}</th><th className="px-2">{t("th_level")}</th>
+                <th className="px-2">{t("th_state")}</th><th className="px-2">{t("th_w9")}</th><th className="px-2">{t("th_tax_pct")}</th><th className="px-2">{t("th_pay_method")}</th>
                 <th className="w-12"></th>
               </tr>
             </thead>
@@ -1031,21 +1036,21 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                   <td className="py-2">
                     <AgentAvatar name={a.name} avatarUrl={profileAvatars[a.email] ?? a.avatarUrl} size={30} onClick={() => pickAvatarFile(a.id, updateAgent)} />
                   </td>
-                  <td className="py-2 font-medium">
+                  <td className="py-2 px-2 font-medium">
                     <Input
                       className="h-8 w-32"
                       value={a.name}
                       onChange={(e) => updateAgent(a.id, { name: e.target.value })}
                     />
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Input
                       className="h-8 w-40"
                       value={a.email}
                       onChange={(e) => updateAgent(a.id, { email: e.target.value })}
                     />
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Select value={a.sponsorId || "none"} onValueChange={(v) => updateAgent(a.id, { sponsorId: v === "none" ? null : v })}>
                       <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -1054,7 +1059,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       </SelectContent>
                     </Select>
                   </td>
-                  <td>
+                  <td className="px-2">
                     {/* Only the company's chosen mode ($ or %) shows — set
                         once in the Setup Wizard, under Company settings. */}
                     <div className="flex gap-1">
@@ -1091,7 +1096,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       )}
                     </div>
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Select value={a.level || "none"} onValueChange={(v) => updateAgent(a.id, { level: v === "none" ? "" : v })}>
                       <SelectTrigger className="h-8 w-32"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
@@ -1102,10 +1107,10 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       </SelectContent>
                     </Select>
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Input className="h-8 w-16" value={a.state ?? ""} onChange={(e) => updateAgent(a.id, { state: e.target.value.toUpperCase() })} placeholder="CA" />
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Select value={a.w9Status ?? "missing"} onValueChange={(v: any) => updateAgent(a.id, { w9Status: v })}>
                       <SelectTrigger className={cn("h-8 w-28 font-medium", w9StatusClass(a.w9Status))}>
                         <SelectValue />
@@ -1117,7 +1122,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       </SelectContent>
                     </Select>
                   </td>
-                  <td>
+                  <td className="px-2">
                     <PercentField
                       className="h-8 w-20"
                       step="0.1"
@@ -1125,7 +1130,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       onChange={(n) => updateAgent(a.id, { taxReservePercent: n })}
                     />
                   </td>
-                  <td>
+                  <td className="px-2">
                     <Input className="h-8 w-28" value={a.paymentMethod ?? ""} onChange={(e) => updateAgent(a.id, { paymentMethod: e.target.value })} placeholder="ACH" />
                   </td>
                   <td><Button variant="ghost" size="icon" onClick={() => removeAgent(a.id)}><Trash2 className="w-4 h-4" /></Button></td>

@@ -225,19 +225,24 @@ export function ReportsPanel() {
   );
 
   const exportCommissions = () => {
-    const rows: (string | number)[][] = [["Salesperson", "Email", "Personal commission", "Overrides", "Advances", "Tax reserve", "Final"]];
+    // Admin fee (1%) is already subtracted out of personalCommission — broken
+    // out here as its own column so the deduction is visible, not just baked
+    // into the net number, matching how it's shown everywhere else (PDFs,
+    // invoice preview, explain dialog).
+    const rows: (string | number)[][] = [["Salesperson", "Email", "Admin fee (1%)", "Personal commission", "Overrides", "Advances", "Tax reserve", "Final"]];
     for (const p of payouts) {
-      rows.push([p.agent.name, p.agent.email, p.personalCommission.toFixed(2), p.overrideTotal.toFixed(2), p.advanceApplied.toFixed(2), p.taxReserveSuggested.toFixed(2), p.finalPayable.toFixed(2)]);
+      const adminFee = p.invoices.reduce((sum, c) => sum + c.adminFeeAmount, 0);
+      rows.push([p.agent.name, p.agent.email, adminFee.toFixed(2), p.personalCommission.toFixed(2), p.overrideTotal.toFixed(2), p.advanceApplied.toFixed(2), p.taxReserveSuggested.toFixed(2), p.finalPayable.toFixed(2)]);
     }
     downloadCSV("commissions_by_rep.csv", rows);
   };
 
   const exportInvoices = () => {
-    const rows: (string | number)[][] = [["Number", "Date", "Customer", "Salesperson", "Status", "Sales", "Cost", "Profit", "Paid"]];
+    const rows: (string | number)[][] = [["Number", "Date", "Customer", "Salesperson", "Status", "Sales", "Cost", "Profit", "Admin fee (1%)", "Profit after fee", "Paid"]];
     for (const inv of s.invoices) {
       const c = calcInvoice(inv, s.financeCompanies);
       const ag = s.agents.find((a) => a.id === inv.agentId);
-      rows.push([inv.number, inv.date, inv.customerName, ag?.name ?? "", inv.status, inv.salesAmount, inv.productCost, c.profit.toFixed(2), inv.paid ? "yes" : "no"]);
+      rows.push([inv.number, inv.date, inv.customerName, ag?.name ?? "", inv.status, inv.salesAmount, inv.productCost, c.profit.toFixed(2), c.adminFeeAmount.toFixed(2), (c.profit - c.adminFeeAmount).toFixed(2), inv.paid ? "yes" : "no"]);
     }
     downloadCSV("invoices.csv", rows);
   };

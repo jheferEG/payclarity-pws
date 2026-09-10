@@ -279,7 +279,23 @@ export function useSupabaseSync() {
       // Disputes (main row)
       syncItems(
         prev.disputes, next.disputes,
-        (d) => supabase.from("disputes").upsert(disputeToRow(d, companyId), { onConflict: "id" }),
+        async (d) => {
+          const { error } = await supabase.from("disputes").upsert(disputeToRow(d, companyId), { onConflict: "id" });
+          if (error) {
+            console.error("sync:dispute", error);
+            // Most likely cause: this rep's agent row was never linked to
+            // their profile (agent added to Equipo after they already had
+            // an account) — RLS then silently rejects the insert and the
+            // request never reaches the admin's approval queue.
+            const isEs = useStore.getState().language === "es";
+            toast.error(
+              isEs
+                ? `No se pudo enviar la solicitud al servidor: ${error.message}`
+                : `Couldn't send the request to the server: ${error.message}`
+            );
+          }
+          return { error };
+        },
         (d) => supabase.from("disputes").delete().eq("id", d.id),
       );
 

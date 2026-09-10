@@ -644,6 +644,7 @@ export function downloadSummary(
     Email: p.agent.email,
     "Personal Profit": +p.personalProfit.toFixed(2),
     "Rate %": +(p.personalRate * 100).toFixed(2),
+    "Admin Fee (1%)": +p.invoices.reduce((sum, c) => sum + c.adminFeeAmount, 0).toFixed(2),
     "Personal Commission": +p.personalCommission.toFixed(2),
     "Override Total": +p.overrideTotal.toFixed(2),
     "Gross Payout": +p.grossPayout.toFixed(2),
