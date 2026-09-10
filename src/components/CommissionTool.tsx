@@ -1515,8 +1515,14 @@ function InvoicesPanel() {
               disabled={!!selectedProduct && selectedProduct.priceEditable === false}
             />
           </div>
-          <div><Label>{t("lbl_product_cost")}</Label>
-            <NumField step="0.01" value={draft.productCost} onChange={(n) => setDraft({ ...draft, productCost: n })} />
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>{t("lbl_product_cost")}</Label>
+              <NumField step="0.01" value={draft.productCost} onChange={(n) => setDraft({ ...draft, productCost: n })} />
+            </div>
+            <div><Label>{t("lbl_commission_level")}</Label>
+              <Input value={draft.commissionLevel ?? ""} readOnly disabled
+                placeholder={t("lbl_salesperson")} />
+            </div>
           </div>
           <div><Label>{t("lbl_approval_pct")}</Label>
             <PercentField step="0.1" value={draft.approvalPercent} onChange={(n) => setDraft({ ...draft, approvalPercent: n })} />
@@ -1568,10 +1574,6 @@ function InvoicesPanel() {
           </div>
           <div><Label>{t("lbl_pending_advance")}</Label>
             <NumField step="0.01" value={draft.pendingAdvanceBalance ?? 0} onChange={(n) => setDraft({ ...draft, pendingAdvanceBalance: n })} />
-          </div>
-          <div><Label>{t("lbl_commission_level")}</Label>
-            <Input value={draft.commissionLevel ?? ""} readOnly disabled
-              placeholder={t("lbl_salesperson")} />
           </div>
           <div className="flex items-end gap-2">
             <Switch checked={draft.paid} onCheckedChange={(v) => setDraft({ ...draft, paid: v })} disabled={!isAdmin} />
@@ -2117,6 +2119,8 @@ function PlanPanel() {
   const ovErrs = validateOverrides(overrides);
   const t = useT();
   const isEs = language === "es";
+  const isFixed = company.commissionEntryMode === "fixed";
+  const [showCompFields, setShowCompFields] = useState(false);
   const nameInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
   // In-progress typing per position, so clearing the field to retype
@@ -2218,9 +2222,16 @@ function PlanPanel() {
       <TabsContent value="positions" className="mt-0">
         <SectionCard
           title={t("sect_positions")}
-          desc={t("sect_positions_desc")}
+          desc={isFixed && !showCompFields ? (isEs ? "Asigna un nombre de rol a cada nivel." : "Assign a role name to each level.") : t("sect_positions_desc")}
           action={
             <div className="flex gap-2 flex-wrap">
+              {isFixed && (
+                <Button variant="outline" size="sm" onClick={() => setShowCompFields((v) => !v)}>
+                  {showCompFields
+                    ? (isEs ? "Ocultar compensación" : "Hide compensation")
+                    : (isEs ? "¿Quieres editar compensaciones?" : "Want to edit compensation?")}
+                </Button>
+              )}
               <Select onValueChange={(v) => addBlankPosition(v)}>
                 <SelectTrigger className="h-8 w-[180px]"><SelectValue placeholder={t("btn_add_preset")} /></SelectTrigger>
                 <SelectContent>
@@ -2270,19 +2281,24 @@ function PlanPanel() {
                             });
                           }
                         }} />
-                      <label className="flex items-center gap-2 text-xs">
-                        <Switch checked={p.active} onCheckedChange={(v) => updatePosition(p.id, { active: v })} />
-                        {p.active ? t("lbl_active") : t("lbl_inactive")}
-                      </label>
-                      <label className="flex items-center gap-2 text-xs">
-                        <Switch checked={p.overrideEligible} onCheckedChange={(v) => updatePosition(p.id, { overrideEligible: v })} />
-                        {t("lbl_override_eligible")}
-                      </label>
+                      {(!isFixed || showCompFields) && (
+                        <>
+                          <label className="flex items-center gap-2 text-xs">
+                            <Switch checked={p.active} onCheckedChange={(v) => updatePosition(p.id, { active: v })} />
+                            {p.active ? t("lbl_active") : t("lbl_inactive")}
+                          </label>
+                          <label className="flex items-center gap-2 text-xs">
+                            <Switch checked={p.overrideEligible} onCheckedChange={(v) => updatePosition(p.id, { overrideEligible: v })} />
+                            {t("lbl_override_eligible")}
+                          </label>
+                        </>
+                      )}
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => removePosition(p.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
+                  {(!isFixed || showCompFields) && (
                   <div className="grid md:grid-cols-4 gap-3">
                     <div><Label className="text-xs">{t("lbl_commission_pct")}</Label>
                       <PercentField step="0.1" value={p.commissionPercent}
@@ -2335,6 +2351,7 @@ function PlanPanel() {
                         onChange={(e) => updatePosition(p.id, { notes: e.target.value })} />
                     </div>
                   </div>
+                  )}
                 </div>
               ))}
             </div>
