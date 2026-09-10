@@ -1851,6 +1851,11 @@ function PayoutDocumentsDialog({
   const isEs = s.language === "es";
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
 
   const inv = invoiceId ? s.invoices.find((i) => i.id === invoiceId) : null;
   const c = inv ? calcInvoice(inv, s.financeCompanies) : null;
@@ -1883,11 +1888,12 @@ function PayoutDocumentsDialog({
     const row = involvedRows.find((r) => r.agentId === doc.agentId);
     if (!row) return;
     const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent);
-    window.open(pdf.output("bloburl"), "_blank");
+    setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
     s.regeneratePayoutDocument(doc.id, s.currentUserName);
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -2037,6 +2043,28 @@ function PayoutDocumentsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+      <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{pdfPreview?.name}</DialogTitle>
+          <DialogDescription>
+            {isEs ? "Vista previa del PDF regenerado." : "Preview of the regenerated PDF."}
+          </DialogDescription>
+        </DialogHeader>
+        {pdfPreview && (
+          <iframe
+            src={pdfPreview.url}
+            title={pdfPreview.name}
+            className="w-full flex-1 rounded-md border border-border"
+          />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={closePdfPreview}>{isEs ? "Cerrar" : "Close"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
