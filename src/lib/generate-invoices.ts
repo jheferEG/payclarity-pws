@@ -288,23 +288,31 @@ export function buildSaleInvoicePDF(
     y = (doc as any).lastAutoTable.finalY + 10;
   }
 
+  const summaryRows: any[] = [
+    ["Approval amount", fmtMoney(c.approvalAmount, cur)],
+    ["Discount", `- ${fmtMoney(inv.discount, cur)}`],
+    ["Total charges", `- ${fmtMoney(c.totalCharges, cur)}`],
+    ["Total credits", `+ ${fmtMoney(c.totalCredits, cur)}`],
+    [
+      { content: "GRAND TOTAL", styles: { fontStyle: "bold" } },
+      { content: fmtMoney(c.grandTotal, cur), styles: { fontStyle: "bold" } },
+    ],
+    ["Product cost", `- ${fmtMoney(inv.productCost, cur)}`],
+    [
+      { content: "Profit", styles: { fontStyle: "bold" } },
+      { content: fmtMoney(c.profit, cur), styles: { fontStyle: "bold" } },
+    ],
+  ];
+  if (c.adminFeeAmount > 0) {
+    summaryRows.push(["Admin fee (1%)", `- ${fmtMoney(c.adminFeeAmount, cur)}`]);
+    summaryRows.push([
+      { content: "Profit after admin fee", styles: { fontStyle: "bold" } },
+      { content: fmtMoney(c.profit - c.adminFeeAmount, cur), styles: { fontStyle: "bold" } },
+    ]);
+  }
   autoTable(doc, {
     startY: y,
-    body: [
-      ["Approval amount", fmtMoney(c.approvalAmount, cur)],
-      ["Discount", `- ${fmtMoney(inv.discount, cur)}`],
-      ["Total charges", `- ${fmtMoney(c.totalCharges, cur)}`],
-      ["Total credits", `+ ${fmtMoney(c.totalCredits, cur)}`],
-      [
-        { content: "GRAND TOTAL", styles: { fontStyle: "bold" } },
-        { content: fmtMoney(c.grandTotal, cur), styles: { fontStyle: "bold" } },
-      ],
-      ["Product cost", `- ${fmtMoney(inv.productCost, cur)}`],
-      [
-        { content: "Profit", styles: { fontStyle: "bold" } },
-        { content: fmtMoney(c.profit, cur), styles: { fontStyle: "bold" } },
-      ],
-    ],
+    body: summaryRows,
     theme: "plain",
     margin: { left: pageW / 2, right: margin },
     styles: { fontSize },
