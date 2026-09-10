@@ -612,7 +612,15 @@ function defaultSplitTemplates(): SplitTemplate[] {
 }
 
 const seqFor = (prefix: string, list: Invoice[]) => {
-  const n = list.filter((i) => i.number?.startsWith(prefix)).length + 1;
+  // Based on the highest existing sequence, not the count — counting breaks
+  // as soon as any invoice in the range has been deleted, since the next
+  // "count + 1" number can collide with one still in the database (the
+  // company_id+number unique constraint then rejects the upsert silently).
+  const nums = list
+    .filter((i) => i.number?.startsWith(`${prefix}-`))
+    .map((i) => parseInt(i.number.slice(prefix.length + 1), 10))
+    .filter((n) => Number.isFinite(n));
+  const n = (nums.length ? Math.max(...nums) : 0) + 1;
   return `${prefix}-${String(n).padStart(5, "0")}`;
 };
 

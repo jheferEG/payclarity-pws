@@ -178,7 +178,7 @@ function drawFooter(doc: jsPDF, b: EffectiveBranding) {
 
 /* -------- Per-invoice (sale) PDF -------- */
 
-export type InvoiceInvolvedRow = { name: string; role: string; amount: number };
+export type InvoiceInvolvedRow = { name: string; role: string; amount: number; agentId?: string | null };
 
 export function buildSaleInvoicePDF(
   c: InvoiceCalc,
@@ -357,12 +357,20 @@ export function buildSaleInvoicePDF(
     });
   }
 
-  if (involved && involved.length > 0) {
+  // When scoped down to a single person who IS the seller, the "SALESPERSON"
+  // field above already says whose document this is — repeating them in a
+  // one-row "who gets paid" table is redundant. Only show the table when it
+  // lists more than one person, or when the sole row belongs to someone else
+  // (e.g. an upline sponsor's override statement).
+  const showInvolvedTable =
+    involved && involved.length > 0 &&
+    !(involved.length === 1 && involved[0].agentId === inv.agentId);
+  if (showInvolvedTable) {
     const y4 = (doc as any).lastAutoTable?.finalY ?? y;
     autoTable(doc, {
       startY: y4 + 14,
       head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-      body: involved.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+      body: involved!.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
       headStyles: { fillColor: brand, textColor: 255 },
       styles: { fontSize },
       margin: { left: margin, right: margin },

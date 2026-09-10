@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/commission-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -185,7 +186,16 @@ export function useSupabaseSync() {
           const { error } = await supabase
             .from("invoices")
             .upsert(invoiceCoreToRow(inv, companyId), { onConflict: "id" });
-          if (error) { console.error("sync:invoice", error); return; }
+          if (error) {
+            console.error("sync:invoice", error);
+            const isEs = useStore.getState().language === "es";
+            toast.error(
+              isEs
+                ? `No se pudo guardar la invoice ${inv.number} en el servidor: ${error.message}`
+                : `Couldn't save invoice ${inv.number} to the server: ${error.message}`
+            );
+            return;
+          }
           await supabase.from("invoice_line_items").delete().eq("invoice_id", inv.id);
           const lineItems = [
             ...inv.charges.map((c, i) => ({
