@@ -1573,15 +1573,6 @@ function InvoicesPanel() {
             <Input value={draft.commissionLevel ?? ""} readOnly disabled
               placeholder={t("lbl_salesperson")} />
           </div>
-          <div><Label>{t("lbl_commission_base")}</Label>
-            <Select value={draft.commissionBase || "profit"} onValueChange={(v: any) => setDraft({ ...draft, commissionBase: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="profit">{t("lbl_commission_base_profit")}</SelectItem>
-                <SelectItem value="product_cost">{t("lbl_commission_base_product")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-end gap-2">
             <Switch checked={draft.paid} onCheckedChange={(v) => setDraft({ ...draft, paid: v })} disabled={!isAdmin} />
             <span className="text-sm">{t("lbl_paid_flag")} {isAdmin ? "" : t("lbl_admin_only")}</span>
