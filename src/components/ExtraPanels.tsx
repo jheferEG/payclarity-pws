@@ -1789,8 +1789,8 @@ export function CalendarPanel() {
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const cur = s.company.currency;
   const payouts = useMemo(
-    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides),
-    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides]
+    () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
+    [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode]
   );
 
   const visibleInvoices = isAdmin
@@ -1813,11 +1813,14 @@ export function CalendarPanel() {
 
   const totalPending = upcoming.reduce((acc, i) => {
     const c = calcInvoice(i, s.financeCompanies);
-    return acc + Math.max(0, c.profit);
+    return acc + Math.max(0, c.profit - c.adminFeeAmount);
   }, 0);
   const totalPaid = past
     .filter((i) => i.paid)
-    .reduce((acc, i) => acc + calcInvoice(i, s.financeCompanies).profit, 0);
+    .reduce((acc, i) => {
+      const c = calcInvoice(i, s.financeCompanies);
+      return acc + (c.profit - c.adminFeeAmount);
+    }, 0);
   const totalPayout = visiblePayouts.reduce((a, p) => a + p.finalPayable, 0);
 
   return (
@@ -1852,10 +1855,10 @@ export function CalendarPanel() {
           {[...byDate.entries()]
             .sort((a, b) => b[0].localeCompare(a[0]))
             .map(([date, list]) => {
-              const dayProfit = list.reduce(
-                (acc, i) => acc + calcInvoice(i, s.financeCompanies).profit,
-                0
-              );
+              const dayProfit = list.reduce((acc, i) => {
+                const c = calcInvoice(i, s.financeCompanies);
+                return acc + (c.profit - c.adminFeeAmount);
+              }, 0);
               const paidCount = list.filter((i) => i.paid).length;
               const allPaid = paidCount === list.length;
               const anyPaid = paidCount > 0 && !allPaid;
@@ -1889,7 +1892,7 @@ export function CalendarPanel() {
                               </Badge>
                             </td>
                             <td className="text-right font-mono">
-                              {fmtMoney(c.profit, cur)}
+                              {fmtMoney(c.profit - c.adminFeeAmount, cur)}
                             </td>
                           </tr>
                         );
