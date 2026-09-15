@@ -412,7 +412,7 @@ export default function CommissionTool() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-sky-200/60 dark:border-sky-800/40 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-[0_1px_12px_rgb(14_165_233/0.08)]">
+      <header className="sticky top-0 z-10 border-b border-teal-200/60 dark:border-teal-800/40 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-[0_1px_12px_rgb(13_148_136/0.08)]">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
           {/* Logo */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -441,7 +441,7 @@ export default function CommissionTool() {
             {/* Language toggle – always visible */}
             <button
               onClick={() => s.setLanguage(s.language === "es" ? "en" : "es")}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-all text-xs font-bold text-accent"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all text-xs font-bold text-accent"
               title={t("language")}
             >
               <Languages className="w-3.5 h-3.5" />
@@ -452,7 +452,7 @@ export default function CommissionTool() {
             {companiesList.length > 1 && !isRep && !showPicker && (
               <button
                 onClick={() => setPickerMode(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-all text-xs font-bold text-accent"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all text-xs font-bold text-accent"
                 title="Cambiar empresa"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -464,7 +464,7 @@ export default function CommissionTool() {
             {isAdmin && (
               <button
                 onClick={() => setAdminOpen(true)}
-                className="relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-all text-sm font-medium text-accent"
+                className="relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all text-sm font-medium text-accent"
               >
                 <ShieldAlert className="w-4 h-4" />
                 <span className="hidden md:inline">Admin</span>
@@ -520,7 +520,7 @@ export default function CommissionTool() {
                     <p className="font-semibold leading-tight text-white truncate max-w-[100px] text-xs">
                       {profile?.full_name ?? profile?.email?.split("@")[0] ?? "User"}
                     </p>
-                    <p className="text-[10px] text-sky-300 capitalize leading-tight">{s.role}</p>
+                    <p className="text-[10px] text-teal-300 capitalize leading-tight">{s.role}</p>
                   </div>
                   <ChevronDown className="w-3 h-3 text-white/70" />
                 </button>
@@ -622,7 +622,7 @@ export default function CommissionTool() {
               <>
                 {/* Group nav — scrollable on mobile, wraps on desktop */}
                 <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 pb-0.5 sm:pb-0 [&::-webkit-scrollbar]:hidden">
-                  <div className="flex gap-1.5 p-1.5 rounded-2xl bg-white dark:bg-card border border-sky-200 dark:border-sky-800/40 shadow-card w-max sm:w-auto">
+                  <div className="flex gap-1.5 p-1.5 rounded-2xl bg-white dark:bg-card border border-teal-200 dark:border-teal-800/40 shadow-card w-max sm:w-auto">
                     {groups.map((g) => (
                       <button
                         key={g.id}
@@ -630,7 +630,7 @@ export default function CommissionTool() {
                         className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all duration-200 ${
                           g.id === currentGroup.id
                             ? "bg-gradient-cta text-white shadow-btn"
-                            : "text-muted-foreground hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-accent"
+                            : "text-muted-foreground hover:bg-teal-50 dark:hover:bg-teal-950/40 hover:text-accent"
                         }`}
                       >
                         {g.label}
@@ -719,7 +719,7 @@ export default function CommissionTool() {
 
 function Stat({ label, value, accent }: { label: string; value: any; accent?: boolean }) {
   return (
-    <div className="px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-right">
+    <div className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-right">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</div>
       <div className={`font-mono font-bold text-sm ${accent ? "text-gradient-cta" : "text-foreground"}`}>{value}</div>
     </div>

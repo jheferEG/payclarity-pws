@@ -555,7 +555,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center gap-2 mt-1">
                   <input type="color" value={s.company.brandColor}
                     onChange={(e) => s.setCompany({ brandColor: e.target.value })}
-                    className="h-10 w-14 rounded-lg border-2 border-sky-200 dark:border-sky-800/60 cursor-pointer p-0.5" />
+                    className="h-10 w-14 rounded-lg border-2 border-teal-200 dark:border-teal-800/60 cursor-pointer p-0.5" />
                   <span className="text-xs font-mono text-muted-foreground">{s.company.brandColor}</span>
                 </div>
               </div>
@@ -571,7 +571,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 {INVOICE_TEMPLATES.map((tpl) => (
                   <button key={tpl.id}
                     onClick={() => s.setCompany({ pdfTemplate: tpl.id } as any)}
-                    className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${(s.company as any).pdfTemplate === tpl.id ? "border-accent bg-sky-50 dark:bg-sky-950/40 text-accent" : "border-border hover:border-sky-300 dark:hover:border-sky-700 text-foreground"}`}
+                    className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${(s.company as any).pdfTemplate === tpl.id ? "border-accent bg-teal-50 dark:bg-teal-950/40 text-accent" : "border-border hover:border-teal-300 dark:hover:border-teal-700 text-foreground"}`}
                   >
                     {tpl.name}
                   </button>
@@ -598,7 +598,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                         setSelectedKit(tpl.id);
                         toast.success(es ? `Kit "${tpl.name}" aplicado` : `${tpl.name} kit applied`);
                       }}
-                      className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 text-left transition-all hover:shadow-sm ${isSelected ? "border-accent bg-sky-50 dark:bg-sky-950/40 ring-2 ring-accent/20" : "border-border hover:border-sky-300 dark:hover:border-sky-700"}`}
+                      className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 text-left transition-all hover:shadow-sm ${isSelected ? "border-accent bg-teal-50 dark:bg-teal-950/40 ring-2 ring-accent/20" : "border-border hover:border-teal-300 dark:hover:border-teal-700"}`}
                     >
                       <span className="text-2xl leading-none select-none">{tpl.emoji ?? "🏢"}</span>
                       <span className="text-xs font-semibold text-foreground leading-snug">{tpl.name}</span>
@@ -620,7 +620,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
         {step === 2 && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{t("sect_team_desc")}</p>
-            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-3 space-y-1.5">
+            <div className="bg-teal-50 dark:bg-teal-950/40 rounded-xl p-3 space-y-1.5">
               <Label className="text-xs font-semibold">
                 {es ? "¿Cómo se paga la comisión en tu equipo?" : "How does your team get paid commission?"}
               </Label>
@@ -690,7 +690,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
               <Plus className="w-3 h-3 mr-2" />{t("btn_add")}
             </Button>
             {s.agents.length > 0 && (
-              <div className="text-xs text-muted-foreground bg-sky-50 dark:bg-sky-950/40 rounded-lg px-3 py-2">
+              <div className="text-xs text-muted-foreground bg-teal-50 dark:bg-teal-950/40 rounded-lg px-3 py-2">
                 ✓ {s.agents.map((a) => a.name).join(", ")}
               </div>
             )}
@@ -701,7 +701,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
         {step === 3 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">{t("sect_tiers_desc")}</p>
-            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-4 space-y-2">
+            <div className="bg-teal-50 dark:bg-teal-950/40 rounded-xl p-4 space-y-2">
               <Label className="text-xs font-semibold">{t("sect_tiers")}</Label>
               <div className="flex items-center gap-3">
                 <Input type="number" step="0.1" className="w-28"
@@ -716,7 +716,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 <p className="text-xs text-accent">✓ {(s.personalTiers[0].rate * 100).toFixed(1)}% {es ? "configurado" : "set"}</p>
               )}
             </div>
-            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-4 space-y-2">
+            <div className="bg-teal-50 dark:bg-teal-950/40 rounded-xl p-4 space-y-2">
               <Label className="text-xs font-semibold">{t("sect_overrides")} — {es ? "Nivel 1" : "Level 1"}</Label>
               <p className="text-xs text-muted-foreground">{t("sect_overrides_desc")}</p>
               <div className="flex items-center gap-3">
@@ -762,7 +762,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
               <Plus className="w-3 h-3 mr-2" />{t("btn_add")}
             </Button>
             {s.financeCompanies.length > 0 && (
-              <div className="text-xs text-muted-foreground bg-sky-50 dark:bg-sky-950/40 rounded-lg px-3 py-2">
+              <div className="text-xs text-muted-foreground bg-teal-50 dark:bg-teal-950/40 rounded-lg px-3 py-2">
                 ✓ {s.financeCompanies.map((f) => f.name).join(", ")}
               </div>
             )}
@@ -777,7 +777,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 ? "Los splits permiten dividir una comisión entre varios vendedores en un mismo invoice."
                 : "Splits let you divide a commission between multiple reps on a single invoice."}
             </p>
-            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-4 space-y-2">
+            <div className="bg-teal-50 dark:bg-teal-950/40 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-accent">{es ? "¿Cómo funciona?" : "How it works"}</p>
               <ul className="text-xs text-muted-foreground space-y-1.5 list-none">
                 <li>① {es ? "Crea una regla de split con porcentajes por participante." : "Create a split rule with percentages per participant."}</li>
@@ -801,7 +801,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 ? "Los advances son pagos anticipados que se descuentan de la comisión final del vendedor."
                 : "Advances are upfront payments deducted from the rep's final commission payout."}
             </p>
-            <div className="bg-sky-50 dark:bg-sky-950/40 rounded-xl p-4 space-y-2">
+            <div className="bg-teal-50 dark:bg-teal-950/40 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-accent">{es ? "Flujo de advances:" : "Advance flow:"}</p>
               <ul className="text-xs text-muted-foreground space-y-1.5 list-none">
                 <li>① {es ? "El admin ingresa el monto de advance en el invoice." : "Admin enters the advance amount on the invoice."}</li>
@@ -844,7 +844,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
             <Button variant="outline" onClick={generateTest} className="w-full">
               <FileDown className="w-4 h-4 mr-2" />{t("wiz_generate_test")}
             </Button>
-            <div className="text-left bg-sky-50 dark:bg-sky-950/40 rounded-xl p-4 space-y-1.5">
+            <div className="text-left bg-teal-50 dark:bg-teal-950/40 rounded-xl p-4 space-y-1.5">
               <p className="text-xs font-semibold text-accent">{es ? "Resumen de configuración:" : "Setup summary:"}</p>
               <p className="text-xs text-muted-foreground">✓ {t("lbl_company_name")}: <span className="font-medium text-foreground">{s.company.name || "—"}</span></p>
               <p className="text-xs text-muted-foreground">✓ {t("tab_team")}: <span className="font-medium text-foreground">{s.agents.length} {es ? "vendedores" : "reps"}</span></p>

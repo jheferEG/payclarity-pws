@@ -42,8 +42,8 @@
 :root {
   --radius: 0.75rem;
 
-  /* ── ClarityPay palette ───────────────────────────────── */
-  --background: #EFF6FF;          /* ice-blue page wash */
+  /* ── ClarityPay palette — navy + teal, per brand mockups ─ */
+  --background: #F0FDFA;          /* pale teal-blue page wash */
   --foreground: #0F172A;
 
   --card: #FFFFFF;
@@ -52,18 +52,18 @@
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
 
-  /* navy + sky gradient pair */
+  /* navy + teal gradient pair — the signature brand duo */
   --primary: #0B1F3A;
   --primary-foreground: #FFFFFF;
-  --primary-glow: #0EA5E9;        /* sky-500 */
+  --primary-glow: #14B8A6;        /* teal-500 */
 
-  --secondary: #E0F2FE;           /* sky-100 */
+  --secondary: #CCFBF1;           /* teal-100 */
   --secondary-foreground: #0B1F3A;
 
-  --muted: #EFF6FF;               /* blue-50 */
+  --muted: #F0FDFA;               /* teal-50 */
   --muted-foreground: #64748B;
 
-  --accent: #0284C7;              /* sky-600  */
+  --accent: #0D9488;              /* teal-600 */
   --accent-foreground: #FFFFFF;
 
   --success: #10B981;
@@ -75,29 +75,29 @@
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
 
-  /* orange — professional amber-orange, pairs with navy */
+  /* orange — secondary functional accent (deductions/pending), not the brand duo */
   --orange:            #EA580C;   /* orange-600 */
   --orange-foreground: #FFFFFF;
   --orange-muted:      #FFF7ED;   /* orange-50 */
 
-  --border: #BAE6FD;              /* sky-200 – soft blue edge */
-  --input: #E0F2FE;
-  --ring: #0EA5E9;
+  --border: #99F6E4;              /* teal-200 – soft teal edge */
+  --input: #CCFBF1;
+  --ring: #14B8A6;
 
   /* gradients */
-  --gradient-primary: linear-gradient(135deg, #0B1F3A 0%, #0369A1 100%);
-  --gradient-cta:     linear-gradient(135deg, #0284C7 0%, #22D3EE 100%);
-  --gradient-hero:    linear-gradient(135deg, #0B1929 0%, #0B3A6E 50%, #0369A1 100%);
-  --gradient-subtle:  linear-gradient(180deg, #EFF6FF 0%, #E0F2FE 100%);
-  /* navy → orange: signature dual-brand gradient */
-  --gradient-duo:     linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 45%, #EA580C 100%);
+  --gradient-primary: linear-gradient(135deg, #0B1F3A 0%, #0D9488 100%);
+  --gradient-cta:     linear-gradient(135deg, #0D9488 0%, #22D3EE 100%);
+  --gradient-hero:    linear-gradient(135deg, #0B1929 0%, #0B3A46 50%, #0D9488 100%);
+  --gradient-subtle:  linear-gradient(180deg, #F0FDFA 0%, #CCFBF1 100%);
+  /* navy → teal: signature dual-brand gradient */
+  --gradient-duo:     linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 45%, #0D9488 100%);
   --gradient-orange:  linear-gradient(135deg, #C2410C 0%, #EA580C 100%);
 
   /* shadows */
-  --shadow-card:     0 1px 3px rgb(14 165 233 / 0.08), 0 6px 24px rgb(14 165 233 / 0.07);
-  --shadow-elegant:  0 8px 32px -8px rgb(3 105 161 / 0.35);
-  --shadow-glow:     0 0 0 3px rgb(14 165 233 / 0.20);
-  --shadow-btn:      0 4px 16px rgb(3 105 161 / 0.30);
+  --shadow-card:     0 1px 3px rgb(13 148 136 / 0.08), 0 6px 24px rgb(13 148 136 / 0.07);
+  --shadow-elegant:  0 8px 32px -8px rgb(15 118 110 / 0.35);
+  --shadow-glow:     0 0 0 3px rgb(20 184 166 / 0.20);
+  --shadow-btn:      0 4px 16px rgb(13 148 136 / 0.30);
 }
 
 .dark {
@@ -109,12 +109,12 @@
   --popover-foreground: oklch(0.97 0.005 248);
   --primary: oklch(0.65 0.18 248);
   --primary-foreground: oklch(0.12 0.03 248);
-  --primary-glow: oklch(0.72 0.18 210);
+  --primary-glow: oklch(0.72 0.15 175);
   --secondary: oklch(0.26 0.04 248);
   --secondary-foreground: oklch(0.97 0.005 248);
   --muted: oklch(0.26 0.04 248);
   --muted-foreground: oklch(0.68 0.02 250);
-  --accent: oklch(0.65 0.18 210);
+  --accent: oklch(0.65 0.15 175);
   --accent-foreground: oklch(0.12 0.03 248);
   --success: oklch(0.70 0.15 155);
   --success-foreground: oklch(0.12 0.03 248);
@@ -125,7 +125,7 @@
   --orange-muted:      oklch(0.24 0.04 42);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.65 0.18 210);
+  --ring: oklch(0.65 0.15 175);
 }
 
 @layer base {
@@ -176,7 +176,7 @@
 
   /* animated dot decoration (hero) */
   .dot-grid {
-    background-image: radial-gradient(circle, rgb(14 165 233 / 0.25) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgb(20 184 166 / 0.25) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 

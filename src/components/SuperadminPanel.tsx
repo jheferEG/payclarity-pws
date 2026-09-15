@@ -490,7 +490,7 @@ export default function SuperadminPanel() {
           {tab === "companies" && (
             <Button
               size="sm"
-              className="bg-gradient-orange shadow-orange text-white hover:opacity-90 gap-1.5"
+              className="bg-gradient-cta shadow-glow text-white hover:opacity-90 gap-1.5"
               onClick={() => setCreateOpen(true)}
             >
               <Plus className="w-4 h-4" />
@@ -718,7 +718,7 @@ export default function SuperadminPanel() {
                 </div>
                 <Button
                   size="sm"
-                  className="bg-gradient-orange shadow-orange text-white hover:opacity-90"
+                  className="bg-gradient-cta shadow-glow text-white hover:opacity-90"
                   onClick={generateInvite}
                   disabled={generatingLink}
                 >
@@ -874,7 +874,7 @@ export default function SuperadminPanel() {
             <Button
               onClick={handleCreate}
               disabled={creating}
-              className="bg-[#0B1F3A] hover:bg-[#0EA5E9] text-white"
+              className="bg-[#0B1F3A] hover:bg-[#0D9488] text-white"
             >
               {creating ? "Creando…" : "Crear empresa"}
             </Button>
@@ -1021,7 +1021,7 @@ export default function SuperadminPanel() {
                       </div>
                       <Button
                         size="sm"
-                        className="bg-gradient-orange shadow-orange text-white hover:opacity-90"
+                        className="bg-gradient-cta shadow-glow text-white hover:opacity-90"
                         disabled={assigning}
                         onClick={() => handleAssignCompany(c.id, c.name)}
                       >

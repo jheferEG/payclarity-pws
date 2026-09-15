@@ -156,7 +156,7 @@ function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-orange shadow-orange mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-cta shadow-glow mb-4">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">Transpare</h1>
@@ -293,7 +293,7 @@ function RegisterPage() {
 
             <Button
               type="submit"
-              className="w-full mt-6 bg-gradient-orange shadow-orange text-white hover:opacity-90"
+              className="w-full mt-6 bg-gradient-cta shadow-glow text-white hover:opacity-90"
               disabled={isSubmitting}
             >
               {T(isSubmitting ? "reg_btn_loading" : "reg_btn")}
@@ -302,7 +302,7 @@ function RegisterPage() {
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             {T("reg_have_account")}{" "}
-            <Link to="/login" className="text-orange font-medium hover:opacity-80 transition-opacity">
+            <Link to="/login" className="text-accent font-medium hover:opacity-80 transition-opacity">
               {T("reg_signin_link")}
             </Link>
           </p>

@@ -9,15 +9,15 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /* navy → blue: main CTA */
+        /* navy → teal: main CTA */
         default:
           "rounded-xl bg-gradient-primary text-white shadow-elegant hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] hover:shadow-btn",
-        /* sky blue → cyan: bright highlight actions */
+        /* teal → cyan: bright highlight actions */
         cta:
           "rounded-xl bg-gradient-cta text-white shadow-btn hover:opacity-90 hover:scale-[1.02] active:scale-[0.98]",
-        /* muted blue fill */
+        /* muted teal fill */
         secondary:
-          "rounded-xl bg-secondary text-secondary-foreground border border-sky-200/60 dark:border-sky-800/60 hover:bg-sky-100 dark:hover:bg-sky-900/40 hover:border-sky-300 dark:hover:border-sky-700 active:scale-[0.98]",
+          "rounded-xl bg-secondary text-secondary-foreground border border-teal-200/60 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 hover:border-teal-300 dark:hover:border-teal-700 active:scale-[0.98]",
         /* outlined */
         outline:
           "rounded-xl border-2 border-accent/40 bg-white dark:bg-transparent text-accent hover:bg-accent hover:text-white hover:border-accent active:scale-[0.98]",

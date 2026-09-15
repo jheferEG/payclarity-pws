@@ -59,7 +59,7 @@ const ROLES: SplitParticipantRole[] = [
   "custom",
 ];
 
-const SPLIT_COLORS = ["#0B1F3A", "#0284C7", "#10B981", "#EA580C", "#7C3AED", "#DB2777"];
+const SPLIT_COLORS = ["#0B1F3A", "#0D9488", "#10B981", "#EA580C", "#7C3AED", "#DB2777"];
 
 export function roleLabel(r: SplitParticipantRole, custom?: string): string {
   if (r === "custom" && custom) return custom;
