@@ -43,6 +43,7 @@ import {
   buildAgentCommissionPDF,
   buildSaleInvoicePDF,
   buildSaleAndDownload,
+  buildInvoicePayoutStatementPDF,
 } from "@/lib/generate-invoices";
 import { useT } from "@/lib/i18n";
 
@@ -304,7 +305,18 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, computeInvolved(c.invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode), s.company.commissionEntryMode)}
+                        onClick={() => {
+                          const rows = computeInvolved(c.invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+                          // Admin sees the whole deal; a rep viewing their own wallet
+                          // only ever gets their own private payout statement.
+                          const myRow = rows.find((r) => r.agentId === wallet.agent.id);
+                          if (s.role !== "rep" || !myRow) {
+                            buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, rows, s.company.commissionEntryMode);
+                          } else {
+                            buildInvoicePayoutStatementPDF(myRow, c, s.company, c.invoice.taxReservePercent)
+                              .save(`${c.invoice.number}_statement.pdf`);
+                          }
+                        }}
                       >
                         PDF
                       </Button>

@@ -1845,14 +1845,26 @@ function InvoicesPanel() {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            const doc = buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
+                            // Admin sees the whole deal (everyone's cut) — this is the
+                            // "see everything" view. A rep only ever gets their own
+                            // private payout document, never the full breakdown.
+                            const myRow = rows.find((r) => r.agentId === myAgentId);
+                            const doc = isAdmin || !myRow
+                              ? buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode)
+                              : buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent);
                             setPdfPreview({ name: `${inv.number} — ${payeeLabel(ag)}`, url: doc.output("bloburl").toString() });
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
+                            const myRow = rows.find((r) => r.agentId === myAgentId);
+                            if (isAdmin || !myRow) {
+                              buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
+                            } else {
+                              buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent)
+                                .save(`${inv.number}_statement.pdf`);
+                            }
                           }}>PDF</Button>
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Documentos de pago" : "Payout documents"} onClick={() => setPayoutDocsId(inv.id)}>
