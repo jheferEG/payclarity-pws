@@ -292,7 +292,6 @@ export function buildSaleInvoicePDF(
       ["Sales Amount", fmtMoney(inv.salesAmount, cur)],
       ["Product Cost", fmtMoney(inv.productCost, cur)],
       [`Approval (${(inv.approvalPercent * 100).toFixed(2)}%)`, fmtMoney(c.approvalAmount, cur)],
-      ["Discount", `- ${fmtMoney(inv.discount, cur)}`],
     ],
     headStyles:
       tpl === "minimal"
@@ -306,6 +305,9 @@ export function buildSaleInvoicePDF(
 
   // Every component that feeds into c.totalCharges must appear here as its
   // own row — otherwise the printed total doesn't reconcile with what's shown.
+  // These (plus the discount) come out of the seller's commission, same as
+  // the admin fee — so the itemized table prints further down, next to the
+  // other commission deductions, instead of up by the sale amount.
   const chargeRows = [...inv.charges.map((x) => [x.label, fmtMoney(x.amount, cur)])];
   const effectiveDealerFee = inv.dealerFee != null ? inv.dealerFee : c.financeCo?.dealerFee ?? 0;
   if (effectiveDealerFee) chargeRows.push(["Dealer fee", fmtMoney(effectiveDealerFee, cur)]);
@@ -315,29 +317,12 @@ export function buildSaleInvoicePDF(
       `Finance fee (${(c.financeCo.defaultFee * 100).toFixed(2)}%)`,
       fmtMoney(c.financeCo.defaultFee * inv.salesAmount, cur),
     ]);
-  // Admin fee is intentionally NOT listed here — it doesn't reduce the sale
-  // or c.totalCharges; it's shown instead as a deduction from the seller's
-  // own commission, in the "Your Commission" section below.
   if (inv.saleType === "credit_card") {
     const ccpfPct = inv.ccpfPercent ?? 0.035;
     chargeRows.push([
       `C.C.P.F. (${(ccpfPct * 100).toFixed(2)}%)`,
       fmtMoney(inv.salesAmount * ccpfPct, cur),
     ]);
-  }
-  if (chargeRows.length && tpl !== "compact") {
-    autoTable(doc, {
-      startY: y,
-      head: [["Extra Charges", `Amount (${cur})`]],
-      body: chargeRows,
-      foot: [["Total Charges", fmtMoney(c.totalCharges, cur)]],
-      headStyles: { fillColor: [80, 80, 80], textColor: 255 },
-      footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: "bold" },
-      styles: { fontSize },
-      margin: { left: margin, right: margin },
-      columnStyles: { 1: { halign: "right" } },
-    });
-    y = (doc as any).lastAutoTable.finalY + 10;
   }
 
   if (inv.credits.length && tpl !== "compact") {
@@ -385,6 +370,25 @@ export function buildSaleInvoicePDF(
     styles: { fontSize },
     columnStyles: { 1: { halign: "right" } },
   });
+  y = (doc as any).lastAutoTable.finalY + 14;
+
+  // Itemized detail for "Total charges" above — printed down here, next to
+  // the admin fee, since these come out of the commission just like it does,
+  // not out of the sale amount.
+  if (chargeRows.length && tpl !== "compact") {
+    autoTable(doc, {
+      startY: y,
+      head: [["Charges detail", `Amount (${cur})`]],
+      body: chargeRows,
+      foot: [["Total Charges", fmtMoney(c.totalCharges, cur)]],
+      headStyles: { fillColor: [80, 80, 80], textColor: 255 },
+      footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: "bold" },
+      styles: { fontSize },
+      margin: { left: margin, right: margin },
+      columnStyles: { 1: { halign: "right" } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
 
   if (inv.split && inv.split.participants.length > 0) {
     const y3 = (doc as any).lastAutoTable?.finalY ?? y;
