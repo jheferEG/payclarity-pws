@@ -37,7 +37,7 @@ import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
   buildOverridePDF,
   downloadAllCommissionPDFs, downloadSummary, makeBrandingSnapshot, INVOICE_TEMPLATES,
-  downloadAllInvoiceStatements, downloadInvoiceMasterSummary, buildInvoicePayoutStatementPDF,
+  buildInvoicePayoutStatementPDF,
 } from "@/lib/generate-invoices";
 import {
   WalletPanel, SimulatorPanel, CalendarPanel, TemplatesPanel, DisputesPanel,
@@ -1915,11 +1915,26 @@ function PayoutDocumentsDialog({
             {inv && c && (
               <div className="flex gap-2 shrink-0">
                 <Button size="sm" variant="outline" disabled={involvedRows.length === 0}
-                  onClick={() => downloadInvoiceMasterSummary(involvedRows, c, s.company)}>
+                  onClick={() => {
+                    if (!inv || !c) return;
+                    // Same full invoice format as "Ver PDF" per recipient, but
+                    // with every row left in — this is the admin-only master
+                    // copy, not a private per-person document.
+                    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+                    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, involvedRows, s.company.commissionEntryMode);
+                    pdf.save(`${inv.number}_master_summary.pdf`);
+                  }}>
                   <FileBarChart className="w-4 h-4 mr-1" />{isEs ? "Resumen maestro" : "Master summary"}
                 </Button>
                 <Button size="sm" disabled={involvedRows.length === 0}
-                  onClick={() => downloadAllInvoiceStatements(involvedRows, c, s.company, inv.taxReservePercent)}>
+                  onClick={() => {
+                    if (!inv || !c) return;
+                    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+                    for (const row of involvedRows) {
+                      const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
+                      pdf.save(`${inv.number}_${row.name.replace(/\s+/g, "_")}.pdf`);
+                    }
+                  }}>
                   <FileDown className="w-4 h-4 mr-1" />{isEs ? "Generar todos" : "Generate All"}
                 </Button>
               </div>
@@ -2625,7 +2640,7 @@ function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> })
           <Button variant="outline" onClick={() => downloadSummary(payouts, company, periodLabel)} disabled={!payouts.length}>
             <FileDown className="w-4 h-4 mr-2" />{t("btn_xlsx_summary")}
           </Button>
-          <Button onClick={() => downloadAllCommissionPDFs(payable, company, invoiceDate, periodLabel)}
+          <Button onClick={() => downloadAllCommissionPDFs(payable, company, invoiceDate, periodLabel, company.commissionEntryMode)}
             disabled={!payable.length} className="bg-gradient-primary">
             <Sparkles className="w-4 h-4 mr-2" />{t("btn_generate_all")} ({payable.length})
           </Button>
