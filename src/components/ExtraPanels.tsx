@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Wallet, FileDown, Sparkles, Paperclip, X, TrendingDown, TrendingUp } from "lucide-react";
+import { Plus, Trash2, Wallet, FileDown, Sparkles, Paperclip, X, TrendingDown, TrendingUp, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore, type Invoice, type Agent } from "@/lib/commission-store";
 import {
@@ -1404,6 +1404,16 @@ function ApprovalsQueuePanel() {
                         </Button>
                       )}
                       <div className="ml-auto flex items-center gap-1">
+                        {inv && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true })}
+                          >
+                            <Pencil className="w-4 h-4 mr-1" />
+                            {s.language === "es" ? "Editar" : "Edit"}
+                          </Button>
+                        )}
                         {inv && (
                           <Button
                             size="sm"

@@ -539,6 +539,7 @@ type State = {
     openTimeline?: boolean;
     openSplit?: boolean;
     openDispute?: boolean;
+    openEdit?: boolean;
   } | null;
   setDeepLink: (d: State["deepLink"]) => void;
 

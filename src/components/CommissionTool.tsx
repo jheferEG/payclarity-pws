@@ -1388,6 +1388,7 @@ function InvoicesPanel() {
     if (dl.openSplit) setSplitId(dl.invoiceId);
     else if (dl.openDispute) setDisputeId(dl.invoiceId);
     else if (dl.openTimeline) setTimelineId(dl.invoiceId);
+    else if (dl.openEdit) editInvoice(dl.invoiceId);
     s.setDeepLink(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.deepLink?.ts]);
