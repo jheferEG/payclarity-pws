@@ -77,6 +77,14 @@ export type Invoice = {
   brandingSnapshot?: CompanyBranding & { companyName: string; address: string; email: string; phone: string; taxId: string; currency: string }; // captured at PDF generation
   split?: InvoiceSplit | null;
   pdfHistory?: InvoicePdfRecord[];
+  // "General invoice" — flat pay per job (subcontractors like plumbers),
+  // no product-cost cascade, no override to sponsors. Snapshotted at
+  // creation from the seller's position so calc functions stay
+  // self-contained (don't need to look up agents/positions).
+  isGeneralInvoice?: boolean;
+  jobType?: "installation" | "service";
+  fixedPay?: number;             // editable — flat rates vary by office
+  extras?: string[];             // e.g. ["mileage", "materials"] — categories, no $ yet
 };
 
 export type InvoicePdfRecord = {
@@ -182,6 +190,12 @@ export type CompensationPosition = {
   minApprovalPercent: number;      // 0..1 (0 = no minimum)
   specialDeductionPercent: number; // decimal
   notes: string;
+  // "General invoice" roles (e.g. subcontractors like plumbers) get paid a
+  // flat amount per job — installation vs. service — with no product-cost
+  // cascade and no override to sponsors. Level/cost don't apply to them.
+  isGeneralInvoice?: boolean;
+  installFixedPay?: number;        // flat $ for an "installation" job
+  serviceFixedPay?: number;        // flat $ for a "service" job — rates vary by office, so both are editable
 };
 
 export type InvoiceTemplateId =

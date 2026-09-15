@@ -8,7 +8,7 @@ import type {
   Payment,
   SplitParticipant,
 } from "./commission-store";
-import { calcInvoice, calcPayouts, costCascade, fmtMoney, type AgentPayout, type InvoiceCalc } from "./commission-calc";
+import { calcInvoice, calcPayouts, costCascade, fmtMoney, payeeLabel, type AgentPayout, type InvoiceCalc } from "./commission-calc";
 import type { FinanceCompany, OverrideLevel, PersonalTier } from "./commission-store";
 import type { Lang } from "./i18n";
 
@@ -684,35 +684,41 @@ export function computeInvolved(
   if (!seller) return [];
   const overrideMap = new Map(overrides.map((o) => [o.level, o.rate]));
 
+  // General invoices (flat pay per job) never cascade to sponsors — the
+  // fixed pay is the seller's entire commission, full stop.
   const upline: { agent: Agent; level: number }[] = [];
-  const visited = new Set<string>([seller.id]);
-  let cursor: Agent = seller;
-  let level = 1;
-  while (cursor.sponsorId && !visited.has(cursor.sponsorId)) {
-    const sponsor = agents.find((a) => a.id === cursor.sponsorId);
-    if (!sponsor) break;
-    visited.add(sponsor.id);
-    upline.push({ agent: sponsor, level });
-    cursor = sponsor;
-    level++;
+  if (!inv.isGeneralInvoice) {
+    const visited = new Set<string>([seller.id]);
+    let cursor: Agent = seller;
+    let level = 1;
+    while (cursor.sponsorId && !visited.has(cursor.sponsorId)) {
+      const sponsor = agents.find((a) => a.id === cursor.sponsorId);
+      if (!sponsor) break;
+      visited.add(sponsor.id);
+      upline.push({ agent: sponsor, level });
+      cursor = sponsor;
+      level++;
+    }
+    upline.reverse(); // topmost sponsor first
   }
-  upline.reverse(); // topmost sponsor first
 
   // Company-wide $ mode: no percentages anywhere. Personal commission is
   // sale minus the seller's own product cost minus the admin fee; each
   // sponsor's override is a cost-cascade difference, not a rate.
   const rate = inv.commissionPercentOverride ?? seller.commissionPercent ?? 0;
-  const personal = commissionEntryMode === "fixed"
-    ? Math.max(0, Math.max(0, c.commissionableBase) - c.adminFeeAmount)
-    : Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
+  const personal = inv.isGeneralInvoice
+    ? Math.max(0, c.commissionableBase)
+    : commissionEntryMode === "fixed"
+      ? Math.max(0, Math.max(0, c.commissionableBase) - c.adminFeeAmount)
+      : Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
   const splits = inv.split?.participants ?? [];
 
-  const cascadeByAgent = commissionEntryMode === "fixed"
+  const cascadeByAgent = commissionEntryMode === "fixed" && !inv.isGeneralInvoice
     ? new Map(costCascade(seller.id, inv.productCost || 0, agents).map((r) => [r.agentId, r.amount]))
     : null;
 
   const rows: InvolvedRow[] = upline.map((u) => ({
-    name: u.agent.name,
+    name: payeeLabel(u.agent),
     role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
     amount: cascadeByAgent
       ? (cascadeByAgent.get(u.agent.id) || 0)
@@ -731,7 +737,7 @@ export function computeInvolved(
       });
     }
   } else {
-    rows.push({ name: seller.name, role: lang === "es" ? "Vendedor" : "Salesperson", amount: personal, agentId: seller.id });
+    rows.push({ name: payeeLabel(seller), role: lang === "es" ? "Vendedor" : "Salesperson", amount: personal, agentId: seller.id });
   }
 
   return rows;

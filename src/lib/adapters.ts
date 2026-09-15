@@ -194,6 +194,10 @@ export function adaptInvoice(row: InvoiceRow): Invoice {
     brandingSnapshot: (row.branding_snapshot as any) ?? undefined,
     split,
     pdfHistory: [],
+    isGeneralInvoice: row.is_general_invoice ?? undefined,
+    jobType: (row.job_type as Invoice["jobType"]) ?? undefined,
+    fixedPay: row.fixed_pay != null ? Number(row.fixed_pay) : undefined,
+    extras: (row.extras as string[] | null) ?? undefined,
   };
 }
 
@@ -226,6 +230,10 @@ export function invoiceCoreToRow(inv: Invoice, companyId: string) {
     commission_base: inv.commissionBase ?? null,
     commission_percent_override: inv.commissionPercentOverride ?? null,
     branding_snapshot: (inv.brandingSnapshot as any) ?? null,
+    is_general_invoice: inv.isGeneralInvoice ?? false,
+    job_type: inv.jobType ?? null,
+    fixed_pay: inv.fixedPay ?? null,
+    extras: inv.extras ?? null,
   };
 }
 
@@ -553,6 +561,9 @@ export function adaptPosition(row: Tables<"compensation_positions">): Compensati
     minApprovalPercent: Number(row.min_approval_percent),
     specialDeductionPercent: Number(row.special_deduction_percent),
     notes: row.notes,
+    isGeneralInvoice: row.is_general_invoice ?? undefined,
+    installFixedPay: row.install_fixed_pay != null ? Number(row.install_fixed_pay) : undefined,
+    serviceFixedPay: row.service_fixed_pay != null ? Number(row.service_fixed_pay) : undefined,
   };
 }
 
@@ -574,5 +585,8 @@ export function positionToRow(p: CompensationPosition, companyId: string) {
     min_approval_percent: p.minApprovalPercent,
     special_deduction_percent: p.specialDeductionPercent,
     notes: p.notes,
+    is_general_invoice: p.isGeneralInvoice ?? false,
+    install_fixed_pay: p.installFixedPay ?? null,
+    service_fixed_pay: p.serviceFixedPay ?? null,
   };
 }

@@ -38,6 +38,24 @@ export function calcInvoice(
   inv: Invoice,
   financeCompanies: FinanceCompany[]
 ): InvoiceCalc {
+  // General invoices (flat pay per job — subcontractors like plumbers) skip
+  // the whole sale/product-cost/fee model: the fixed pay IS the profit and
+  // the commissionable base, full stop.
+  if (inv.isGeneralInvoice) {
+    const fixedPay = inv.fixedPay || 0;
+    return {
+      invoice: inv,
+      financeCo: null,
+      approvalAmount: fixedPay,
+      totalCharges: 0,
+      totalCredits: 0,
+      grandTotal: fixedPay,
+      profit: fixedPay,
+      adminFeeAmount: 0,
+      commissionProfit: fixedPay,
+      commissionableBase: fixedPay,
+    };
+  }
   const fc = financeCompanies.find((f) => f.id === inv.financeCompanyId) || null;
   const approvalAmount = inv.salesAmount * (inv.approvalPercent || 0);
   const dealerFee = inv.dealerFee != null ? inv.dealerFee : fc ? fc.dealerFee : 0;
@@ -208,7 +226,9 @@ export function calcPayouts(
     invoicesByAgent.get(a)!.push(c);
     paidStatus.set(a, (paidStatus.get(a) ?? true) && c.invoice.paid);
 
-    if (commissionEntryMode === "fixed") {
+    // General invoices (flat pay per job) never cascade to sponsors —
+    // level/cost don't apply to that role, so there's nothing to walk up.
+    if (commissionEntryMode === "fixed" && !c.invoice.isGeneralInvoice) {
       for (const row of costCascade(a, c.invoice.productCost || 0, agents)) {
         cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + row.amount);
         if (!cascadeDetailByAgent.has(row.agentId)) cascadeDetailByAgent.set(row.agentId, new Map());
@@ -237,7 +257,11 @@ export function calcPayouts(
       // Company-wide $ mode: no percentages anywhere — personal commission
       // is always sale minus the seller's own product cost minus the fee,
       // unless admin typed a manual $ override for this specific invoice.
-      const raw = c.invoice.commissionPercentOverride != null
+      // A general invoice's flat pay always wins — it's self-contained and
+      // ignores the company's $/% mode entirely.
+      const raw = c.invoice.isGeneralInvoice
+        ? Math.max(0, c.commissionableBase)
+        : c.invoice.commissionPercentOverride != null
         ? Math.max(0, c.commissionableBase) * c.invoice.commissionPercentOverride
         : commissionEntryMode === "fixed"
           ? Math.max(0, c.commissionableBase)

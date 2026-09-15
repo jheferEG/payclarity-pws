@@ -1229,6 +1229,14 @@ function FinancePanel() {
 }
 
 /* ---------- Invoices ---------- */
+const EXTRA_OPTIONS: { value: string; es: string; en: string }[] = [
+  { value: "mileage", es: "Millaje", en: "Mileage" },
+  { value: "materials", es: "Materiales", en: "Materials" },
+  { value: "construction", es: "Construcción", en: "Construction" },
+  { value: "electrical", es: "Trabajo eléctrico", en: "Electrical work" },
+  { value: "other", es: "Otro", en: "Other" },
+];
+
 function blankInvoice(): Omit<Invoice, "id" | "number"> {
   return {
     date: new Date().toISOString().slice(0, 10),
@@ -1256,6 +1264,10 @@ function blankInvoice(): Omit<Invoice, "id" | "number"> {
     commissionLevel: "",
     commissionBase: "profit",
     commissionPercentOverride: undefined,
+    isGeneralInvoice: false,
+    jobType: undefined,
+    fixedPay: 0,
+    extras: [],
   };
 }
 
@@ -1445,7 +1457,7 @@ function InvoicesPanel() {
         desc={t("sect_invoice_desc")}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          <div><Label>{t("lbl_date")}</Label><Input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></div>
+          <div><Label>{draft.isGeneralInvoice ? (s.language === "es" ? "Fecha de instalación" : "Installation date") : t("lbl_date")}</Label><Input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></div>
           <div><Label>{t("lbl_status")}</Label>
             <Select value={draft.status} onValueChange={(v: any) => setDraft({ ...draft, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1460,6 +1472,7 @@ function InvoicesPanel() {
           <div><Label>{t("lbl_salesperson")}</Label>
             <Select value={draft.agentId} onValueChange={(v) => {
               const ag = s.agents.find((a) => a.id === v);
+              const pos = s.positions.find((p) => p.name === ag?.level);
               // Costo de producto ← this rep's own commission rule (Equipo tab).
               // The $ field is what matters here, regardless of which mode
               // the agent's row is currently set to — both fields are always
@@ -1471,6 +1484,11 @@ function InvoicesPanel() {
                 agentId: v,
                 commissionLevel: ag?.level ?? draft.commissionLevel ?? "",
                 productCost: nextProductCost,
+                isGeneralInvoice: !!pos?.isGeneralInvoice,
+                jobType: pos?.isGeneralInvoice ? (draft.jobType ?? "installation") : undefined,
+                fixedPay: pos?.isGeneralInvoice
+                  ? ((draft.jobType ?? "installation") === "installation" ? pos.installFixedPay ?? 450 : pos.serviceFixedPay ?? 325)
+                  : draft.fixedPay,
               });
             }} disabled={!isAdmin}>
               <SelectTrigger><SelectValue placeholder={t("lbl_select_ellipsis")} /></SelectTrigger>
@@ -1482,6 +1500,7 @@ function InvoicesPanel() {
           <div className="md:col-span-2"><Label>{t("lbl_customer")}</Label>
             <Input value={draft.customerName} onChange={(e) => setDraft({ ...draft, customerName: e.target.value })} placeholder={t("lbl_customer_name_placeholder")} />
           </div>
+          {!draft.isGeneralInvoice && (
           <div><Label>{t("lbl_finance_co")}</Label>
             <Select value={draft.financeCompanyId || "none"} onValueChange={(v) => setDraft({ ...draft, financeCompanyId: v === "none" ? null : v })}>
               <SelectTrigger><SelectValue placeholder={t("lbl_none_dash")} /></SelectTrigger>
@@ -1491,7 +1510,57 @@ function InvoicesPanel() {
               </SelectContent>
             </Select>
           </div>
+          )}
 
+          {draft.isGeneralInvoice ? (
+            <>
+              <div className="md:col-span-3"><Label>{s.language === "es" ? "Nombre (pago a nombre de)" : "Name (payable to)"}</Label>
+                <Input value={payeeLabel(s.agents.find((a) => a.id === draft.agentId))} readOnly disabled />
+              </div>
+              <div><Label>{s.language === "es" ? "Tipo" : "Type"}</Label>
+                <Select value={draft.jobType ?? "installation"} onValueChange={(v: "installation" | "service") => {
+                  const pos = s.positions.find((p) => p.name === s.agents.find((a) => a.id === draft.agentId)?.level);
+                  const fixedPay = v === "installation" ? pos?.installFixedPay ?? 450 : pos?.serviceFixedPay ?? 325;
+                  setDraft({ ...draft, jobType: v, fixedPay });
+                }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="installation">{s.language === "es" ? "Instalación" : "Installation"}</SelectItem>
+                    <SelectItem value="service">{s.language === "es" ? "Servicio" : "Service"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>{s.language === "es" ? "Pago fijo" : "Fixed pay"}</Label>
+                <NumField step="0.01" value={draft.fixedPay ?? 0} onChange={(n) => setDraft({ ...draft, fixedPay: n })} />
+              </div>
+              <div className="md:col-span-3"><Label>{s.language === "es" ? "Extras" : "Extras"}</Label>
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {EXTRA_OPTIONS.map((opt) => {
+                    const checked = (draft.extras ?? []).includes(opt.value);
+                    return (
+                      <label key={opt.value} className="flex items-center gap-1.5 text-sm">
+                        <input type="checkbox" checked={checked} onChange={(e) => {
+                          const cur = draft.extras ?? [];
+                          setDraft({
+                            ...draft,
+                            extras: e.target.checked ? [...cur, opt.value] : cur.filter((x) => x !== opt.value),
+                          });
+                        }} />
+                        {s.language === "es" ? opt.es : opt.en}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div><Label>{t("lbl_advance_applied")}</Label>
+                <NumField step="0.01" value={draft.advanceApplied} onChange={(n) => setDraft({ ...draft, advanceApplied: n })} />
+              </div>
+              <div><Label>{t("lbl_tax_reserve_pct")}</Label>
+                <PercentField step="0.1" value={draft.taxReservePercent} onChange={(n) => setDraft({ ...draft, taxReservePercent: n })} />
+              </div>
+            </>
+          ) : (
+            <>
           <div><Label>{s.language === "es" ? "Producto" : "Product"}</Label>
             <Select
               value={selectedProductId || "none"}
@@ -1591,6 +1660,8 @@ function InvoicesPanel() {
           <div><Label>{t("lbl_pending_advance")}</Label>
             <NumField step="0.01" value={draft.pendingAdvanceBalance ?? 0} onChange={(n) => setDraft({ ...draft, pendingAdvanceBalance: n })} />
           </div>
+            </>
+          )}
           <div className="flex items-end gap-2">
             <Switch checked={draft.paid} onCheckedChange={(v) => setDraft({ ...draft, paid: v })} disabled={!isAdmin} />
             <span className="text-sm">{t("lbl_paid_flag")} {isAdmin ? "" : t("lbl_admin_only")}</span>
@@ -1617,6 +1688,10 @@ function InvoicesPanel() {
 
       {(isAdmin || editing) && (
       <SectionCard title={t("preview_title")} desc={t("sect_invoice_preview_desc")}>
+        {draft.isGeneralInvoice ? (
+          <Row k={s.language === "es" ? "Pago fijo" : "Fixed pay"} v={fmtMoney(draft.fixedPay ?? 0, s.company.currency)} accent bold />
+        ) : (
+          <>
         <Row k={t("preview_sales")} v={fmtMoney(draft.salesAmount, s.company.currency)} />
         <Row k={t("preview_approval")} v={fmtMoney(live.approvalAmount, s.company.currency)} />
         <Row k={t("lbl_discount")} v={`- ${fmtMoney(draft.discount, s.company.currency)}`} />
@@ -1626,6 +1701,8 @@ function InvoicesPanel() {
         <Row k={t("preview_grand_total")} v={fmtMoney(live.grandTotal, s.company.currency)} bold />
         <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(draft.productCost, s.company.currency)}`} />
         <Row k={t("preview_net_profit")} v={fmtMoney(live.profit, s.company.currency)} accent bold />
+          </>
+        )}
         {(() => {
           const isFixed = s.company.commissionEntryMode === "fixed";
           const ag = s.agents.find((a) => a.id === draft.agentId);
@@ -1651,7 +1728,7 @@ function InvoicesPanel() {
               {live.adminFeeAmount > 0 && (
                 <Row k={s.language === "es" ? "Admin fee (de la comisión)" : "Admin fee (from commission)"} v={`- ${fmtMoney(live.adminFeeAmount, s.company.currency)}`} />
               )}
-              <Row k={isFixed ? t("preview_personal") : `${t("preview_personal")} (${(rate * 100).toFixed(2)}%)`} v={fmtMoney(personal, s.company.currency)} />
+              <Row k={isFixed || draft.isGeneralInvoice ? t("preview_personal") : `${t("preview_personal")} (${(rate * 100).toFixed(2)}%)`} v={fmtMoney(personal, s.company.currency)} />
               {splitRows.length > 0 && (
                 <div className="mt-1 mb-1 pl-3 border-l-2 border-accent/30">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("preview_splits")}</div>
@@ -2219,6 +2296,9 @@ function PlanPanel() {
       minApprovalPercent: 0,
       specialDeductionPercent: 0,
       notes: "",
+      isGeneralInvoice: false,
+      installFixedPay: 450,
+      serviceFixedPay: 325,
     });
     setJustAddedId(id);
   };
@@ -2334,6 +2414,10 @@ function PlanPanel() {
                             <Switch checked={p.overrideEligible} onCheckedChange={(v) => updatePosition(p.id, { overrideEligible: v })} />
                             {t("lbl_override_eligible")}
                           </label>
+                          <label className="flex items-center gap-2 text-xs">
+                            <Switch checked={!!p.isGeneralInvoice} onCheckedChange={(v) => updatePosition(p.id, { isGeneralInvoice: v })} />
+                            {isEs ? "Invoice general" : "General invoice"}
+                          </label>
                         </>
                       )}
                     </div>
@@ -2343,18 +2427,38 @@ function PlanPanel() {
                   </div>
                   {(!isFixed || showCompFields) && (
                   <div className="grid md:grid-cols-4 gap-3">
-                    <div><Label className="text-xs">{t("lbl_commission_pct")}</Label>
-                      <PercentField step="0.1" value={p.commissionPercent}
-                        onChange={(n) => updatePosition(p.id, { commissionPercent: n })} />
-                    </div>
-                    <div><Label className="text-xs">{t("lbl_fixed_payout")} ({company.currency})</Label>
-                      <NumField value={p.fixedPayout}
-                        onChange={(n) => updatePosition(p.id, { fixedPayout: n })} />
-                    </div>
-                    <div><Label className="text-xs">{t("lbl_diff_override")}</Label>
-                      <PercentField step="0.1" value={p.differentialOverridePercent}
-                        onChange={(n) => updatePosition(p.id, { differentialOverridePercent: n })} />
-                    </div>
+                    {p.isGeneralInvoice ? (
+                      <>
+                        <div><Label className="text-xs">{isEs ? "Pago fijo — Instalación" : "Fixed pay — Installation"} ({company.currency})</Label>
+                          <NumField value={p.installFixedPay ?? 450}
+                            onChange={(n) => updatePosition(p.id, { installFixedPay: n })} />
+                        </div>
+                        <div><Label className="text-xs">{isEs ? "Pago fijo — Servicio" : "Fixed pay — Service"} ({company.currency})</Label>
+                          <NumField value={p.serviceFixedPay ?? 325}
+                            onChange={(n) => updatePosition(p.id, { serviceFixedPay: n })} />
+                        </div>
+                        <p className="md:col-span-2 text-xs text-muted-foreground self-end pb-2">
+                          {isEs
+                            ? "Pago plano por trabajo — no genera overrides hacia los sponsors. Nivel/costo no aplican para este rol."
+                            : "Flat pay per job — doesn't generate overrides to sponsors. Level/cost don't apply to this role."}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div><Label className="text-xs">{t("lbl_commission_pct")}</Label>
+                          <PercentField step="0.1" value={p.commissionPercent}
+                            onChange={(n) => updatePosition(p.id, { commissionPercent: n })} />
+                        </div>
+                        <div><Label className="text-xs">{t("lbl_fixed_payout")} ({company.currency})</Label>
+                          <NumField value={p.fixedPayout}
+                            onChange={(n) => updatePosition(p.id, { fixedPayout: n })} />
+                        </div>
+                        <div><Label className="text-xs">{t("lbl_diff_override")}</Label>
+                          <PercentField step="0.1" value={p.differentialOverridePercent}
+                            onChange={(n) => updatePosition(p.id, { differentialOverridePercent: n })} />
+                        </div>
+                      </>
+                    )}
                     <div><Label className="text-xs">{t("lbl_split_default")}</Label>
                       <PercentField step="1" value={p.splitDefaultPercent}
                         onChange={(n) => updatePosition(p.id, { splitDefaultPercent: n })} />

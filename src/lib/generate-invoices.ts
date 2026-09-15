@@ -180,6 +180,14 @@ function drawFooter(doc: jsPDF, b: EffectiveBranding) {
 
 export type InvoiceInvolvedRow = { name: string; role: string; amount: number; agentId?: string | null };
 
+const EXTRA_LABELS: Record<string, string> = {
+  mileage: "Mileage",
+  materials: "Materials",
+  construction: "Construction",
+  electrical: "Electrical work",
+  other: "Other",
+};
+
 export function buildSaleInvoicePDF(
   c: InvoiceCalc,
   company: Company,
@@ -217,6 +225,62 @@ export function buildSaleInvoicePDF(
   y += tpl === "compact" ? 44 : 60;
 
   const fontSize = tpl === "compact" ? 9 : 10;
+
+  // General invoices (flat pay per job — subcontractors like plumbers) skip
+  // the whole sale/product-cost/charges model entirely.
+  if (inv.isGeneralInvoice) {
+    autoTable(doc, {
+      startY: y,
+      head: [["Job details", ""]],
+      body: [
+        ["Type", inv.jobType === "service" ? "Service" : "Installation"],
+        ["Fixed pay", fmtMoney(inv.fixedPay || 0, cur)],
+        ...(inv.extras && inv.extras.length
+          ? [["Extras", inv.extras.map((x) => EXTRA_LABELS[x] ?? x).join(", ")]]
+          : []),
+      ],
+      headStyles:
+        tpl === "minimal"
+          ? { fillColor: [240, 240, 240], textColor: 20 }
+          : { fillColor: brand, textColor: 255 },
+      styles: { fontSize },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY + 20;
+
+    const showInvolvedTableGI =
+      involved && involved.length > 0 &&
+      !(involved.length === 1 && involved[0].agentId === inv.agentId);
+    if (showInvolvedTableGI) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
+        body: involved!.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+        headStyles: { fillColor: brand, textColor: 255 },
+        styles: { fontSize },
+        margin: { left: margin, right: margin },
+        columnStyles: { 2: { halign: "right" } },
+      });
+    }
+
+    const sellerRowGI = involved?.find((r) => r.agentId === inv.agentId);
+    if (sellerRowGI && inv.taxReservePercent) {
+      const reserveAmt = Math.max(0, sellerRowGI.amount) * inv.taxReservePercent;
+      const yNote = (doc as any).lastAutoTable?.finalY ?? y;
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(90);
+      doc.text(
+        `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+        margin,
+        yNote + 16
+      );
+      doc.setTextColor(0);
+    }
+
+    drawFooter(doc, b);
+    return doc;
+  }
 
   autoTable(doc, {
     startY: y,

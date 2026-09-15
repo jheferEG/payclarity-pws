@@ -431,6 +431,10 @@ export type Database = {
           commission_base: "profit" | "product_cost"
           commission_percent_override: number | null
           branding_snapshot: Record<string, unknown> | null
+          is_general_invoice: boolean
+          job_type: "installation" | "service" | null
+          fixed_pay: number | null
+          extras: string[] | null
           created_at: string
           updated_at: string
         }
@@ -462,6 +466,10 @@ export type Database = {
           commission_base?: "profit" | "product_cost"
           commission_percent_override?: number | null
           branding_snapshot?: Record<string, unknown> | null
+          is_general_invoice?: boolean
+          job_type?: "installation" | "service" | null
+          fixed_pay?: number | null
+          extras?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -493,6 +501,10 @@ export type Database = {
           commission_base?: "profit" | "product_cost"
           commission_percent_override?: number | null
           branding_snapshot?: Record<string, unknown> | null
+          is_general_invoice?: boolean
+          job_type?: "installation" | "service" | null
+          fixed_pay?: number | null
+          extras?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -960,6 +972,9 @@ export type Database = {
           min_approval_percent: number
           special_deduction_percent: number
           notes: string
+          is_general_invoice: boolean
+          install_fixed_pay: number | null
+          service_fixed_pay: number | null
           created_at: string
           updated_at: string
         }
@@ -980,6 +995,9 @@ export type Database = {
           min_approval_percent?: number
           special_deduction_percent?: number
           notes?: string
+          is_general_invoice?: boolean
+          install_fixed_pay?: number | null
+          service_fixed_pay?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1000,6 +1018,9 @@ export type Database = {
           min_approval_percent?: number
           special_deduction_percent?: number
           notes?: string
+          is_general_invoice?: boolean
+          install_fixed_pay?: number | null
+          service_fixed_pay?: number | null
           created_at?: string
           updated_at?: string
         }
