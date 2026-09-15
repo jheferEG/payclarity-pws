@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import type { AgentPayout, InvoiceCalc } from "./commission-calc";
-import { fmtMoney } from "./commission-calc";
+import { fmtMoney, payeeLabel } from "./commission-calc";
 import type { Company, Invoice, InvoiceTemplateId } from "./commission-store";
 
 const hexToRgb = (hex: string): [number, number, number] => {
@@ -378,6 +378,22 @@ export function buildSaleInvoicePDF(
     });
   }
 
+  // Same tax-reserve recommendation shown in the commission explain
+  // dialog — a suggestion only, so it's the one place a % still shows up.
+  const sellerRow = involved?.find((r) => r.agentId === inv.agentId);
+  if (sellerRow && inv.taxReservePercent) {
+    const reserveAmt = Math.max(0, sellerRow.amount) * inv.taxReservePercent;
+    const y5 = (doc as any).lastAutoTable?.finalY ?? y;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(
+      `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+      margin,
+      y5 + 16
+    );
+    doc.setTextColor(0);
+  }
 
   drawFooter(doc, b);
   return doc;
@@ -410,7 +426,7 @@ export function buildAgentCommissionPDF(
   doc.text("PAY TO", margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(p.agent.name, margin, y + 16);
+  doc.text(payeeLabel(p.agent), margin, y + 16);
   doc.text(p.agent.email || "", margin, y + 30);
 
   y += 60;
@@ -549,7 +565,7 @@ export function buildOverridePDF(
   doc.text("OVERRIDE EARNED BY", margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(p.agent.name, margin, y + 16);
+  doc.text(payeeLabel(p.agent), margin, y + 16);
   doc.text(p.agent.email || "", margin, y + 30);
 
   y += 60;

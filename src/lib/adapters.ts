@@ -67,6 +67,7 @@ export function adaptAgent(row: Tables<"agents">): Agent {
     fixedCommissionAmount: row.fixed_commission_amount != null ? Number(row.fixed_commission_amount) : undefined,
     avatarUrl: row.avatar_url ?? undefined,
     level: row.level ?? undefined,
+    companyName: row.company_name ?? undefined,
   };
 }
 
@@ -86,6 +87,7 @@ export function agentToRow(a: Agent, companyId: string) {
     fixed_commission_amount: a.fixedCommissionAmount ?? undefined,
     avatar_url: a.avatarUrl ?? undefined,
     level: a.level ?? undefined,
+    company_name: a.companyName ?? undefined,
   };
 }
 

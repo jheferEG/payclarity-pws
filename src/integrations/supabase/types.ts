@@ -773,6 +773,7 @@ export type Database = {
           fixed_commission_amount: number | null
           avatar_url: string | null
           level: string
+          company_name: string | null
           created_at: string
           updated_at: string
         }
@@ -792,6 +793,7 @@ export type Database = {
           fixed_commission_amount?: number | null
           avatar_url?: string | null
           level?: string
+          company_name?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -811,6 +813,7 @@ export type Database = {
           fixed_commission_amount?: number | null
           avatar_url?: string | null
           level?: string
+          company_name?: string | null
           created_at?: string
           updated_at?: string
         }

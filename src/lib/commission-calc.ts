@@ -13,6 +13,14 @@ export const fmtMoney = (n: number, currency = "USD") =>
     minimumFractionDigits: 2,
   }).format(n || 0);
 
+/** Some reps (subcontractors, LLCs — e.g. plumbers) get paid under their
+ *  business name, not their own. Wherever an invoice/PDF names the payee,
+ *  use this instead of agent.name directly. */
+export const payeeLabel = (agent: Pick<Agent, "name" | "companyName"> | null | undefined): string => {
+  if (!agent) return "—";
+  return agent.companyName?.trim() ? `${agent.companyName.trim()} — ${agent.name}` : agent.name;
+};
+
 export type InvoiceCalc = {
   invoice: Invoice;
   financeCo: FinanceCompany | null;

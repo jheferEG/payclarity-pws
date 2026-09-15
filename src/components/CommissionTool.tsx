@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useStore, type Invoice, type LineItem, type PayoutDocument } from "@/lib/commission-store";
 import {
-  calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers,
+  calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
 import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
@@ -895,7 +895,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
   const entryMode = company.commissionEntryMode ?? "fixed";
   const t = useT();
   const isEs = language === "es";
-  const [form, setForm] = useState({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "" });
+  const [form, setForm] = useState({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "", companyName: "" });
 
   const readiness = useMemo(() => {
     if (agents.length === 0) return null;
@@ -930,8 +930,9 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
         ? { commissionMode: "fixed" as const, fixedCommissionAmount: Number(fixedRaw), commissionPercent: undefined }
         : { commissionMode: "percent" as const, commissionPercent: Number(pctRaw) / 100, fixedCommissionAmount: undefined }),
       level: form.level.trim(),
+      companyName: form.companyName.trim() || undefined,
     });
-    setForm({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "" });
+    setForm({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "", companyName: "" });
     toast.success(t("success_rep_added"));
   };
 
@@ -960,12 +961,16 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
       title={t("sect_team")}
       desc={t("sect_team_desc")}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 mb-6 p-4 bg-muted/40 rounded-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-7 gap-3 mb-6 p-4 bg-muted/40 rounded-lg">
         <div><Label>{t("lbl_name")} *</Label>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Jane Doe" />
         </div>
         <div><Label>{t("lbl_email")} *</Label>
           <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="jane@…" />
+        </div>
+        <div><Label>{t("lbl_agent_company_name")}</Label>
+          <Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+            placeholder={isEs ? "si tiene LLC" : "if they have an LLC"} />
         </div>
         <div><Label>{t("lbl_sponsor")}</Label>
           <Select value={form.sponsorId || "none"} onValueChange={(v) => setForm({ ...form, sponsorId: v === "none" ? "" : v })}>
@@ -1024,7 +1029,8 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
             <thead className="text-left text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="py-2 w-10"></th>
-                <th className="py-2 px-2">{t("th_name")}</th><th className="px-2">{t("th_email")}</th><th className="px-2">{t("th_sponsor")}</th>
+                <th className="py-2 px-2">{t("th_name")}</th><th className="px-2">{t("th_email")}</th>
+                <th className="px-2">{t("lbl_agent_company_name")}</th><th className="px-2">{t("th_sponsor")}</th>
                 <th className="px-2">{entryMode === "fixed" ? t("lbl_product_cost_rule") : t("th_commission")}</th><th className="px-2">{t("th_level")}</th>
                 <th className="px-2">{t("th_state")}</th><th className="px-2">{t("th_w9")}</th><th className="px-2">{t("th_tax_pct")}</th><th className="px-2">{t("th_pay_method")}</th>
                 <th className="w-12"></th>
@@ -1049,6 +1055,11 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
                       value={a.email}
                       onChange={(e) => updateAgent(a.id, { email: e.target.value })}
                     />
+                  </td>
+                  <td className="px-2">
+                    <Input className="h-8 w-32" value={a.companyName ?? ""}
+                      onChange={(e) => updateAgent(a.id, { companyName: e.target.value || undefined })}
+                      placeholder={isEs ? "si tiene LLC" : "if any"} />
                   </td>
                   <td className="px-2">
                     <Select value={a.sponsorId || "none"} onValueChange={(v) => updateAgent(a.id, { sponsorId: v === "none" ? null : v })}>
@@ -1737,14 +1748,14 @@ function InvoicesPanel() {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            const doc = buildSaleInvoicePDF(c, s.company, ag?.name || "—", payout, rows, s.company.commissionEntryMode);
-                            setPdfPreview({ name: `${inv.number} — ${ag?.name || "—"}`, url: doc.output("bloburl").toString() });
+                            const doc = buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
+                            setPdfPreview({ name: `${inv.number} — ${payeeLabel(ag)}`, url: doc.output("bloburl").toString() });
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            buildSaleAndDownload(c, s.company, ag?.name || "—", payout, rows, s.company.commissionEntryMode);
+                            buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
                           }}>PDF</Button>
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Documentos de pago" : "Payout documents"} onClick={() => setPayoutDocsId(inv.id)}>
@@ -1797,7 +1808,7 @@ function InvoicesPanel() {
                     <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
                     <Button size="sm" variant="outline" onClick={() => {
                       const pdf = isAdmin
-                        ? buildSaleInvoicePDF(live, s.company, s.agents.find((a) => a.id === draft.agentId)?.name || "—", null, [row], s.company.commissionEntryMode)
+                        ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
                         : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
                       setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
                     }}>
@@ -1805,7 +1816,7 @@ function InvoicesPanel() {
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => {
                       const pdf = isAdmin
-                        ? buildSaleInvoicePDF(live, s.company, s.agents.find((a) => a.id === draft.agentId)?.name || "—", null, [row], s.company.commissionEntryMode)
+                        ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
                         : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
                       pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
                     }}>
@@ -1892,10 +1903,19 @@ function PayoutDocumentsDialog({
     // Full invoice format (same as the main PDF), scoped to just this
     // person's own row in "Who gets paid on this sale" — admin sees the
     // whole deal's context, but each recipient's document stays private.
-    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+    const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
     const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
     setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
     s.regeneratePayoutDocument(doc.id, s.currentUserName);
+  };
+
+  const downloadOne = (doc: PayoutDocument) => {
+    if (!inv || !c) return;
+    const row = involvedRows.find((r) => r.agentId === doc.agentId);
+    if (!row) return;
+    const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
+    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
+    pdf.save(`${inv.number}_${row.name.replace(/\s+/g, "_")}.pdf`);
   };
 
   return (
@@ -1920,7 +1940,7 @@ function PayoutDocumentsDialog({
                     // Same full invoice format as "Ver PDF" per recipient, but
                     // with every row left in — this is the admin-only master
                     // copy, not a private per-person document.
-                    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+                    const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
                     const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, involvedRows, s.company.commissionEntryMode);
                     pdf.save(`${inv.number}_master_summary.pdf`);
                   }}>
@@ -1929,7 +1949,7 @@ function PayoutDocumentsDialog({
                 <Button size="sm" disabled={involvedRows.length === 0}
                   onClick={() => {
                     if (!inv || !c) return;
-                    const sellerName = s.agents.find((a) => a.id === inv.agentId)?.name || "—";
+                    const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
                     for (const row of involvedRows) {
                       const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
                       pdf.save(`${inv.number}_${row.name.replace(/\s+/g, "_")}.pdf`);
@@ -2026,6 +2046,9 @@ function PayoutDocumentsDialog({
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <Button size="sm" variant="outline" onClick={() => regen(d)}>
                         <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver PDF" : "View PDF"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => downloadOne(d)}>
+                        <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Descargar" : "Download"}
                       </Button>
                       <Button size="sm" variant="outline" disabled={d.status === "approved" || d.status === "paid"}
                         onClick={() => s.approvePayoutDocument(d.id)}>

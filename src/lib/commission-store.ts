@@ -17,6 +17,7 @@ export type Agent = {
   fixedCommissionAmount?: number; // flat $ paid per qualifying invoice when commissionMode === "fixed"
   level?: string;             // commission level label (e.g. Junior Rep, Sales Rep, Manager)
   avatarUrl?: string;         // base64 or URL for profile photo
+  companyName?: string;       // LLC/business name this agent gets paid under, if any (e.g. subcontractors)
 };
 
 export type FinanceCompany = {

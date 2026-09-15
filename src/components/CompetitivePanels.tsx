@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2, Wand2, Upload, CheckCircle2, ArrowRight, ArrowLeft, Settings2, Sparkles, FileDown } from "lucide-react";
 import { useStore, type AdjustmentKind, type Adjustment, type Invoice } from "@/lib/commission-store";
-import { fmtMoney, calcInvoice, calcPayouts } from "@/lib/commission-calc";
+import { fmtMoney, calcInvoice, calcPayouts, payeeLabel } from "@/lib/commission-calc";
 import { labelFor, buildWallet, computeInvolved } from "@/lib/ledger";
 import { INVOICE_TEMPLATES, buildSaleAndDownload } from "@/lib/generate-invoices";
 import { INDUSTRY_TEMPLATES } from "@/lib/templates";
@@ -467,7 +467,7 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
       const company = useStore.getState().company;
       const agents = useStore.getState().agents;
       const c = calcInvoice(inv, fcs);
-      const agentName = agents.find((a) => a.id === inv!.agentId)?.name || "—";
+      const agentName = payeeLabel(agents.find((a) => a.id === inv!.agentId));
       const rows = computeInvolved(inv, c, agents, useStore.getState().overrides, s.language, company.commissionEntryMode);
       buildSaleAndDownload(c, company, agentName, null, rows, company.commissionEntryMode);
       toast.success(t("success_pdf"));
