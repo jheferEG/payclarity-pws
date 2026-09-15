@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Invoice, type LineItem, type PayoutDocument } from "@/lib/commission-store";
+import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment } from "@/lib/commission-store";
 import {
   calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
@@ -37,7 +37,7 @@ import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
   buildOverridePDF,
   downloadAllCommissionPDFs, downloadSummary, makeBrandingSnapshot, INVOICE_TEMPLATES,
-  buildInvoicePayoutStatementPDF,
+  buildInvoicePayoutStatementPDF, buildCashCustomerInvoicePDF,
 } from "@/lib/generate-invoices";
 import {
   WalletPanel, SimulatorPanel, CalendarPanel, TemplatesPanel, DisputesPanel,
@@ -1268,6 +1268,11 @@ function blankInvoice(): Omit<Invoice, "id" | "number"> {
     jobType: undefined,
     fixedPay: 0,
     extras: [],
+    customerAddress: "",
+    customerPhone: "",
+    invoiceItemLabel: "",
+    customerPayments: [],
+    paymentPlanNote: "",
   };
 }
 
@@ -1501,6 +1506,12 @@ function InvoicesPanel() {
           <div className="md:col-span-2"><Label>{t("lbl_customer")}</Label>
             <Input value={draft.customerName} onChange={(e) => setDraft({ ...draft, customerName: e.target.value })} placeholder={t("lbl_customer_name_placeholder")} />
           </div>
+          <div className="md:col-span-2"><Label>{s.language === "es" ? "Dirección del cliente" : "Customer address"}</Label>
+            <Input value={draft.customerAddress ?? ""} onChange={(e) => setDraft({ ...draft, customerAddress: e.target.value })} />
+          </div>
+          <div><Label>{s.language === "es" ? "Teléfono del cliente" : "Customer phone"}</Label>
+            <Input value={draft.customerPhone ?? ""} onChange={(e) => setDraft({ ...draft, customerPhone: e.target.value })} />
+          </div>
           {!draft.isGeneralInvoice && (
           <div><Label>{t("lbl_finance_co")}</Label>
             <Select value={draft.financeCompanyId || "none"} onValueChange={(v) => setDraft({ ...draft, financeCompanyId: v === "none" ? null : v })}>
@@ -1692,6 +1703,38 @@ function InvoicesPanel() {
         <LineEditor title={t("lbl_extra_charges")} rows={draft.charges} onAdd={() => addLine("charges")} onRemove={(i) => removeLine("charges", i)} onChange={(i, f, v) => updateLine("charges", i, f, v)} />
         <LineEditor title={t("lbl_credits")} rows={draft.credits} onAdd={() => addLine("credits")} onRemove={(i) => removeLine("credits", i)} onChange={(i, f, v) => updateLine("credits", i, f, v)} />
 
+        {draft.saleType === "cash" && (
+          <div className="mt-5 border-t pt-4 space-y-4">
+            <p className="text-sm font-semibold">
+              {s.language === "es" ? "Invoice para el cliente (pago en efectivo)" : "Customer invoice (cash payment)"}
+            </p>
+            <div>
+              <Label className="text-xs">{s.language === "es" ? "Nombre del artículo/servicio principal" : "Main item/service name"}</Label>
+              <Input
+                value={draft.invoiceItemLabel ?? ""}
+                onChange={(e) => setDraft({ ...draft, invoiceItemLabel: e.target.value })}
+                placeholder={s.language === "es" ? "ej. Water Treatment System" : "e.g. Water Treatment System"}
+              />
+            </div>
+            <CustomerPaymentsEditor
+              rows={draft.customerPayments ?? []}
+              onChange={(rows) => setDraft({ ...draft, customerPayments: rows })}
+              isEs={s.language === "es"}
+            />
+            <div>
+              <Label className="text-xs">{s.language === "es" ? "Nota del plan de pago (balance restante)" : "Payment plan note (remaining balance)"}</Label>
+              <Textarea
+                rows={2}
+                value={draft.paymentPlanNote ?? ""}
+                onChange={(e) => setDraft({ ...draft, paymentPlanNote: e.target.value })}
+                placeholder={s.language === "es"
+                  ? "ej. El monto restante se pagará en 13 cuotas de $200 los días 15 de cada mes."
+                  : "e.g. The remaining balance will be paid in 13 monthly installments of $200 on the 15th."}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
           {editing && (
@@ -1870,6 +1913,16 @@ function InvoicesPanel() {
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Documentos de pago" : "Payout documents"} onClick={() => setPayoutDocsId(inv.id)}>
                               <Layers className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {inv.saleType === "cash" && (
+                            <Button variant="ghost" size="sm" title={s.language === "es" ? "Invoice para el cliente (efectivo)" : "Customer invoice (cash)"}
+                              onClick={() => {
+                                const doc = buildCashCustomerInvoicePDF(inv, s.company);
+                                setPdfPreview({ name: `${inv.number} — ${s.language === "es" ? "Invoice cliente" : "Customer invoice"}`, url: doc.output("bloburl").toString() });
+                              }}>
+                              <Receipt className="w-4 h-4 mr-1" />
+                              {s.language === "es" ? "Invoice cliente" : "Customer invoice"}
                             </Button>
                           )}
                           <Button variant="ghost" size="sm" title={t("tt_timeline_audit")} onClick={() => setTimelineId(inv.id)}><Activity className="w-4 h-4" /></Button>
@@ -2254,6 +2307,39 @@ function LineEditor({
             <Input value={r.label} placeholder={t("lbl_description")} onChange={(e) => onChange(i, "label", e.target.value)} />
             <NumField step="0.01" value={r.amount} onChange={(n) => onChange(i, "amount", String(n))} />
             <Button variant="ghost" size="icon" onClick={() => onRemove(i)}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** "Abonos" list for the customer-facing cash invoice — each is a label
+ * (default "Abono"), an amount, and a date, shown as payment history. */
+function CustomerPaymentsEditor({
+  rows, onChange, isEs,
+}: {
+  rows: CustomerPayment[];
+  onChange: (rows: CustomerPayment[]) => void;
+  isEs: boolean;
+}) {
+  const add = () => onChange([...rows, { label: isEs ? "Abono" : "Payment", amount: 0, date: new Date().toISOString().slice(0, 10) }]);
+  const remove = (i: number) => onChange(rows.filter((_, j) => j !== i));
+  const update = (i: number, patch: Partial<CustomerPayment>) => onChange(rows.map((r, j) => j === i ? { ...r, ...patch } : r));
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label className="text-xs">{isEs ? "Abonos del cliente" : "Customer payments"}</Label>
+        <Button variant="outline" size="sm" onClick={add}><Plus className="w-3 h-3 mr-1" />{isEs ? "Agregar abono" : "Add payment"}</Button>
+      </div>
+      <div className="space-y-2">
+        {rows.length === 0 && <p className="text-xs text-muted-foreground">{isEs ? "Sin abonos registrados." : "No payments recorded."}</p>}
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-[1fr_120px_140px_auto] gap-2">
+            <Input value={r.label} placeholder={isEs ? "Abono" : "Payment"} onChange={(e) => update(i, { label: e.target.value })} />
+            <NumField step="0.01" value={r.amount} onChange={(n) => update(i, { amount: n })} />
+            <Input type="date" value={r.date} onChange={(e) => update(i, { date: e.target.value })} />
+            <Button variant="ghost" size="icon" onClick={() => remove(i)}><Trash2 className="w-4 h-4" /></Button>
           </div>
         ))}
       </div>

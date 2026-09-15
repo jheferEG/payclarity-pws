@@ -85,7 +85,16 @@ export type Invoice = {
   jobType?: "installation" | "service";
   fixedPay?: number;             // editable — flat rates vary by office
   extras?: InvoiceExtra[];       // each extra adds its own $ on top of the fixed pay
+  // Customer-facing cash invoice — a receipt handed to the customer (not the
+  // internal commission document), used when they pay cash in installments.
+  customerAddress?: string;
+  customerPhone?: string;
+  invoiceItemLabel?: string;              // e.g. "Water Treatment System" — the main line item's name
+  customerPayments?: CustomerPayment[];   // "Abono $X · date" entries the customer has made
+  paymentPlanNote?: string;               // free text, e.g. "remaining balance in 13 monthly installments..."
 };
+
+export type CustomerPayment = { label: string; amount: number; date: string };
 
 export type InvoiceExtra = { category: string; amount: number };
 

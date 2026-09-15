@@ -4,7 +4,7 @@ import type {
   Payment, Adjustment, Dispute, RequestEvent, Notification, NotificationKind,
   PersonalTier, OverrideLevel, Company, W9Status,
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
-  Product, CompensationPosition, PayoutDocument, InvoiceExtra,
+  Product, CompensationPosition, PayoutDocument, InvoiceExtra, CustomerPayment,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -198,6 +198,11 @@ export function adaptInvoice(row: InvoiceRow): Invoice {
     jobType: (row.job_type as Invoice["jobType"]) ?? undefined,
     fixedPay: row.fixed_pay != null ? Number(row.fixed_pay) : undefined,
     extras: (row.extras as unknown as InvoiceExtra[] | null) ?? undefined,
+    customerAddress: row.customer_address ?? undefined,
+    customerPhone: row.customer_phone ?? undefined,
+    invoiceItemLabel: row.invoice_item_label ?? undefined,
+    customerPayments: (row.customer_payments as unknown as CustomerPayment[] | null) ?? undefined,
+    paymentPlanNote: row.payment_plan_note ?? undefined,
   };
 }
 
@@ -234,6 +239,11 @@ export function invoiceCoreToRow(inv: Invoice, companyId: string) {
     job_type: inv.jobType ?? null,
     fixed_pay: inv.fixedPay ?? null,
     extras: inv.extras ?? null,
+    customer_address: inv.customerAddress ?? null,
+    customer_phone: inv.customerPhone ?? null,
+    invoice_item_label: inv.invoiceItemLabel ?? null,
+    customer_payments: inv.customerPayments ?? null,
+    payment_plan_note: inv.paymentPlanNote ?? null,
   };
 }
 

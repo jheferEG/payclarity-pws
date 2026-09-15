@@ -470,6 +470,145 @@ export function buildSaleInvoicePDF(
   return doc;
 }
 
+/* -------- Customer-facing cash invoice/receipt --------
+ * A totally different document from everything above: no commission
+ * breakdown, no "who gets paid" — just what the customer bought, what
+ * they've paid so far (abonos), and what's left. Matches the paper
+ * receipt format the company already hands customers who pay cash in
+ * installments. */
+export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsPDF {
+  const b = resolveBranding(company, inv);
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  const cur = b.currency;
+  const brand = hexToRgb(b.brandColor);
+  const brand2 = hexToRgb(b.brandColorSecondary);
+
+  // ── Header: logo/company left, "NO. X · INVOICE" right ──
+  let logoBottom = margin;
+  if (b.logoDataUrl) {
+    try {
+      const fmt = b.logoDataUrl.includes("image/png") ? "PNG" : "JPEG";
+      doc.addImage(b.logoDataUrl, fmt, margin, margin, 60, 60);
+      logoBottom = margin + 60;
+    } catch {
+      /* ignore bad image */
+    }
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(20);
+  doc.text(b.companyName, margin, logoBottom + 16);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(90);
+  doc.text(b.address, margin, logoBottom + 28);
+  if (b.taxId) doc.text(`EIN # ${b.taxId}`, margin, logoBottom + 39);
+  doc.text(b.email, margin, logoBottom + 50);
+  doc.text(`Phone: ${b.phone}`, margin, logoBottom + 61);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(20);
+  doc.text(`NO. ${inv.number}`, pageW - margin, margin + 12, { align: "right" });
+  doc.setFontSize(22);
+  doc.text("INVOICE", pageW - margin, margin + 34, { align: "right" });
+
+  let y = logoBottom + 90;
+
+  // ── Date / Billed to ──
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(20);
+  doc.text("Date:", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(inv.date, margin + 36, y);
+  y += 22;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Billed to:", margin, y);
+  y += 16;
+  doc.setFont("helvetica", "normal");
+  doc.text(inv.customerName || "—", margin, y);
+  y += 14;
+  if (inv.customerAddress) {
+    doc.text(inv.customerAddress, margin, y);
+    y += 14;
+  }
+  if (inv.customerPhone) {
+    doc.text(`Phone: ${inv.customerPhone}`, margin, y);
+    y += 14;
+  }
+  y += 12;
+
+  // ── Item table: main item + any extra charges as additional lines ──
+  const itemRows: (string | number)[][] = [
+    [inv.invoiceItemLabel || "Product/Service", "1", fmtMoney(inv.salesAmount, cur), fmtMoney(inv.salesAmount, cur)],
+    ...inv.charges.map((c) => [c.label || "—", "1", fmtMoney(c.amount, cur), fmtMoney(c.amount, cur)]),
+  ];
+  autoTable(doc, {
+    startY: y,
+    head: [["Item", "Quantity", "Price", "Amount"]],
+    body: itemRows,
+    headStyles: { fillColor: [235, 235, 235], textColor: 20 },
+    styles: { fontSize: 10 },
+    margin: { left: margin, right: margin },
+    columnStyles: { 1: { halign: "center" }, 2: { halign: "right" }, 3: { halign: "right" } },
+  });
+  y = (doc as any).lastAutoTable.finalY + 16;
+
+  const total = inv.salesAmount + inv.charges.reduce((s, c) => s + Number(c.amount || 0), 0);
+  const paid = (inv.customerPayments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+  const balance = Math.max(0, total - paid);
+
+  autoTable(doc, {
+    startY: y,
+    body: [
+      [{ content: "TOTAL", styles: { fontStyle: "bold" } }, { content: fmtMoney(total, cur), styles: { fontStyle: "bold" } }],
+      ["PAID", fmtMoney(paid, cur)],
+      [{ content: "BALANCE", styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }],
+    ],
+    theme: "plain",
+    margin: { left: pageW / 2, right: margin },
+    styles: { fontSize: 11 },
+    columnStyles: { 1: { halign: "right" } },
+  });
+  y = (doc as any).lastAutoTable.finalY + 24;
+
+  // ── Payment method / history ──
+  const payments = inv.customerPayments || [];
+  if (payments.length || inv.paymentPlanNote) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(20);
+    doc.text("Payment method:", margin, y);
+    y += 16;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    for (const p of payments) {
+      doc.text(`${p.label}  ${fmtMoney(p.amount, cur)}   ${p.date}`, margin, y);
+      y += 15;
+    }
+    if (inv.paymentPlanNote) {
+      y += 6;
+      const lines = doc.splitTextToSize(inv.paymentPlanNote, pageW - margin * 2 - 40);
+      doc.text(lines, margin, y);
+      y += lines.length * 14;
+    }
+  }
+
+  // ── Decorative wave footer, brand two-tone ──
+  const waveH = 90;
+  doc.setFillColor(...brand2);
+  doc.ellipse(pageW * 0.25, pageH + waveH * 0.3, pageW * 0.55, waveH * 1.3, "F");
+  doc.setFillColor(...brand);
+  doc.ellipse(pageW * 0.85, pageH + waveH * 0.5, pageW * 0.5, waveH * 1.1, "F");
+
+  return doc;
+}
+
 /* -------- Per-agent commission PDF -------- */
 
 export function buildAgentCommissionPDF(

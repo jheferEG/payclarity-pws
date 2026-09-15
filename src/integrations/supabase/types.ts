@@ -435,6 +435,11 @@ export type Database = {
           job_type: "installation" | "service" | null
           fixed_pay: number | null
           extras: { category: string; amount: number }[] | null
+          customer_address: string | null
+          customer_phone: string | null
+          invoice_item_label: string | null
+          customer_payments: { label: string; amount: number; date: string }[] | null
+          payment_plan_note: string | null
           created_at: string
           updated_at: string
         }
@@ -470,6 +475,11 @@ export type Database = {
           job_type?: "installation" | "service" | null
           fixed_pay?: number | null
           extras?: { category: string; amount: number }[] | null
+          customer_address?: string | null
+          customer_phone?: string | null
+          invoice_item_label?: string | null
+          customer_payments?: { label: string; amount: number; date: string }[] | null
+          payment_plan_note?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -505,6 +515,11 @@ export type Database = {
           job_type?: "installation" | "service" | null
           fixed_pay?: number | null
           extras?: { category: string; amount: number }[] | null
+          customer_address?: string | null
+          customer_phone?: string | null
+          invoice_item_label?: string | null
+          customer_payments?: { label: string; amount: number; date: string }[] | null
+          payment_plan_note?: string | null
           created_at?: string
           updated_at?: string
         }
