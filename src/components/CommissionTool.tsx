@@ -1533,24 +1533,44 @@ function InvoicesPanel() {
               <div><Label>{s.language === "es" ? "Pago fijo" : "Fixed pay"}</Label>
                 <NumField step="0.01" value={draft.fixedPay ?? 0} onChange={(n) => setDraft({ ...draft, fixedPay: n })} />
               </div>
-              <div className="md:col-span-3"><Label>{s.language === "es" ? "Extras" : "Extras"}</Label>
-                <div className="flex flex-wrap gap-3 pt-1">
+              <div className="md:col-span-3">
+                <Label>{s.language === "es" ? "Extras (se suman al pago fijo)" : "Extras (added to the fixed pay)"}</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
                   {EXTRA_OPTIONS.map((opt) => {
-                    const checked = (draft.extras ?? []).includes(opt.value);
+                    const entry = (draft.extras ?? []).find((x) => x.category === opt.value);
+                    const checked = !!entry;
                     return (
-                      <label key={opt.value} className="flex items-center gap-1.5 text-sm">
+                      <div key={opt.value} className="flex items-center gap-2 border border-input rounded-md p-2">
                         <input type="checkbox" checked={checked} onChange={(e) => {
                           const cur = draft.extras ?? [];
                           setDraft({
                             ...draft,
-                            extras: e.target.checked ? [...cur, opt.value] : cur.filter((x) => x !== opt.value),
+                            extras: e.target.checked
+                              ? [...cur, { category: opt.value, amount: 0 }]
+                              : cur.filter((x) => x.category !== opt.value),
                           });
                         }} />
-                        {s.language === "es" ? opt.es : opt.en}
-                      </label>
+                        <span className="text-sm flex-1">{s.language === "es" ? opt.es : opt.en}</span>
+                        {checked && (
+                          <NumField
+                            className="h-7 w-20"
+                            step="0.01"
+                            value={entry.amount}
+                            onChange={(n) => setDraft({
+                              ...draft,
+                              extras: (draft.extras ?? []).map((x) => x.category === opt.value ? { ...x, amount: n } : x),
+                            })}
+                          />
+                        )}
+                      </div>
                     );
                   })}
                 </div>
+                {(draft.extras ?? []).length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {s.language === "es" ? "Total extras" : "Extras total"}: {fmtMoney((draft.extras ?? []).reduce((sum, x) => sum + (x.amount || 0), 0), s.company.currency)}
+                  </p>
+                )}
               </div>
               <div><Label>{t("lbl_advance_applied")}</Label>
                 <NumField step="0.01" value={draft.advanceApplied} onChange={(n) => setDraft({ ...draft, advanceApplied: n })} />
@@ -1689,7 +1709,7 @@ function InvoicesPanel() {
       {(isAdmin || editing) && (
       <SectionCard title={t("preview_title")} desc={t("sect_invoice_preview_desc")}>
         {draft.isGeneralInvoice ? (
-          <Row k={s.language === "es" ? "Pago fijo" : "Fixed pay"} v={fmtMoney(draft.fixedPay ?? 0, s.company.currency)} accent bold />
+          <Row k={s.language === "es" ? "Pago fijo + extras" : "Fixed pay + extras"} v={fmtMoney(live.profit, s.company.currency)} accent bold />
         ) : (
           <>
         <Row k={t("preview_sales")} v={fmtMoney(draft.salesAmount, s.company.currency)} />

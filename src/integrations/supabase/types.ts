@@ -434,7 +434,7 @@ export type Database = {
           is_general_invoice: boolean
           job_type: "installation" | "service" | null
           fixed_pay: number | null
-          extras: string[] | null
+          extras: { category: string; amount: number }[] | null
           created_at: string
           updated_at: string
         }
@@ -469,7 +469,7 @@ export type Database = {
           is_general_invoice?: boolean
           job_type?: "installation" | "service" | null
           fixed_pay?: number | null
-          extras?: string[] | null
+          extras?: { category: string; amount: number }[] | null
           created_at?: string
           updated_at?: string
         }
@@ -504,7 +504,7 @@ export type Database = {
           is_general_invoice?: boolean
           job_type?: "installation" | "service" | null
           fixed_pay?: number | null
-          extras?: string[] | null
+          extras?: { category: string; amount: number }[] | null
           created_at?: string
           updated_at?: string
         }

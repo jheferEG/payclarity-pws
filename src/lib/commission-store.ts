@@ -84,8 +84,10 @@ export type Invoice = {
   isGeneralInvoice?: boolean;
   jobType?: "installation" | "service";
   fixedPay?: number;             // editable — flat rates vary by office
-  extras?: string[];             // e.g. ["mileage", "materials"] — categories, no $ yet
+  extras?: InvoiceExtra[];       // each extra adds its own $ on top of the fixed pay
 };
+
+export type InvoiceExtra = { category: string; amount: number };
 
 export type InvoicePdfRecord = {
   at: string;

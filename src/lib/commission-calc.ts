@@ -39,10 +39,12 @@ export function calcInvoice(
   financeCompanies: FinanceCompany[]
 ): InvoiceCalc {
   // General invoices (flat pay per job — subcontractors like plumbers) skip
-  // the whole sale/product-cost/fee model: the fixed pay IS the profit and
-  // the commissionable base, full stop.
+  // the whole sale/product-cost/fee model: the fixed pay plus each extra's
+  // own $ amount (mileage, materials, etc. — they add on top) IS the profit
+  // and the commissionable base, full stop.
   if (inv.isGeneralInvoice) {
-    const fixedPay = inv.fixedPay || 0;
+    const extrasTotal = (inv.extras || []).reduce((s, x) => s + (x.amount || 0), 0);
+    const fixedPay = (inv.fixedPay || 0) + extrasTotal;
     return {
       invoice: inv,
       financeCo: null,

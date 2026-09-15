@@ -231,20 +231,23 @@ export function buildSaleInvoicePDF(
   if (inv.isGeneralInvoice) {
     autoTable(doc, {
       startY: y,
-      head: [["Job details", ""]],
+      head: [["Job details", `Amount (${cur})`]],
       body: [
         ["Type", inv.jobType === "service" ? "Service" : "Installation"],
         ["Fixed pay", fmtMoney(inv.fixedPay || 0, cur)],
-        ...(inv.extras && inv.extras.length
-          ? [["Extras", inv.extras.map((x) => EXTRA_LABELS[x] ?? x).join(", ")]]
-          : []),
+        ...(inv.extras || []).map((x) => [EXTRA_LABELS[x.category] ?? x.category, fmtMoney(x.amount, cur)]),
       ],
+      foot: (inv.extras && inv.extras.length)
+        ? [["Total", fmtMoney((inv.fixedPay || 0) + inv.extras.reduce((s, x) => s + (x.amount || 0), 0), cur)]]
+        : undefined,
+      footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
       headStyles:
         tpl === "minimal"
           ? { fillColor: [240, 240, 240], textColor: 20 }
           : { fillColor: brand, textColor: 255 },
       styles: { fontSize },
       margin: { left: margin, right: margin },
+      columnStyles: { 1: { halign: "right" } },
     });
     y = (doc as any).lastAutoTable.finalY + 20;
 

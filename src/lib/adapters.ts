@@ -4,7 +4,7 @@ import type {
   Payment, Adjustment, Dispute, RequestEvent, Notification, NotificationKind,
   PersonalTier, OverrideLevel, Company, W9Status,
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
-  Product, CompensationPosition, PayoutDocument,
+  Product, CompensationPosition, PayoutDocument, InvoiceExtra,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -197,7 +197,7 @@ export function adaptInvoice(row: InvoiceRow): Invoice {
     isGeneralInvoice: row.is_general_invoice ?? undefined,
     jobType: (row.job_type as Invoice["jobType"]) ?? undefined,
     fixedPay: row.fixed_pay != null ? Number(row.fixed_pay) : undefined,
-    extras: (row.extras as string[] | null) ?? undefined,
+    extras: (row.extras as unknown as InvoiceExtra[] | null) ?? undefined,
   };
 }
 
