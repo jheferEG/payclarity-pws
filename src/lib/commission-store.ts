@@ -436,6 +436,67 @@ export function workStatementTotal(ws: TechnicianWorkStatement, inv: Invoice | u
   return Math.max(0, jobPay + mileagePay + ws.materialReimbursement - ws.deductions - ws.chargebacks - ws.corrections);
 }
 
+/** Phase 3: consolidates one technician's approved Work Statements for a
+ *  pay period into a single payable batch. A Work Statement belongs to at
+ *  most one active batch — generating a batch stamps weeklyStatementId on
+ *  each one it includes, so it can never be double-batched or double-paid.
+ *  Marking this paid posts a Payment (reusing the same Payment/Wallet the
+ *  commission side already has — technicians are agents too), which is
+ *  what surfaces it in the Payout Calendar and year-end 1099 totals. */
+export type WeeklyStatementStatus = "open" | "locked" | "approved" | "paid";
+
+export type WeeklyAdjustment = { label: string; amount: number };
+
+export type WeeklyTechnicianStatement = {
+  id: string;
+  number: string; // "WKS-000001"
+  technicianId: string;
+  periodStart: string;
+  periodEnd: string;
+  status: WeeklyStatementStatus;
+  workStatementIds: string[];
+  adjustments: WeeklyAdjustment[]; // batch-level corrections, on top of the individual statements
+  approvedAt: string | null;
+  approvedBy: string | null;
+  paidAt: string | null;
+  paymentReference: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Why a technician's Work Statement can't go into a new weekly batch,
+ *  shown to the admin when generating one (per the client's spec). */
+export type ExclusionReason =
+  | "already_batched" | "not_approved" | "cancelled" | "superseded" | "already_paid";
+
+export function eligibleWorkStatements(
+  technicianId: string,
+  workStatements: TechnicianWorkStatement[]
+): { eligible: TechnicianWorkStatement[]; excluded: { ws: TechnicianWorkStatement; reason: ExclusionReason }[] } {
+  const mine = workStatements.filter((w) => w.technicianId === technicianId);
+  const eligible: TechnicianWorkStatement[] = [];
+  const excluded: { ws: TechnicianWorkStatement; reason: ExclusionReason }[] = [];
+  for (const w of mine) {
+    if (w.weeklyStatementId) { excluded.push({ ws: w, reason: "already_batched" }); continue; }
+    if (w.status === "paid") { excluded.push({ ws: w, reason: "already_paid" }); continue; }
+    if (w.status === "rejected") { excluded.push({ ws: w, reason: "cancelled" }); continue; }
+    if (w.status !== "approved") { excluded.push({ ws: w, reason: "not_approved" }); continue; }
+    eligible.push(w);
+  }
+  return { eligible, excluded };
+}
+
+export function weeklyStatementTotal(
+  wk: WeeklyTechnicianStatement,
+  workStatements: TechnicianWorkStatement[],
+  invoices: Invoice[]
+): number {
+  const included = workStatements.filter((w) => wk.workStatementIds.includes(w.id));
+  const base = included.reduce((sum, w) => sum + workStatementTotal(w, invoices.find((i) => i.id === w.invoiceId)), 0);
+  const adj = wk.adjustments.reduce((s, a) => s + (a.amount || 0), 0);
+  return Math.max(0, base + adj);
+}
+
 export type RequestStatus =
   | "submitted"
   | "under_review"
@@ -640,6 +701,13 @@ type State = {
   rejectWorkStatement: (id: string, by: string, reason: string) => void;
   addWorkStatementAttachment: (id: string, attachment: { name: string; url: string }) => void;
   removeWorkStatement: (id: string) => void;
+
+  weeklyStatements: WeeklyTechnicianStatement[];
+  generateWeeklyStatement: (technicianId: string, periodStart: string, periodEnd: string) => string | null;
+  updateWeeklyStatement: (id: string, patch: Partial<WeeklyTechnicianStatement>) => void;
+  approveWeeklyStatement: (id: string, by: string) => void;
+  markWeeklyStatementPaid: (id: string, reference: string) => void;
+  removeWeeklyStatement: (id: string) => void;
 
   addDispute: (
     d: Omit<
@@ -1457,6 +1525,84 @@ export const useStore = create<State>()(
         workStatements: s.workStatements.filter((w) => w.id !== id),
       })),
 
+      weeklyStatements: [],
+      generateWeeklyStatement: (technicianId, periodStart, periodEnd) => {
+        const { eligible } = eligibleWorkStatements(technicianId, get().workStatements);
+        if (!eligible.length) return null;
+        const id = uid();
+        set((s) => {
+          const now = new Date().toISOString();
+          const seq = s.weeklyStatements.length + 1;
+          const wk: WeeklyTechnicianStatement = {
+            id,
+            number: `WKS-${String(seq).padStart(6, "0")}`,
+            technicianId,
+            periodStart,
+            periodEnd,
+            status: "locked",
+            workStatementIds: eligible.map((w) => w.id),
+            adjustments: [],
+            approvedAt: null,
+            approvedBy: null,
+            paidAt: null,
+            paymentReference: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          return {
+            weeklyStatements: [...s.weeklyStatements, wk],
+            // Stamp weeklyStatementId on everything just batched — this is
+            // what makes it ineligible for a second batch (double-payment
+            // prevention, per the client's spec).
+            workStatements: s.workStatements.map((w) =>
+              eligible.some((e) => e.id === w.id) ? { ...w, weeklyStatementId: id, updatedAt: now } : w
+            ),
+          };
+        });
+        return id;
+      },
+      updateWeeklyStatement: (id, patch) => set((s) => ({
+        weeklyStatements: s.weeklyStatements.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w)),
+      })),
+      approveWeeklyStatement: (id, by) => set((s) => ({
+        weeklyStatements: s.weeklyStatements.map((w) =>
+          w.id === id ? { ...w, status: "approved", approvedAt: new Date().toISOString(), approvedBy: by, updatedAt: new Date().toISOString() } : w
+        ),
+      })),
+      markWeeklyStatementPaid: (id, reference) => set((s) => {
+        const wk = s.weeklyStatements.find((w) => w.id === id);
+        if (!wk) return {};
+        const total = weeklyStatementTotal(wk, s.workStatements, s.invoices);
+        const now = new Date().toISOString();
+        return {
+          weeklyStatements: s.weeklyStatements.map((w) =>
+            w.id === id ? { ...w, status: "paid", paidAt: now, paymentReference: reference, updatedAt: now } : w
+          ),
+          // Same downstream reuse as markPayoutDocumentPaid — technicians are
+          // agents, so this posts to the SAME Payment/Wallet the commission
+          // side already has, which is what surfaces it in the Payout
+          // Calendar and year-end 1099 totals without a parallel system.
+          workStatements: s.workStatements.map((w) =>
+            wk.workStatementIds.includes(w.id) ? { ...w, status: "paid", updatedAt: now } : w
+          ),
+          payments: [...s.payments, {
+            id: uid(),
+            agentId: wk.technicianId,
+            date: now.slice(0, 10),
+            amount: total,
+            method: "Weekly technician statement",
+            notes: `${wk.number} · ${wk.periodStart} – ${wk.periodEnd}`,
+            reference: reference || wk.number,
+            status: "paid" as const,
+          }],
+        };
+      }),
+      removeWeeklyStatement: (id) => set((s) => ({
+        weeklyStatements: s.weeklyStatements.filter((w) => w.id !== id),
+        // Un-batch its statements so they become eligible again
+        workStatements: s.workStatements.map((w) => (w.weeklyStatementId === id ? { ...w, weeklyStatementId: null } : w)),
+      })),
+
       addDispute: (d) => {
         const id = uid();
         set((s) => {
@@ -1725,6 +1871,7 @@ export const useStore = create<State>()(
           payoutDocuments: [],
           customerInvoices: [],
           workStatements: [],
+          weeklyStatements: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",

@@ -12,14 +12,29 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Pencil, Paperclip, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Pencil, Paperclip, CheckCircle2, XCircle, CalendarRange } from "lucide-react";
 import {
   useStore, customerInvoiceTotals, workStatementTotal,
+  eligibleWorkStatements, weeklyStatementTotal,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
   type TechnicianWorkStatement, type WorkStatementStatus,
+  type WeeklyTechnicianStatement, type ExclusionReason,
 } from "@/lib/commission-store";
 import { fmtMoney } from "@/lib/commission-calc";
 import { buildCustomerInvoicePDF, buildCustomerReceiptPDF } from "@/lib/generate-invoices";
+
+function downloadCSV(filename: string, rows: (string | number)[][]) {
+  const csv = rows.map((r) => r.map((c) => {
+    const s = String(c ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 function pickAttachmentFile(onDone: (a: { name: string; url: string }) => void) {
   const input = document.createElement("input");
@@ -709,5 +724,223 @@ function WorkStatementEditDialog({ ws, onClose, readOnly }: { ws: TechnicianWork
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ========================================================================
+ * WEEKLY TECHNICIAN STATEMENTS + COMPANY PAYABLES SUMMARY
+ * Phase 3 of Billing & Technician Payables. Batches one technician's
+ * approved Work Statements for a period into a single payable — a Work
+ * Statement can only ever be in one active batch (double-payment
+ * prevention). Marking a batch paid reuses the existing payments ledger,
+ * so it shows up in the Payout Calendar / 1099 totals like everything else.
+ * ======================================================================== */
+const EXCLUSION_LABEL_ES: Record<ExclusionReason, string> = {
+  already_batched: "Ya está en otro lote", not_approved: "No aprobado",
+  cancelled: "Rechazado/cancelado", superseded: "Reemplazado", already_paid: "Ya pagado",
+};
+const EXCLUSION_LABEL_EN: Record<ExclusionReason, string> = {
+  already_batched: "Already in another batch", not_approved: "Not approved",
+  cancelled: "Rejected/cancelled", superseded: "Superseded", already_paid: "Already paid",
+};
+
+export function WeeklyStatementsPanel() {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const EXCLUSION_LABEL = isEs ? EXCLUSION_LABEL_ES : EXCLUSION_LABEL_EN;
+
+  const technicians = s.agents.filter((a) => {
+    const pos = s.positions.find((p) => p.name === a.level);
+    return pos?.isGeneralInvoice;
+  });
+
+  const [genTech, setGenTech] = useState("");
+  const [periodStart, setPeriodStart] = useState(new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [payId, setPayId] = useState<string | null>(null);
+  const [payRef, setPayRef] = useState("");
+  const [summaryFrom, setSummaryFrom] = useState("");
+  const [summaryTo, setSummaryTo] = useState("");
+
+  const preview = genTech ? eligibleWorkStatements(genTech, s.workStatements) : null;
+
+  const generate = () => {
+    if (!genTech) return toast.error(isEs ? "Elige un técnico." : "Pick a technician.");
+    const id = s.generateWeeklyStatement(genTech, periodStart, periodEnd);
+    if (!id) return toast.error(isEs ? "Nada elegible para este técnico." : "Nothing eligible for this technician.");
+    toast.success(isEs ? "Lote generado." : "Batch generated.");
+  };
+
+  const list = s.weeklyStatements.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const paying = s.weeklyStatements.find((w) => w.id === payId) ?? null;
+
+  const summaryList = list.filter((w) =>
+    (!summaryFrom || w.periodStart >= summaryFrom) && (!summaryTo || w.periodEnd <= summaryTo)
+  );
+  const summaryTotal = summaryList.reduce((sum, w) => sum + weeklyStatementTotal(w, s.workStatements, s.invoices), 0);
+
+  const exportSummary = () => {
+    const rows: (string | number)[][] = [["Technician", "Statement", "Period start", "Period end", "Status", "Total"]];
+    for (const w of summaryList) {
+      const tech = s.agents.find((a) => a.id === w.technicianId);
+      rows.push([tech?.name ?? "—", w.number, w.periodStart, w.periodEnd, w.status, weeklyStatementTotal(w, s.workStatements, s.invoices).toFixed(2)]);
+    }
+    downloadCSV("company_payables_summary.csv", rows);
+  };
+
+  return (
+    <>
+      <Section
+        title={isEs ? "Resumen de pagos de la compañía" : "Company Payables Summary"}
+        desc={isEs ? "Total a pagar a técnicos en un período, a través de todos los lotes semanales." : "Total payable to technicians in a period, across all weekly batches."}
+        action={
+          <div className="flex flex-wrap items-end gap-2">
+            <div><Label className="text-xs">{isEs ? "Desde" : "From"}</Label><Input type="date" className="h-8" value={summaryFrom} onChange={(e) => setSummaryFrom(e.target.value)} /></div>
+            <div><Label className="text-xs">{isEs ? "Hasta" : "To"}</Label><Input type="date" className="h-8" value={summaryTo} onChange={(e) => setSummaryTo(e.target.value)} /></div>
+            <Button size="sm" variant="outline" onClick={exportSummary} disabled={!summaryList.length}>
+              <FileDown className="w-3.5 h-3.5 mr-1" />CSV
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex items-center justify-between text-sm bg-muted/40 rounded-lg px-4 py-3">
+          <span className="text-muted-foreground">{summaryList.length} {isEs ? "lote(s)" : "batch(es)"}</span>
+          <span className="font-mono font-bold text-lg text-accent">{fmtMoney(summaryTotal, s.company.currency)}</span>
+        </div>
+      </Section>
+
+      <Section
+        title={isEs ? "Generar lote semanal" : "Generate weekly batch"}
+        desc={isEs ? "Consolida los estados de trabajo aprobados de un técnico en un solo pago." : "Consolidates a technician's approved work statements into one payable."}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          <div className="sm:col-span-2"><Label className="text-xs">{isEs ? "Técnico" : "Technician"}</Label>
+            <Select value={genTech || "none"} onValueChange={(v) => setGenTech(v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder={isEs ? "Elegir…" : "Pick…"} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {technicians.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
+            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
+            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </div>
+        </div>
+
+        {preview && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1">
+                {isEs ? "Elegibles" : "Eligible"} ({preview.eligible.length})
+              </p>
+              {preview.eligible.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{isEs ? "Ninguno." : "None."}</p>
+              ) : (
+                <div className="space-y-1">
+                  {preview.eligible.map((w) => (
+                    <div key={w.id} className="flex justify-between text-sm bg-emerald-500/5 border border-emerald-500/20 rounded px-2 py-1">
+                      <span>{w.number}</span>
+                      <span className="font-mono">{fmtMoney(workStatementTotal(w, s.invoices.find((i) => i.id === w.invoiceId)), s.company.currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {preview.excluded.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-1">
+                  {isEs ? "Excluidos" : "Excluded"} ({preview.excluded.length})
+                </p>
+                <div className="space-y-1">
+                  {preview.excluded.map(({ ws, reason }) => (
+                    <div key={ws.id} className="flex justify-between text-xs bg-muted/40 rounded px-2 py-1 text-muted-foreground">
+                      <span>{ws.number}</span>
+                      <span>{EXCLUSION_LABEL[reason]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Button onClick={generate} disabled={!preview.eligible.length}>
+              <Plus className="w-4 h-4 mr-2" />{isEs ? "Generar lote" : "Generate batch"}
+            </Button>
+          </div>
+        )}
+      </Section>
+
+      <Section title={isEs ? "Lotes semanales" : "Weekly batches"}>
+        {list.length === 0 ? (
+          <Empty msg={isEs ? "Sin lotes todavía." : "No batches yet."} />
+        ) : (
+          <div className="space-y-3">
+            {list.map((w) => {
+              const tech = s.agents.find((a) => a.id === w.technicianId);
+              const total = weeklyStatementTotal(w, s.workStatements, s.invoices);
+              return (
+                <Card key={w.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-semibold text-sm">{w.number}</span>
+                        <span className="text-muted-foreground text-xs">·</span>
+                        <span className="text-sm">{tech?.name ?? "—"}</span>
+                        <Badge variant={w.status === "paid" ? "default" : w.status === "approved" ? "secondary" : "outline"}>{w.status}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CalendarRange className="w-3 h-3" />{w.periodStart} – {w.periodEnd} · {w.workStatementIds.length} {isEs ? "estados" : "statements"}
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold font-mono">{fmtMoney(total, s.company.currency)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                    {w.status === "locked" && (
+                      <Button size="sm" onClick={() => { s.approveWeeklyStatement(w.id, s.currentUserName); toast.success(isEs ? "Aprobado." : "Approved."); }}>
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />{isEs ? "Aprobar" : "Approve"}
+                      </Button>
+                    )}
+                    {w.status === "approved" && (
+                      <Button size="sm" onClick={() => { setPayId(w.id); setPayRef(""); }}>
+                        <DollarSign className="w-3.5 h-3.5 mr-1" />{isEs ? "Marcar pagado" : "Mark paid"}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="ml-auto" onClick={() => {
+                      if (!confirm(isEs ? "¿Eliminar este lote? Los estados de trabajo quedarán elegibles de nuevo." : "Delete this batch? Its work statements become eligible again.")) return;
+                      s.removeWeeklyStatement(w.id);
+                    }}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      <Dialog open={!!paying} onOpenChange={(o) => !o && setPayId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{isEs ? "Marcar como pagado" : "Mark as paid"}</DialogTitle>
+            <DialogDescription>{paying?.number}</DialogDescription>
+          </DialogHeader>
+          <div><Label className="text-xs">{isEs ? "Referencia de pago" : "Payment reference"}</Label>
+            <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder={isEs ? "ej. ACH #1234" : "e.g. ACH #1234"} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayId(null)}>{isEs ? "Cancelar" : "Cancel"}</Button>
+            <Button onClick={() => {
+              if (!paying) return;
+              s.markWeeklyStatementPaid(paying.id, payRef.trim());
+              setPayId(null);
+              toast.success(isEs ? "Marcado como pagado." : "Marked as paid.");
+            }}>{isEs ? "Confirmar" : "Confirm"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

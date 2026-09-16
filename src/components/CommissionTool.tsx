@@ -17,7 +17,7 @@ import {
   Wallet, Calculator, CalendarDays, BookTemplate, MessageSquare, HelpCircle, Shield, UserRound,
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
-  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck,
+  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -44,7 +44,7 @@ import {
   ExplainDialog, DisputeDialog,
 } from "@/components/ExtraPanels";
 import { DashboardPanel, ReportsPanel, YearEnd1099Panel, TaxReserveByStateEditor } from "@/components/NewPanels";
-import { CustomerInvoicesPanel, WorkStatementsPanel } from "@/components/BillingPanels";
+import { CustomerInvoicesPanel, WorkStatementsPanel, WeeklyStatementsPanel } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
@@ -66,6 +66,7 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
     { id: "billing", label: t("nav_billing"), tabs: [
       { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
       { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
+      { id: "weekly-statements", label: t("tab_weekly_statements"), icon: CalendarRange },
     ]},
     { id: "team", label: t("nav_team"), tabs: [
       { id: "agents", label: t("tab_team"), icon: Users },
@@ -707,6 +708,7 @@ export default function CommissionTool() {
             <TabsContent value="generate"><GeneratePanel payouts={payouts} /></TabsContent>
             <TabsContent value="users"><UserManagementPanel /></TabsContent>
             <TabsContent value="customer-invoices"><CustomerInvoicesPanel /></TabsContent>
+            <TabsContent value="weekly-statements"><WeeklyStatementsPanel /></TabsContent>
           </>}
         </Tabs>
         )}

@@ -432,6 +432,60 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_technician_statements: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          technician_id: string
+          period_start: string
+          period_end: string
+          status: "open" | "locked" | "approved" | "paid"
+          work_statement_ids: string[]
+          adjustments: { label: string; amount: number }[]
+          approved_at: string | null
+          approved_by: string | null
+          paid_at: string | null
+          payment_reference: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          technician_id: string
+          period_start: string
+          period_end: string
+          status?: "open" | "locked" | "approved" | "paid"
+          work_statement_ids?: string[]
+          adjustments?: { label: string; amount: number }[]
+          approved_at?: string | null
+          approved_by?: string | null
+          paid_at?: string | null
+          payment_reference?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          technician_id?: string
+          period_start?: string
+          period_end?: string
+          status?: "open" | "locked" | "approved" | "paid"
+          work_statement_ids?: string[]
+          adjustments?: { label: string; amount: number }[]
+          approved_at?: string | null
+          approved_by?: string | null
+          paid_at?: string | null
+          payment_reference?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       adjustments: {
         Row: {
           id: string

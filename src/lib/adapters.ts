@@ -7,6 +7,7 @@ import type {
   Product, CompensationPosition, PayoutDocument, InvoiceExtra, CustomerPayment,
   CustomerInvoice, CustomerInvoiceStatus, CustomerInvoiceLineItem, CustomerInvoicePayment,
   InvoiceTemplateId, RateRule, TechnicianWorkStatement, WorkStatementStatus, WorkStatementAuditEntry,
+  WeeklyTechnicianStatement, WeeklyStatementStatus, WeeklyAdjustment,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -432,6 +433,45 @@ export function workStatementToRow(w: TechnicianWorkStatement, companyId: string
     attachments: w.attachments,
     approval_history: w.approvalHistory,
     weekly_statement_id: w.weeklyStatementId,
+  };
+}
+
+// ─── WEEKLY TECHNICIAN STATEMENTS ────────────────────────────────────────────
+
+export function adaptWeeklyStatement(row: Tables<"weekly_technician_statements">): WeeklyTechnicianStatement {
+  return {
+    id: row.id,
+    number: row.number,
+    technicianId: row.technician_id,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    status: row.status as WeeklyStatementStatus,
+    workStatementIds: (row.work_statement_ids as string[] | null) ?? [],
+    adjustments: (row.adjustments as unknown as WeeklyAdjustment[] | null) ?? [],
+    approvedAt: row.approved_at,
+    approvedBy: row.approved_by,
+    paidAt: row.paid_at,
+    paymentReference: row.payment_reference,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function weeklyStatementToRow(w: WeeklyTechnicianStatement, companyId: string) {
+  return {
+    id: w.id,
+    company_id: companyId,
+    number: w.number,
+    technician_id: w.technicianId,
+    period_start: w.periodStart,
+    period_end: w.periodEnd,
+    status: w.status,
+    work_statement_ids: w.workStatementIds,
+    adjustments: w.adjustments,
+    approved_at: w.approvedAt,
+    approved_by: w.approvedBy,
+    paid_at: w.paidAt,
+    payment_reference: w.paymentReference,
   };
 }
 
