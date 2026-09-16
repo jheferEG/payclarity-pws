@@ -12,13 +12,28 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Pencil } from "lucide-react";
+import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Pencil, Paperclip, CheckCircle2, XCircle } from "lucide-react";
 import {
-  useStore, customerInvoiceTotals,
+  useStore, customerInvoiceTotals, workStatementTotal,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
+  type TechnicianWorkStatement, type WorkStatementStatus,
 } from "@/lib/commission-store";
 import { fmtMoney } from "@/lib/commission-calc";
 import { buildCustomerInvoicePDF, buildCustomerReceiptPDF } from "@/lib/generate-invoices";
+
+function pickAttachmentFile(onDone: (a: { name: string; url: string }) => void) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*,.pdf";
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => onDone({ name: file.name, url: e.target?.result as string });
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
 
 /* ---------- Shared SectionCard (duplicated lightweight, matches other panels) ---------- */
 function Section({ title, desc, children, action }: { title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode }) {
@@ -432,6 +447,265 @@ function RecordPaymentDialog({ ci, onClose }: { ci: CustomerInvoice; onClose: ()
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{isEs ? "Cancelar" : "Cancel"}</Button>
           <Button onClick={submit}>{isEs ? "Registrar" : "Record"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ========================================================================
+ * TECHNICIAN WORK STATEMENTS — Phase 2 of Billing & Technician Payables.
+ * One per technician per job (isGeneralInvoice=true invoice), the
+ * approval/audit/attachments layer that sits on top of it. Never touches
+ * the underlying invoice's fixedPay/extras — those still drive calcPayouts.
+ * ======================================================================== */
+const WS_STATUS_ORDER: WorkStatementStatus[] = ["draft", "submitted", "approved", "rejected", "paid"];
+const WS_STATUS_LABEL_ES: Record<WorkStatementStatus, string> = {
+  draft: "Borrador", submitted: "Enviado", approved: "Aprobado", rejected: "Rechazado", paid: "Pagado",
+};
+const WS_STATUS_LABEL_EN: Record<WorkStatementStatus, string> = {
+  draft: "Draft", submitted: "Submitted", approved: "Approved", rejected: "Rejected", paid: "Paid",
+};
+function wsStatusVariant(st: WorkStatementStatus): "default" | "outline" | "destructive" | "secondary" {
+  if (st === "approved" || st === "paid") return "default";
+  if (st === "rejected") return "destructive";
+  if (st === "submitted") return "secondary";
+  return "outline";
+}
+
+export function WorkStatementsPanel() {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const STATUS_LABEL = isEs ? WS_STATUS_LABEL_ES : WS_STATUS_LABEL_EN;
+  const isAdmin = s.role !== "rep";
+  const myAgentId = !isAdmin ? s.activeAgentId : null;
+  const [filter, setFilter] = useState<"all" | WorkStatementStatus>("all");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const visible = isAdmin ? s.workStatements : s.workStatements.filter((w) => w.technicianId === myAgentId);
+  const list = visible.filter((w) => filter === "all" || w.status === filter).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const counts: Record<string, number> = { all: visible.length };
+  for (const st of WS_STATUS_ORDER) counts[st] = visible.filter((w) => w.status === st).length;
+
+  const editing = s.workStatements.find((w) => w.id === editId) ?? null;
+  const rejecting = s.workStatements.find((w) => w.id === rejectId) ?? null;
+
+  useEffect(() => {
+    const dl = s.deepLink;
+    if (!dl || !dl.openWorkStatement || !dl.workStatementId) return;
+    setEditId(dl.workStatementId);
+    s.setDeepLink(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.deepLink?.ts]);
+
+  return (
+    <>
+      <Section
+        title={isEs ? "Estados de trabajo del técnico" : "Technician Work Statements"}
+        desc={isEs
+          ? "Una hoja de aprobación por técnico y trabajo — no cambia el pago fijo del invoice general, solo el flujo de aprobación alrededor."
+          : "One approval sheet per technician per job — doesn't change the general invoice's fixed pay, just the approval workflow around it."}
+      >
+        <div className="flex flex-wrap gap-2 mb-4">
+          <Button size="sm" variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
+            {isEs ? "Todos" : "All"} ({counts.all})
+          </Button>
+          {WS_STATUS_ORDER.map((st) => (
+            <Button key={st} size="sm" variant={filter === st ? "default" : "outline"} onClick={() => setFilter(st)}>
+              {STATUS_LABEL[st]} ({counts[st] ?? 0})
+            </Button>
+          ))}
+        </div>
+
+        {list.length === 0 ? (
+          <Empty msg={isEs ? "Sin estados de trabajo todavía." : "No work statements yet."} />
+        ) : (
+          <div className="space-y-3">
+            {list.map((w) => {
+              const inv = s.invoices.find((i) => i.id === w.invoiceId);
+              const tech = s.agents.find((a) => a.id === w.technicianId);
+              const total = workStatementTotal(w, inv);
+              return (
+                <Card key={w.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-semibold text-sm">{w.number}</span>
+                        <span className="text-muted-foreground text-xs">·</span>
+                        <span className="text-sm">{tech?.name ?? "—"}</span>
+                        <Badge variant={wsStatusVariant(w.status)}>{STATUS_LABEL[w.status]}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {isEs ? "Trabajo" : "Job"}: {inv?.number ?? "—"} · {inv?.customerName || "—"}
+                        {inv?.jobType && <> · {inv.jobType === "installation" ? (isEs ? "Instalación" : "Installation") : (isEs ? "Servicio" : "Service")}</>}
+                        {w.rateLabelSnapshot && <> · {w.rateLabelSnapshot}</>}
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold font-mono shrink-0">{fmtMoney(total, s.company.currency)}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                    <Button size="sm" variant="outline" onClick={() => setEditId(w.id)}>
+                      <Pencil className="w-3.5 h-3.5 mr-1" />{isEs ? "Editar" : "Edit"}
+                    </Button>
+                    {w.status === "draft" && (
+                      <Button size="sm" variant="outline" onClick={() => { s.submitWorkStatement(w.id, s.currentUserName); toast.success(isEs ? "Enviado para aprobación." : "Submitted for approval."); }}>
+                        {isEs ? "Enviar" : "Submit"}
+                      </Button>
+                    )}
+                    {isAdmin && w.status === "submitted" && (
+                      <>
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => { s.approveWorkStatement(w.id, s.currentUserName); toast.success(isEs ? "Aprobado." : "Approved."); }}>
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />{isEs ? "Aprobar" : "Approve"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50"
+                          onClick={() => setRejectId(w.id)}>
+                          <XCircle className="w-3.5 h-3.5 mr-1" />{isEs ? "Rechazar" : "Reject"}
+                        </Button>
+                      </>
+                    )}
+                    {w.attachments.length > 0 && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Paperclip className="w-3.5 h-3.5" />{w.attachments.length}
+                      </span>
+                    )}
+                    {isAdmin && (
+                      <Button size="sm" variant="ghost" className="ml-auto" onClick={() => {
+                        if (!confirm(isEs ? "¿Eliminar este estado de trabajo?" : "Delete this work statement?")) return;
+                        s.removeWorkStatement(w.id);
+                      }}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {editing && <WorkStatementEditDialog ws={editing} onClose={() => setEditId(null)} readOnly={!isAdmin} />}
+
+      <Dialog open={!!rejecting} onOpenChange={(o) => !o && setRejectId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{isEs ? "Motivo del rechazo" : "Rejection reason"}</DialogTitle>
+          </DialogHeader>
+          <Textarea rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejectId(null); setRejectReason(""); }}>{isEs ? "Cancelar" : "Cancel"}</Button>
+            <Button variant="destructive" onClick={() => {
+              if (!rejecting) return;
+              s.rejectWorkStatement(rejecting.id, s.currentUserName, rejectReason.trim() || (isEs ? "Sin motivo" : "No reason given"));
+              setRejectId(null); setRejectReason("");
+              toast(isEs ? "Rechazado." : "Rejected.");
+            }}>{isEs ? "Rechazar" : "Reject"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function WorkStatementEditDialog({ ws, onClose, readOnly }: { ws: TechnicianWorkStatement; onClose: () => void; readOnly?: boolean }) {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const [draft, setDraft] = useState<TechnicianWorkStatement>(ws);
+  useEffect(() => setDraft(ws), [ws.id]);
+  const inv = s.invoices.find((i) => i.id === ws.invoiceId);
+  const total = workStatementTotal(draft, inv);
+
+  const save = () => {
+    s.updateWorkStatement(draft.id, draft);
+    toast.success(isEs ? "Guardado." : "Saved.");
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{draft.number}</DialogTitle>
+          <DialogDescription>
+            {inv?.customerName || "—"} · {inv?.number ?? "—"} · {draft.rateLabelSnapshot}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label className="text-xs">{isEs ? "Tarifa base (congelada)" : "Base rate (frozen)"}</Label>
+            <Input disabled value={fmtMoney(draft.baseRateSnapshot, s.company.currency)} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Tarifa de millaje" : "Mileage rate"}</Label>
+            <Input disabled value={fmtMoney(draft.mileageRateSnapshot, s.company.currency)} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Millas" : "Mileage"}</Label>
+            <NumField step="1" value={draft.mileage} onChange={(n) => setDraft({ ...draft, mileage: n })} disabled={readOnly} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Reembolso de materiales" : "Material reimbursement"}</Label>
+            <NumField step="0.01" value={draft.materialReimbursement} onChange={(n) => setDraft({ ...draft, materialReimbursement: n })} disabled={readOnly} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Deducciones" : "Deductions"}</Label>
+            <NumField step="0.01" value={draft.deductions} onChange={(n) => setDraft({ ...draft, deductions: n })} disabled={readOnly} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Contracargos" : "Chargebacks"}</Label>
+            <NumField step="0.01" value={draft.chargebacks} onChange={(n) => setDraft({ ...draft, chargebacks: n })} disabled={readOnly} />
+          </div>
+          <div className="col-span-2"><Label className="text-xs">{isEs ? "Correcciones" : "Corrections"}</Label>
+            <NumField step="0.01" value={draft.corrections} onChange={(n) => setDraft({ ...draft, corrections: n })} disabled={readOnly} />
+          </div>
+        </div>
+
+        <div className="flex justify-end text-sm mt-2">
+          <span className="font-bold text-accent">{isEs ? "Total a pagar" : "Total due"}: {fmtMoney(total, s.company.currency)}</span>
+        </div>
+
+        <div className="mt-3">
+          <Label className="text-xs">{isEs ? "Notas" : "Notes"}</Label>
+          <Textarea rows={2} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} disabled={readOnly} />
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs font-semibold">{isEs ? "Adjuntos / fotos" : "Attachments / photos"}</Label>
+            {!readOnly && (
+              <Button variant="outline" size="sm" onClick={() => pickAttachmentFile((a) => s.addWorkStatementAttachment(draft.id, a))}>
+                <Paperclip className="w-3.5 h-3.5 mr-1" />{isEs ? "Adjuntar" : "Attach"}
+              </Button>
+            )}
+          </div>
+          {draft.attachments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{isEs ? "Sin adjuntos." : "No attachments."}</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {draft.attachments.map((a, i) => (
+                a.url.startsWith("data:image") ? (
+                  <img key={i} src={a.url} alt={a.name} className="h-16 w-16 object-cover rounded border border-border" />
+                ) : (
+                  <a key={i} href={a.url} download={a.name} className="text-xs px-2 py-1 rounded border border-border bg-muted/40">{a.name}</a>
+                )
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <Label className="text-xs font-semibold">{isEs ? "Historial de aprobación" : "Approval history"}</Label>
+          <div className="space-y-1 mt-1">
+            {draft.approvalHistory.map((ev, i) => (
+              <p key={i} className="text-xs text-muted-foreground">
+                {new Date(ev.at).toLocaleString()} — <span className="font-medium">{ev.actor}</span> {ev.action}{ev.message ? `: ${ev.message}` : ""}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{isEs ? "Cerrar" : "Close"}</Button>
+          {!readOnly && <Button onClick={save}>{isEs ? "Guardar" : "Save"}</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

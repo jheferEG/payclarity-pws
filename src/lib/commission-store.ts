@@ -205,9 +205,54 @@ export type CompensationPosition = {
   // flat amount per job — installation vs. service — with no product-cost
   // cascade and no override to sponsors. Level/cost don't apply to them.
   isGeneralInvoice?: boolean;
-  installFixedPay?: number;        // flat $ for an "installation" job
+  installFixedPay?: number;        // flat $ for an "installation" job — used when no rateRules match
   serviceFixedPay?: number;        // flat $ for a "service" job — rates vary by office, so both are editable
+  // Rate Plans (Phase 2): more specific rules than the two flat rates above —
+  // matched by job type / territory / product, highest priority active match
+  // wins. Falls back to installFixedPay/serviceFixedPay when nothing matches.
+  rateRules?: RateRule[];
 };
+
+export type RateRule = {
+  id: string;
+  label: string;
+  jobType: "installation" | "service" | "any";
+  territory: string;   // free-text match against the job's service address/state; "" = any
+  productRule: string; // free-text match against the job's product; "" = any
+  rateMode: "flat" | "multiplier"; // multiplier × the position's installFixedPay/serviceFixedPay
+  baseRate: number;
+  mileageRate: number;
+  priority: number; // higher wins when multiple rules match
+  active: boolean;
+};
+
+/** Highest-priority active rule matching the given context, or null to fall
+ *  back to the position's flat installFixedPay/serviceFixedPay. Territory/
+ *  product match by simple case-insensitive substring — good enough for a
+ *  free-text filter, no address-parsing needed. */
+export function resolveRateRule(
+  position: CompensationPosition | undefined,
+  ctx: { jobType: "installation" | "service"; territory?: string; productRule?: string }
+): RateRule | null {
+  if (!position?.rateRules?.length) return null;
+  const territory = (ctx.territory || "").toLowerCase();
+  const product = (ctx.productRule || "").toLowerCase();
+  const matches = position.rateRules.filter((r) =>
+    r.active &&
+    (r.jobType === "any" || r.jobType === ctx.jobType) &&
+    (!r.territory || territory.includes(r.territory.toLowerCase())) &&
+    (!r.productRule || product.includes(r.productRule.toLowerCase()))
+  );
+  if (!matches.length) return null;
+  return matches.reduce((best, r) => (r.priority > best.priority ? r : best), matches[0]);
+}
+
+/** The $ amount a rate rule (or the position's flat fallback) resolves to. */
+export function rateRuleAmount(rule: RateRule | null, position: CompensationPosition | undefined, jobType: "installation" | "service"): number {
+  const flatFallback = jobType === "installation" ? position?.installFixedPay ?? 450 : position?.serviceFixedPay ?? 325;
+  if (!rule) return flatFallback;
+  return rule.rateMode === "multiplier" ? flatFallback * rule.baseRate : rule.baseRate;
+}
 
 export type InvoiceTemplateId =
   | "classic"
@@ -347,6 +392,48 @@ export function customerInvoiceTotals(ci: CustomerInvoice) {
   const paid = ci.payments.reduce((s, p) => s + (p.amount || 0), 0);
   const balance = Math.max(0, total - paid);
   return { lineTotal, total, paid, balance };
+}
+
+/** Phase 2: the approval/audit workflow layer on top of a "general invoice"
+ *  job (isGeneralInvoice=true) — one per technician per job, same
+ *  1:1-with-the-master-Invoice pattern as PayoutDocument/CustomerInvoice.
+ *  The Invoice itself keeps being the actual pay record (fixedPay/extras
+ *  feed calcPayouts); this document is the paperwork around it: rate
+ *  snapshot, mileage/materials/deductions, attachments, approval history,
+ *  and a link to the Weekly Technician Statement that will eventually
+ *  batch it (Phase 3 — null until then). */
+export type WorkStatementStatus = "draft" | "submitted" | "approved" | "rejected" | "paid";
+
+export type WorkStatementAuditEntry = { at: string; actor: string; action: string; message: string };
+
+export type TechnicianWorkStatement = {
+  id: string;
+  number: string; // "WS-000001"
+  invoiceId: string; // the job — an Invoice with isGeneralInvoice=true
+  technicianId: string; // == invoice.agentId, denormalized for convenience
+  status: WorkStatementStatus;
+  rateRuleId: string | null;
+  rateLabelSnapshot: string; // e.g. "Standard Installation Plan" or "Flat rate" — frozen at creation
+  baseRateSnapshot: number;
+  mileageRateSnapshot: number;
+  mileage: number;
+  materialReimbursement: number;
+  deductions: number;
+  chargebacks: number;
+  corrections: number;
+  notes: string;
+  attachments: { name: string; url: string }[]; // photos/files as data URLs, same pattern as agent/product photos
+  approvalHistory: WorkStatementAuditEntry[];
+  weeklyStatementId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Total due is derived, never stored — same principle as customerInvoiceTotals. */
+export function workStatementTotal(ws: TechnicianWorkStatement, inv: Invoice | undefined) {
+  const jobPay = inv ? (inv.fixedPay || 0) + (inv.extras || []).reduce((s, x) => s + (x.amount || 0), 0) : 0;
+  const mileagePay = ws.mileage * ws.mileageRateSnapshot;
+  return Math.max(0, jobPay + mileagePay + ws.materialReimbursement - ws.deductions - ws.chargebacks - ws.corrections);
 }
 
 export type RequestStatus =
@@ -545,6 +632,15 @@ type State = {
   recordCustomerInvoicePayment: (id: string, payment: Omit<CustomerInvoicePayment, "id">) => void;
   removeCustomerInvoice: (id: string) => void;
 
+  workStatements: TechnicianWorkStatement[];
+  createWorkStatement: (invoiceId: string) => string;
+  updateWorkStatement: (id: string, patch: Partial<TechnicianWorkStatement>) => void;
+  submitWorkStatement: (id: string, by: string) => void;
+  approveWorkStatement: (id: string, by: string) => void;
+  rejectWorkStatement: (id: string, by: string, reason: string) => void;
+  addWorkStatementAttachment: (id: string, attachment: { name: string; url: string }) => void;
+  removeWorkStatement: (id: string) => void;
+
   addDispute: (
     d: Omit<
       Dispute,
@@ -618,11 +714,13 @@ type State = {
     invoiceId?: string;
     disputeId?: string;
     customerInvoiceId?: string;
+    workStatementId?: string;
     openTimeline?: boolean;
     openSplit?: boolean;
     openDispute?: boolean;
     openEdit?: boolean;
     openCustomerInvoice?: boolean;
+    openWorkStatement?: boolean;
   } | null;
   setDeepLink: (d: State["deepLink"]) => void;
 
@@ -1291,6 +1389,74 @@ export const useStore = create<State>()(
         customerInvoices: s.customerInvoices.filter((d) => d.id !== id),
       })),
 
+      workStatements: [],
+      createWorkStatement: (invoiceId) => {
+        const id = uid();
+        set((s) => {
+          const inv = s.invoices.find((i) => i.id === invoiceId);
+          if (!inv) return {};
+          const agent = s.agents.find((a) => a.id === inv.agentId);
+          const position = s.positions.find((p) => p.name === agent?.level);
+          const jobType = inv.jobType ?? "installation";
+          const rule = resolveRateRule(position, { jobType, territory: agent?.state, productRule: position?.productRule });
+          const now = new Date().toISOString();
+          const seq = s.workStatements.length + 1;
+          const doc: TechnicianWorkStatement = {
+            id,
+            number: `WS-${String(seq).padStart(6, "0")}`,
+            invoiceId,
+            technicianId: inv.agentId,
+            status: "draft",
+            rateRuleId: rule?.id ?? null,
+            rateLabelSnapshot: rule?.label ?? (s.language === "es" ? "Tarifa fija" : "Flat rate"),
+            baseRateSnapshot: rateRuleAmount(rule, position, jobType),
+            mileageRateSnapshot: rule?.mileageRate ?? 0,
+            mileage: 0,
+            materialReimbursement: 0,
+            deductions: 0,
+            chargebacks: 0,
+            corrections: 0,
+            notes: "",
+            attachments: [],
+            approvalHistory: [{ at: now, actor: s.currentUserName, action: "created", message: "" }],
+            weeklyStatementId: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          return { workStatements: [...s.workStatements, doc] };
+        });
+        return id;
+      },
+      updateWorkStatement: (id, patch) => set((s) => ({
+        workStatements: s.workStatements.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w)),
+      })),
+      submitWorkStatement: (id, by) => set((s) => ({
+        workStatements: s.workStatements.map((w) => w.id === id
+          ? { ...w, status: "submitted", updatedAt: new Date().toISOString(),
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "submitted", message: "" }] }
+          : w),
+      })),
+      approveWorkStatement: (id, by) => set((s) => ({
+        workStatements: s.workStatements.map((w) => w.id === id
+          ? { ...w, status: "approved", updatedAt: new Date().toISOString(),
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "approved", message: "" }] }
+          : w),
+      })),
+      rejectWorkStatement: (id, by, reason) => set((s) => ({
+        workStatements: s.workStatements.map((w) => w.id === id
+          ? { ...w, status: "rejected", updatedAt: new Date().toISOString(),
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "rejected", message: reason }] }
+          : w),
+      })),
+      addWorkStatementAttachment: (id, attachment) => set((s) => ({
+        workStatements: s.workStatements.map((w) => w.id === id
+          ? { ...w, attachments: [...w.attachments, attachment], updatedAt: new Date().toISOString() }
+          : w),
+      })),
+      removeWorkStatement: (id) => set((s) => ({
+        workStatements: s.workStatements.filter((w) => w.id !== id),
+      })),
+
       addDispute: (d) => {
         const id = uid();
         set((s) => {
@@ -1558,6 +1724,7 @@ export const useStore = create<State>()(
           products: [],
           payoutDocuments: [],
           customerInvoices: [],
+          workStatements: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",

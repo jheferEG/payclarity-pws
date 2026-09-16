@@ -41,6 +41,7 @@ const D: Dict = {
   tab_dashboard: { es: "Dashboard", en: "Dashboard" },
   tab_invoices: { es: "Invoices", en: "Invoices" },
   tab_customer_invoices: { es: "Facturas de cliente", en: "Customer Invoices" },
+  tab_work_statements: { es: "Estados de trabajo", en: "Work Statements" },
   tab_my_invoices: { es: "Mis invoices", en: "My invoices" },
   tab_wallet: { es: "Cartera", en: "Wallet" },
   tab_my_wallet: { es: "Mi cartera", en: "My wallet" },

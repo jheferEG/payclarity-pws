@@ -17,7 +17,7 @@ import {
   Wallet, Calculator, CalendarDays, BookTemplate, MessageSquare, HelpCircle, Shield, UserRound,
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
-  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText,
+  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment } from "@/lib/commission-store";
+import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition, type RateRule } from "@/lib/commission-store";
 import {
   calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
@@ -44,7 +44,7 @@ import {
   ExplainDialog, DisputeDialog,
 } from "@/components/ExtraPanels";
 import { DashboardPanel, ReportsPanel, YearEnd1099Panel, TaxReserveByStateEditor } from "@/components/NewPanels";
-import { CustomerInvoicesPanel } from "@/components/BillingPanels";
+import { CustomerInvoicesPanel, WorkStatementsPanel } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
@@ -65,6 +65,7 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
     { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_invoices"), icon: Receipt }] },
     { id: "billing", label: t("nav_billing"), tabs: [
       { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
+      { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
     ]},
     { id: "team", label: t("nav_team"), tabs: [
       { id: "agents", label: t("tab_team"), icon: Users },
@@ -99,6 +100,9 @@ function makeRepGroups(t: (key: any) => string): NavGroup[] {
   return [
     { id: "team", label: t("nav_wallet"), tabs: [{ id: "wallet", label: t("tab_my_wallet"), icon: Wallet }] },
     { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_my_invoices"), icon: Receipt }] },
+    { id: "billing", label: t("nav_billing"), tabs: [
+      { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
+    ]},
     { id: "payouts", label: t("nav_payouts"), tabs: [
       { id: "calendar", label: t("tab_my_payouts"), icon: CalendarDays },
       { id: "disputes", label: t("tab_my_requests"), icon: MessageSquare },
@@ -685,6 +689,7 @@ export default function CommissionTool() {
           <TabsContent value="simulator"><SimulatorPanel /></TabsContent>
           <TabsContent value="calendar"><CalendarPanel /></TabsContent>
           <TabsContent value="disputes"><DisputesPanel /></TabsContent>
+          <TabsContent value="work-statements"><WorkStatementsPanel /></TabsContent>
           {!isRep && <>
             <TabsContent value="reports"><ReportsPanel /></TabsContent>
             <TabsContent value="yearend"><YearEnd1099Panel /></TabsContent>
@@ -1931,6 +1936,17 @@ function InvoicesPanel() {
                               {s.language === "es" ? "Facturar" : "Bill customer"}
                             </Button>
                           )}
+                          {isAdmin && inv.isGeneralInvoice && (
+                            <Button variant="ghost" size="sm" title={s.language === "es" ? "Estado de trabajo" : "Work statement"}
+                              onClick={() => {
+                                const existing = s.workStatements.find((w) => w.invoiceId === inv.id);
+                                const id = existing ? existing.id : s.createWorkStatement(inv.id);
+                                s.setDeepLink({ ts: Date.now(), tab: "work-statements", workStatementId: id, openWorkStatement: true });
+                              }}>
+                              <ClipboardCheck className="w-4 h-4 mr-1" />
+                              {s.language === "es" ? "Estado de trabajo" : "Work statement"}
+                            </Button>
+                          )}
                           {inv.saleType === "cash" && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Invoice para el cliente (efectivo)" : "Customer invoice (cash)"}
                               onClick={() => {
@@ -2363,6 +2379,79 @@ function CustomerPaymentsEditor({
   );
 }
 
+/** Rate Plans (Phase 2 of Billing & Technician Payables) — more specific
+ * rules than the position's two flat rates, matched by job type/territory/
+ * product; highest-priority active match wins (see resolveRateRule). */
+function RateRulesEditor({ position, isEs, currency, onChange }: {
+  position: CompensationPosition; isEs: boolean; currency: string; onChange: (rules: RateRule[]) => void;
+}) {
+  const rules = position.rateRules ?? [];
+  const add = () => onChange([...rules, {
+    id: crypto.randomUUID(), label: isEs ? "Nueva regla" : "New rule", jobType: "any",
+    territory: "", productRule: "", rateMode: "flat", baseRate: 0, mileageRate: 0.5, priority: 0, active: true,
+  }]);
+  const update = (i: number, patch: Partial<RateRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const remove = (i: number) => onChange(rules.filter((_, j) => j !== i));
+
+  return (
+    <div className="border-t pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <Label className="text-xs font-semibold">{isEs ? "Rate Plans (reglas específicas)" : "Rate Plans (specific rules)"}</Label>
+        <Button variant="outline" size="sm" onClick={add}><Plus className="w-3 h-3 mr-1" />{isEs ? "Agregar regla" : "Add rule"}</Button>
+      </div>
+      {rules.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {isEs ? "Sin reglas — se usa siempre el pago fijo de arriba." : "No rules — the flat pay above always applies."}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {rules.map((r, i) => (
+            <div key={r.id} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end p-2 rounded-md border border-border/60">
+              <div className="lg:col-span-2"><Label className="text-[10px]">{isEs ? "Nombre" : "Label"}</Label>
+                <Input className="h-8" value={r.label} onChange={(e) => update(i, { label: e.target.value })} />
+              </div>
+              <div><Label className="text-[10px]">{isEs ? "Tipo" : "Job type"}</Label>
+                <Select value={r.jobType} onValueChange={(v: RateRule["jobType"]) => update(i, { jobType: v })}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">{isEs ? "Cualquiera" : "Any"}</SelectItem>
+                    <SelectItem value="installation">{isEs ? "Instalación" : "Installation"}</SelectItem>
+                    <SelectItem value="service">{isEs ? "Servicio" : "Service"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-[10px]">{isEs ? "Territorio" : "Territory"}</Label>
+                <Input className="h-8" value={r.territory} placeholder={isEs ? "cualquiera" : "any"} onChange={(e) => update(i, { territory: e.target.value })} />
+              </div>
+              <div><Label className="text-[10px]">{isEs ? "Producto" : "Product"}</Label>
+                <Input className="h-8" value={r.productRule} placeholder={isEs ? "cualquiera" : "any"} onChange={(e) => update(i, { productRule: e.target.value })} />
+              </div>
+              <div><Label className="text-[10px]">{isEs ? "Modo" : "Mode"}</Label>
+                <Select value={r.rateMode} onValueChange={(v: RateRule["rateMode"]) => update(i, { rateMode: v })}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flat">{isEs ? "Fijo $" : "Flat $"}</SelectItem>
+                    <SelectItem value="multiplier">{isEs ? "Multiplicador ×" : "Multiplier ×"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-[10px]">{r.rateMode === "multiplier" ? "×" : `$ (${currency})`}</Label>
+                <NumField className="h-8" step={r.rateMode === "multiplier" ? "0.01" : "1"} value={r.baseRate} onChange={(n) => update(i, { baseRate: n })} />
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="flex-1"><Label className="text-[10px]">{isEs ? "Millaje $" : "Mileage $"}</Label>
+                  <NumField className="h-8" step="0.01" value={r.mileageRate} onChange={(n) => update(i, { mileageRate: n })} />
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => remove(i)}><Trash2 className="w-4 h-4" /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Plan ---------- */
 function PlanPanel() {
   const {
@@ -2434,6 +2523,7 @@ function PlanPanel() {
       isGeneralInvoice: false,
       installFixedPay: 450,
       serviceFixedPay: 325,
+      rateRules: [],
     });
     setJustAddedId(id);
   };
@@ -2577,6 +2667,10 @@ function PlanPanel() {
                             ? "Pago plano por trabajo — no genera overrides hacia los sponsors. Nivel/costo no aplican para este rol."
                             : "Flat pay per job — doesn't generate overrides to sponsors. Level/cost don't apply to this role."}
                         </p>
+                        <div className="md:col-span-4">
+                          <RateRulesEditor position={p} isEs={isEs} currency={company.currency}
+                            onChange={(rateRules) => updatePosition(p.id, { rateRules })} />
+                        </div>
                       </>
                     ) : (
                       <>

@@ -360,6 +360,78 @@ export type Database = {
         }
         Relationships: []
       }
+      technician_work_statements: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          invoice_id: string
+          technician_id: string
+          status: "draft" | "submitted" | "approved" | "rejected" | "paid"
+          rate_rule_id: string | null
+          rate_label_snapshot: string
+          base_rate_snapshot: number
+          mileage_rate_snapshot: number
+          mileage: number
+          material_reimbursement: number
+          deductions: number
+          chargebacks: number
+          corrections: number
+          notes: string
+          attachments: { name: string; url: string }[]
+          approval_history: { at: string; actor: string; action: string; message: string }[]
+          weekly_statement_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          invoice_id: string
+          technician_id: string
+          status?: "draft" | "submitted" | "approved" | "rejected" | "paid"
+          rate_rule_id?: string | null
+          rate_label_snapshot?: string
+          base_rate_snapshot?: number
+          mileage_rate_snapshot?: number
+          mileage?: number
+          material_reimbursement?: number
+          deductions?: number
+          chargebacks?: number
+          corrections?: number
+          notes?: string
+          attachments?: { name: string; url: string }[]
+          approval_history?: { at: string; actor: string; action: string; message: string }[]
+          weekly_statement_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          invoice_id?: string
+          technician_id?: string
+          status?: "draft" | "submitted" | "approved" | "rejected" | "paid"
+          rate_rule_id?: string | null
+          rate_label_snapshot?: string
+          base_rate_snapshot?: number
+          mileage_rate_snapshot?: number
+          mileage?: number
+          material_reimbursement?: number
+          deductions?: number
+          chargebacks?: number
+          corrections?: number
+          notes?: string
+          attachments?: { name: string; url: string }[]
+          approval_history?: { at: string; actor: string; action: string; message: string }[]
+          weekly_statement_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       adjustments: {
         Row: {
           id: string
@@ -1077,6 +1149,7 @@ export type Database = {
           is_general_invoice: boolean
           install_fixed_pay: number | null
           service_fixed_pay: number | null
+          rate_rules: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
           created_at: string
           updated_at: string
         }
@@ -1100,6 +1173,7 @@ export type Database = {
           is_general_invoice?: boolean
           install_fixed_pay?: number | null
           service_fixed_pay?: number | null
+          rate_rules?: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
           created_at?: string
           updated_at?: string
         }
@@ -1123,6 +1197,7 @@ export type Database = {
           is_general_invoice?: boolean
           install_fixed_pay?: number | null
           service_fixed_pay?: number | null
+          rate_rules?: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
           created_at?: string
           updated_at?: string
         }

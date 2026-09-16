@@ -6,7 +6,7 @@ import type {
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
   Product, CompensationPosition, PayoutDocument, InvoiceExtra, CustomerPayment,
   CustomerInvoice, CustomerInvoiceStatus, CustomerInvoiceLineItem, CustomerInvoicePayment,
-  InvoiceTemplateId,
+  InvoiceTemplateId, RateRule, TechnicianWorkStatement, WorkStatementStatus, WorkStatementAuditEntry,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -384,6 +384,57 @@ export function customerInvoiceToRow(d: CustomerInvoice, companyId: string) {
   };
 }
 
+// ─── TECHNICIAN WORK STATEMENTS ──────────────────────────────────────────────
+
+export function adaptWorkStatement(row: Tables<"technician_work_statements">): TechnicianWorkStatement {
+  return {
+    id: row.id,
+    number: row.number,
+    invoiceId: row.invoice_id,
+    technicianId: row.technician_id,
+    status: row.status as WorkStatementStatus,
+    rateRuleId: row.rate_rule_id,
+    rateLabelSnapshot: row.rate_label_snapshot,
+    baseRateSnapshot: Number(row.base_rate_snapshot),
+    mileageRateSnapshot: Number(row.mileage_rate_snapshot),
+    mileage: Number(row.mileage),
+    materialReimbursement: Number(row.material_reimbursement),
+    deductions: Number(row.deductions),
+    chargebacks: Number(row.chargebacks),
+    corrections: Number(row.corrections),
+    notes: row.notes,
+    attachments: (row.attachments as unknown as { name: string; url: string }[] | null) ?? [],
+    approvalHistory: (row.approval_history as unknown as WorkStatementAuditEntry[] | null) ?? [],
+    weeklyStatementId: row.weekly_statement_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function workStatementToRow(w: TechnicianWorkStatement, companyId: string) {
+  return {
+    id: w.id,
+    company_id: companyId,
+    number: w.number,
+    invoice_id: w.invoiceId,
+    technician_id: w.technicianId,
+    status: w.status,
+    rate_rule_id: w.rateRuleId,
+    rate_label_snapshot: w.rateLabelSnapshot,
+    base_rate_snapshot: w.baseRateSnapshot,
+    mileage_rate_snapshot: w.mileageRateSnapshot,
+    mileage: w.mileage,
+    material_reimbursement: w.materialReimbursement,
+    deductions: w.deductions,
+    chargebacks: w.chargebacks,
+    corrections: w.corrections,
+    notes: w.notes,
+    attachments: w.attachments,
+    approval_history: w.approvalHistory,
+    weekly_statement_id: w.weeklyStatementId,
+  };
+}
+
 // ─── ADJUSTMENTS ─────────────────────────────────────────────────────────────
 
 export function adaptAdjustment(row: Tables<"adjustments">): Adjustment {
@@ -637,6 +688,7 @@ export function adaptPosition(row: Tables<"compensation_positions">): Compensati
     isGeneralInvoice: row.is_general_invoice ?? undefined,
     installFixedPay: row.install_fixed_pay != null ? Number(row.install_fixed_pay) : undefined,
     serviceFixedPay: row.service_fixed_pay != null ? Number(row.service_fixed_pay) : undefined,
+    rateRules: (row.rate_rules as unknown as RateRule[] | null) ?? undefined,
   };
 }
 
@@ -661,5 +713,6 @@ export function positionToRow(p: CompensationPosition, companyId: string) {
     is_general_invoice: p.isGeneralInvoice ?? false,
     install_fixed_pay: p.installFixedPay ?? null,
     service_fixed_pay: p.serviceFixedPay ?? null,
+    rate_rules: p.rateRules ?? null,
   };
 }
