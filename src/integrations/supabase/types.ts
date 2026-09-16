@@ -273,6 +273,93 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_invoices: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          invoice_id: string
+          status: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
+          customer_name: string
+          customer_email: string
+          billing_address: string
+          service_address: string
+          invoice_date: string
+          due_date: string
+          line_items: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
+          discount: number
+          tax_percent: number
+          deposit: number
+          financing_applied: number
+          payment_terms: string
+          notes: string
+          warranty_info: string
+          template_id: string | null
+          payments: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          sent_at: string | null
+          viewed_at: string | null
+          branding_snapshot: Record<string, unknown> | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          invoice_id: string
+          status?: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
+          customer_name?: string
+          customer_email?: string
+          billing_address?: string
+          service_address?: string
+          invoice_date: string
+          due_date?: string
+          line_items?: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
+          discount?: number
+          tax_percent?: number
+          deposit?: number
+          financing_applied?: number
+          payment_terms?: string
+          notes?: string
+          warranty_info?: string
+          template_id?: string | null
+          payments?: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          sent_at?: string | null
+          viewed_at?: string | null
+          branding_snapshot?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          invoice_id?: string
+          status?: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
+          customer_name?: string
+          customer_email?: string
+          billing_address?: string
+          service_address?: string
+          invoice_date?: string
+          due_date?: string
+          line_items?: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
+          discount?: number
+          tax_percent?: number
+          deposit?: number
+          financing_applied?: number
+          payment_terms?: string
+          notes?: string
+          warranty_info?: string
+          template_id?: string | null
+          payments?: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          sent_at?: string | null
+          viewed_at?: string | null
+          branding_snapshot?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       adjustments: {
         Row: {
           id: string

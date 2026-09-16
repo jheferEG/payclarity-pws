@@ -17,7 +17,7 @@ import {
   Wallet, Calculator, CalendarDays, BookTemplate, MessageSquare, HelpCircle, Shield, UserRound,
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
-  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock,
+  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -44,6 +44,7 @@ import {
   ExplainDialog, DisputeDialog,
 } from "@/components/ExtraPanels";
 import { DashboardPanel, ReportsPanel, YearEnd1099Panel, TaxReserveByStateEditor } from "@/components/NewPanels";
+import { CustomerInvoicesPanel } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
@@ -62,6 +63,9 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
   return [
     { id: "dashboard", label: t("nav_dashboard"), tabs: [{ id: "dashboard", label: t("tab_dashboard"), icon: LayoutDashboard }] },
     { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_invoices"), icon: Receipt }] },
+    { id: "billing", label: t("nav_billing"), tabs: [
+      { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
+    ]},
     { id: "team", label: t("nav_team"), tabs: [
       { id: "agents", label: t("tab_team"), icon: Users },
       { id: "wallet", label: t("tab_wallet"), icon: Wallet },
@@ -697,6 +701,7 @@ export default function CommissionTool() {
             <TabsContent value="company"><CompanyPanel /></TabsContent>
             <TabsContent value="generate"><GeneratePanel payouts={payouts} /></TabsContent>
             <TabsContent value="users"><UserManagementPanel /></TabsContent>
+            <TabsContent value="customer-invoices"><CustomerInvoicesPanel /></TabsContent>
           </>}
         </Tabs>
         )}
@@ -1913,6 +1918,17 @@ function InvoicesPanel() {
                           {isAdmin && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Documentos de pago" : "Payout documents"} onClick={() => setPayoutDocsId(inv.id)}>
                               <Layers className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {isAdmin && (
+                            <Button variant="ghost" size="sm" title={s.language === "es" ? "Factura de cliente" : "Customer invoice"}
+                              onClick={() => {
+                                const existing = s.customerInvoices.find((ci) => ci.invoiceId === inv.id);
+                                const id = existing ? existing.id : s.createCustomerInvoice(inv.id);
+                                s.setDeepLink({ ts: Date.now(), tab: "customer-invoices", customerInvoiceId: id, openCustomerInvoice: true });
+                              }}>
+                              <ReceiptText className="w-4 h-4 mr-1" />
+                              {s.language === "es" ? "Facturar" : "Bill customer"}
                             </Button>
                           )}
                           {inv.saleType === "cash" && (

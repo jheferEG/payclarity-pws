@@ -5,6 +5,8 @@ import type {
   PersonalTier, OverrideLevel, Company, W9Status,
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
   Product, CompensationPosition, PayoutDocument, InvoiceExtra, CustomerPayment,
+  CustomerInvoice, CustomerInvoiceStatus, CustomerInvoiceLineItem, CustomerInvoicePayment,
+  InvoiceTemplateId,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -318,6 +320,67 @@ export function payoutDocumentToRow(d: PayoutDocument, companyId: string) {
     pdf_versions: d.pdfVersions,
     last_pdf_at: d.lastPdfAt,
     last_pdf_by: d.lastPdfBy,
+  };
+}
+
+// ─── CUSTOMER INVOICES ───────────────────────────────────────────────────────
+
+export function adaptCustomerInvoice(row: Tables<"customer_invoices">): CustomerInvoice {
+  return {
+    id: row.id,
+    number: row.number,
+    invoiceId: row.invoice_id,
+    status: row.status as CustomerInvoiceStatus,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email ?? "",
+    billingAddress: row.billing_address,
+    serviceAddress: row.service_address,
+    invoiceDate: row.invoice_date,
+    dueDate: row.due_date,
+    lineItems: (row.line_items as unknown as CustomerInvoiceLineItem[] | null) ?? [],
+    discount: Number(row.discount),
+    taxPercent: Number(row.tax_percent),
+    deposit: Number(row.deposit),
+    financingApplied: Number(row.financing_applied),
+    paymentTerms: row.payment_terms,
+    notes: row.notes,
+    warrantyInfo: row.warranty_info,
+    templateId: (row.template_id as InvoiceTemplateId | null) ?? undefined,
+    payments: (row.payments as unknown as CustomerInvoicePayment[] | null) ?? [],
+    sentAt: row.sent_at,
+    viewedAt: row.viewed_at,
+    brandingSnapshot: (row.branding_snapshot as any) ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function customerInvoiceToRow(d: CustomerInvoice, companyId: string) {
+  return {
+    id: d.id,
+    company_id: companyId,
+    number: d.number,
+    invoice_id: d.invoiceId,
+    status: d.status,
+    customer_name: d.customerName,
+    customer_email: d.customerEmail,
+    billing_address: d.billingAddress,
+    service_address: d.serviceAddress,
+    invoice_date: d.invoiceDate,
+    due_date: d.dueDate,
+    line_items: d.lineItems,
+    discount: d.discount,
+    tax_percent: d.taxPercent,
+    deposit: d.deposit,
+    financing_applied: d.financingApplied,
+    payment_terms: d.paymentTerms,
+    notes: d.notes,
+    warranty_info: d.warrantyInfo,
+    template_id: d.templateId ?? null,
+    payments: d.payments,
+    sent_at: d.sentAt,
+    viewed_at: d.viewedAt,
+    branding_snapshot: (d.brandingSnapshot as any) ?? null,
   };
 }
 

@@ -14,6 +14,7 @@ const D: Dict = {
   // Navigation groups
   nav_dashboard: { es: "Dashboard", en: "Dashboard" },
   nav_invoices: { es: "Invoices", en: "Invoices" },
+  nav_billing: { es: "Facturación", en: "Billing" },
   nav_team: { es: "Equipo", en: "Team" },
   nav_compensation: { es: "Compensación", en: "Compensation" },
   nav_payouts: { es: "Pagos", en: "Payouts" },
@@ -39,6 +40,7 @@ const D: Dict = {
 
   tab_dashboard: { es: "Dashboard", en: "Dashboard" },
   tab_invoices: { es: "Invoices", en: "Invoices" },
+  tab_customer_invoices: { es: "Facturas de cliente", en: "Customer Invoices" },
   tab_my_invoices: { es: "Mis invoices", en: "My invoices" },
   tab_wallet: { es: "Cartera", en: "Wallet" },
   tab_my_wallet: { es: "Mi cartera", en: "My wallet" },

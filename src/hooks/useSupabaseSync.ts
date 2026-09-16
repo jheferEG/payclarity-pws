@@ -11,6 +11,7 @@ import {
   adaptInvoice, invoiceCoreToRow,
   adaptPayment, paymentToRow,
   adaptPayoutDocument, payoutDocumentToRow,
+  adaptCustomerInvoice, customerInvoiceToRow,
   adaptAdjustment, adjustmentToRow,
   adaptDispute, disputeToRow,
   adaptNotification, notificationToRow,
@@ -56,6 +57,7 @@ export function useSupabaseSync() {
         invoices: [],
         payments: [],
         payoutDocuments: [],
+        customerInvoices: [],
         adjustments: [],
         disputes: [],
         notifications: [],
@@ -76,6 +78,7 @@ export function useSupabaseSync() {
         { data: invoices },
         { data: payments },
         { data: payoutDocuments },
+        { data: customerInvoices },
         { data: adjustments },
         { data: disputes },
         { data: notifications },
@@ -95,6 +98,7 @@ export function useSupabaseSync() {
           .order("date", { ascending: false }),
         supabase.from("payments").select("*"),
         supabase.from("payout_documents").select("*"),
+        supabase.from("customer_invoices").select("*"),
         supabase.from("adjustments").select("*"),
         supabase.from("disputes").select("*, dispute_events(*)"),
         supabase.from("notifications").select("*").order("at", { ascending: false }),
@@ -113,6 +117,7 @@ export function useSupabaseSync() {
         invoices: ((invoices ?? []) as any[]).map(adaptInvoice),
         payments: (payments ?? []).map(adaptPayment),
         payoutDocuments: (payoutDocuments ?? []).map(adaptPayoutDocument),
+        customerInvoices: (customerInvoices ?? []).map(adaptCustomerInvoice),
         adjustments: (adjustments ?? []).map(adaptAdjustment),
         disputes: ((disputes ?? []) as any[]).map(adaptDispute),
         notifications: (notifications ?? []).map(adaptNotification),
@@ -267,6 +272,13 @@ export function useSupabaseSync() {
         prev.payoutDocuments, next.payoutDocuments,
         (d) => supabase.from("payout_documents").upsert(payoutDocumentToRow(d, companyId), { onConflict: "id" }),
         (d) => supabase.from("payout_documents").delete().eq("id", d.id),
+      );
+
+      // Customer invoices
+      syncItems(
+        prev.customerInvoices, next.customerInvoices,
+        (d) => supabase.from("customer_invoices").upsert(customerInvoiceToRow(d, companyId), { onConflict: "id" }),
+        (d) => supabase.from("customer_invoices").delete().eq("id", d.id),
       );
 
       // Adjustments

@@ -284,6 +284,71 @@ export type PayoutDocument = {
   updatedAt: string;
 };
 
+/** Customer-facing billing document — a separate document type from the
+ *  internal sales/commission Invoice. Linked to (but never writes into) the
+ *  master Invoice, so it can never create a second commission or double-
+ *  count the sale. Phase 1 of "Billing & Technician Payables". */
+export type CustomerInvoiceStatus =
+  | "draft" | "sent" | "viewed" | "partially_paid"
+  | "paid" | "overdue" | "cancelled" | "refunded";
+
+export type CustomerInvoiceLineItem = {
+  id: string;
+  productId?: string | null; // optional link back to the Products catalog
+  kind: "product" | "service";
+  label: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type CustomerInvoicePayment = {
+  id: string;
+  amount: number;
+  date: string;
+  method: string; // "cash" | "check" | "card" | "financing" | ...
+  reference: string;
+  notes: string;
+  recordedBy: string;
+};
+
+export type CustomerInvoice = {
+  id: string;
+  number: string; // "CINV-000001"
+  invoiceId: string; // link to the master sale/job Invoice — never duplicated
+  status: CustomerInvoiceStatus;
+  customerName: string;
+  customerEmail: string; // not on the client's field list, but needed to actually address "Email Customer"
+  billingAddress: string;
+  serviceAddress: string;
+  invoiceDate: string;
+  dueDate: string;
+  lineItems: CustomerInvoiceLineItem[];
+  discount: number;
+  taxPercent: number;
+  deposit: number;
+  financingApplied: number; // $ amount already covered by financing
+  paymentTerms: string;
+  notes: string;
+  warrantyInfo: string;
+  templateId?: InvoiceTemplateId; // optional override; falls back to Company.invoiceTemplate
+  payments: CustomerInvoicePayment[];
+  sentAt: string | null;
+  viewedAt: string | null;
+  brandingSnapshot?: Invoice["brandingSnapshot"];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Balance is always derived, never stored. Shared by the store, the UI and
+ *  the PDF builder so they can never disagree. */
+export function customerInvoiceTotals(ci: CustomerInvoice) {
+  const lineTotal = ci.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0);
+  const total = Math.max(0, lineTotal - ci.discount + lineTotal * ci.taxPercent - ci.deposit - ci.financingApplied);
+  const paid = ci.payments.reduce((s, p) => s + (p.amount || 0), 0);
+  const balance = Math.max(0, total - paid);
+  return { lineTotal, total, paid, balance };
+}
+
 export type RequestStatus =
   | "submitted"
   | "under_review"
@@ -473,6 +538,13 @@ type State = {
   recordPayoutDocumentDelivery: (id: string) => void;
   regeneratePayoutDocument: (id: string, by: string) => void;
 
+  customerInvoices: CustomerInvoice[];
+  createCustomerInvoice: (invoiceId: string) => string;
+  updateCustomerInvoice: (id: string, patch: Partial<CustomerInvoice>) => void;
+  setCustomerInvoiceStatus: (id: string, status: CustomerInvoiceStatus) => void;
+  recordCustomerInvoicePayment: (id: string, payment: Omit<CustomerInvoicePayment, "id">) => void;
+  removeCustomerInvoice: (id: string) => void;
+
   addDispute: (
     d: Omit<
       Dispute,
@@ -545,10 +617,12 @@ type State = {
     tab?: string;
     invoiceId?: string;
     disputeId?: string;
+    customerInvoiceId?: string;
     openTimeline?: boolean;
     openSplit?: boolean;
     openDispute?: boolean;
     openEdit?: boolean;
+    openCustomerInvoice?: boolean;
   } | null;
   setDeepLink: (d: State["deepLink"]) => void;
 
@@ -1126,6 +1200,97 @@ export const useStore = create<State>()(
         };
       }),
 
+      customerInvoices: [],
+      createCustomerInvoice: (invoiceId) => {
+        const id = uid();
+        set((s) => {
+          const inv = s.invoices.find((i) => i.id === invoiceId);
+          if (!inv) return {};
+          const seq = s.customerInvoices.length + 1;
+          const now = new Date().toISOString();
+          // Seed from the master invoice, including last session's flat
+          // cash-invoice fields when present, so nothing already entered is lost.
+          const lineItems: CustomerInvoiceLineItem[] = [
+            {
+              id: uid(),
+              productId: null,
+              kind: "product",
+              label: inv.invoiceItemLabel || (inv.isGeneralInvoice ? "Service" : "Product/Service"),
+              quantity: 1,
+              unitPrice: inv.isGeneralInvoice ? (inv.fixedPay || 0) : inv.salesAmount,
+            },
+            ...inv.charges.map((c): CustomerInvoiceLineItem => ({
+              id: uid(), productId: null, kind: "service", label: c.label, quantity: 1, unitPrice: c.amount,
+            })),
+          ];
+          const doc: CustomerInvoice = {
+            id,
+            number: `CINV-${String(seq).padStart(6, "0")}`,
+            invoiceId,
+            status: "draft",
+            customerName: inv.customerName,
+            customerEmail: "",
+            billingAddress: inv.customerAddress || "",
+            serviceAddress: inv.customerAddress || "",
+            invoiceDate: inv.date,
+            dueDate: inv.date,
+            lineItems,
+            discount: inv.discount || 0,
+            taxPercent: 0,
+            deposit: 0,
+            financingApplied: 0,
+            paymentTerms: "",
+            notes: "",
+            warrantyInfo: "",
+            payments: (inv.customerPayments || []).map((p): CustomerInvoicePayment => ({
+              id: uid(), amount: p.amount, date: p.date, method: "cash", reference: "", notes: p.label, recordedBy: "",
+            })),
+            sentAt: null,
+            viewedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          return { customerInvoices: [...s.customerInvoices, doc] };
+        });
+        return id;
+      },
+      updateCustomerInvoice: (id, patch) => set((s) => ({
+        customerInvoices: s.customerInvoices.map((d) =>
+          d.id === id ? { ...d, ...patch, updatedAt: new Date().toISOString() } : d
+        ),
+      })),
+      setCustomerInvoiceStatus: (id, status) => set((s) => ({
+        customerInvoices: s.customerInvoices.map((d) =>
+          d.id === id
+            ? {
+                ...d,
+                status,
+                sentAt: status === "sent" && !d.sentAt ? new Date().toISOString() : d.sentAt,
+                viewedAt: status === "viewed" && !d.viewedAt ? new Date().toISOString() : d.viewedAt,
+                updatedAt: new Date().toISOString(),
+              }
+            : d
+        ),
+      })),
+      recordCustomerInvoicePayment: (id, payment) => set((s) => {
+        const doc = s.customerInvoices.find((d) => d.id === id);
+        if (!doc) return {};
+        const nextPayments = [...doc.payments, { ...payment, id: uid() }];
+        const { total, paid } = customerInvoiceTotals({ ...doc, payments: nextPayments });
+        // Never touches Payment[]/agent wallets — customer money is a
+        // separate ledger from commission payouts.
+        const nextStatus: CustomerInvoiceStatus =
+          paid >= total && total > 0 ? "paid" : paid > 0 ? "partially_paid" : doc.status;
+        return {
+          customerInvoices: s.customerInvoices.map((d) =>
+            d.id === id ? { ...d, payments: nextPayments, status: nextStatus, updatedAt: new Date().toISOString() } : d
+          ),
+        };
+      }),
+      removeCustomerInvoice: (id) => set((s) => ({
+        customerInvoices: s.customerInvoices.filter((d) => d.id !== id),
+      })),
+
       addDispute: (d) => {
         const id = uid();
         set((s) => {
@@ -1392,6 +1557,7 @@ export const useStore = create<State>()(
           splitRules: [],
           products: [],
           payoutDocuments: [],
+          customerInvoices: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",
