@@ -1259,4 +1259,89 @@ export function downloadInvoiceMasterSummary(
   doc.save(`${c.invoice.number}_master_summary.pdf`);
 }
 
+/** One invoice's worth of rows for the period-wide master summary below. */
+export type InvoiceSummarySection = {
+  invoiceNumber: string;
+  date: string;
+  customerName: string;
+  salesAmount: number;
+  rows: InvoiceInvolvedRow[];
+};
+
+/** Same "MASTER TRANSACTION SUMMARY" look as buildInvoiceMasterSummaryPDF,
+ *  extended to cover every sale in a period instead of just one — one
+ *  sub-table per invoice, paginating as needed, with a grand total at the
+ *  end. This is what "Generate All" produces for the whole period. */
+export function buildPeriodMasterSummaryPDF(
+  sections: InvoiceSummarySection[],
+  company: Company,
+  periodLabel: string
+): jsPDF {
+  const b = resolveBranding(company);
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const margin = 40;
+  const cur = b.currency;
+  const brand = hexToRgb(b.brandColor);
+  const pageH = doc.internal.pageSize.getHeight();
+  const headerLines = [`Period: ${periodLabel}`, `${sections.length} invoice(s)`];
+
+  drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+  let y = 110;
+  let grandTotal = 0;
+
+  for (const sec of sections) {
+    if (y > pageH - 170) {
+      drawFooter(doc, b);
+      doc.addPage();
+      drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+      y = 110;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(`Invoice #: ${sec.invoiceNumber}   ·   Date: ${sec.date}`, margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Customer: ${sec.customerName || "—"}   ·   Sales amount: ${fmtMoney(sec.salesAmount, cur)}`, margin, y + 14);
+    y += 24;
+
+    const total = sec.rows.reduce((s, r) => s + r.amount, 0);
+    grandTotal += total;
+    autoTable(doc, {
+      startY: y,
+      head: [["Name", "Role", `Amount (${cur})`]],
+      body: sec.rows.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+      foot: [["", "Subtotal", fmtMoney(total, cur)]],
+      headStyles: { fillColor: brand, textColor: 255 },
+      footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
+      styles: { fontSize: 9 },
+      margin: { left: margin, right: margin },
+      columnStyles: { 2: { halign: "right" } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 26;
+  }
+
+  if (y > pageH - 90) {
+    drawFooter(doc, b);
+    doc.addPage();
+    drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+    y = 110;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text(`Grand total payout: ${fmtMoney(grandTotal, cur)}`, margin, y);
+
+  drawFooter(doc, b);
+  return doc;
+}
+
+export function downloadPeriodMasterSummary(
+  sections: InvoiceSummarySection[],
+  company: Company,
+  periodLabel: string,
+  filenameHint: string
+) {
+  const doc = buildPeriodMasterSummaryPDF(sections, company, periodLabel);
+  doc.save(`${filenameHint}_master_summary.pdf`);
+}
+
 export type { Invoice };

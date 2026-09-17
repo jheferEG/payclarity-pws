@@ -36,8 +36,9 @@ import {
 import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
   buildOverridePDF,
-  downloadAllCommissionPDFs, downloadSummary, makeBrandingSnapshot, INVOICE_TEMPLATES,
+  downloadSummary, makeBrandingSnapshot, INVOICE_TEMPLATES,
   buildInvoicePayoutStatementPDF, buildCashCustomerInvoicePDF,
+  downloadInvoiceMasterSummary, downloadPeriodMasterSummary, type InvoiceSummarySection,
 } from "@/lib/generate-invoices";
 import {
   WalletPanel, SimulatorPanel, CalendarPanel, TemplatesPanel, DisputesPanel,
@@ -706,7 +707,7 @@ export default function CommissionTool() {
             <TabsContent value="products"><ProductsPanel /></TabsContent>
             <TabsContent value="splits"><SplitsPanel /></TabsContent>
             <TabsContent value="company"><CompanyPanel /></TabsContent>
-            <TabsContent value="generate"><GeneratePanel payouts={payouts} /></TabsContent>
+            <TabsContent value="generate"><GeneratePanel /></TabsContent>
             <TabsContent value="users"><UserManagementPanel /></TabsContent>
             <TabsContent value="customer-invoices"><CustomerInvoicesPanel /></TabsContent>
             <TabsContent value="weekly-statements"><WeeklyStatementsPanel /></TabsContent>
@@ -2136,12 +2137,10 @@ function PayoutDocumentsDialog({
                 <Button size="sm" variant="outline" disabled={involvedRows.length === 0}
                   onClick={() => {
                     if (!inv || !c) return;
-                    // Same full invoice format as "Ver PDF" per recipient, but
-                    // with every row left in — this is the admin-only master
-                    // copy, not a private per-person document.
-                    const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
-                    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, involvedRows, s.company.commissionEntryMode);
-                    pdf.save(`${inv.number}_master_summary.pdf`);
+                    // The client asked to keep this exact simple look (Name /
+                    // Role / Amount table) — do not switch this back to the
+                    // full invoice format.
+                    downloadInvoiceMasterSummary(involvedRows, c, s.company);
                   }}>
                   <FileBarChart className="w-4 h-4 mr-1" />{isEs ? "Resumen maestro" : "Master summary"}
                 </Button>
@@ -3033,17 +3032,52 @@ function CompanyPanel() {
 }
 
 /* ---------- Generate ---------- */
-function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> }) {
-  const { company, invoiceDate, periodLabel, language } = useStore();
+function GeneratePanel() {
+  const { company, invoiceDate, periodLabel, language, agents, invoices, financeCompanies, personalTiers, overrides } = useStore();
   const t = useT();
+  const isEs = language === "es";
   const isFixed = company.commissionEntryMode === "fixed";
-  const total = payouts.reduce((a, p) => a + p.finalPayable, 0);
-  const payable = payouts.filter((p) => p.grossPayout > 0);
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
   const closePdfPreview = () => {
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
     setPdfPreview(null);
   };
+
+  // Week/month filter — scopes this whole run (table, XLSX, PDFs) to a
+  // period instead of always aggregating every invoice ever entered.
+  // Empty on both ends = "all time" (unchanged prior behavior).
+  const [periodFrom, setPeriodFrom] = useState("");
+  const [periodTo, setPeriodTo] = useState("");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const setThisWeek = () => {
+    const d = new Date();
+    const day = d.getDay(); // 0 = Sunday
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((day + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    setPeriodFrom(monday.toISOString().slice(0, 10));
+    setPeriodTo(sunday.toISOString().slice(0, 10));
+  };
+  const setThisMonth = () => {
+    const d = new Date();
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    setPeriodFrom(first.toISOString().slice(0, 10));
+    setPeriodTo(last.toISOString().slice(0, 10));
+  };
+  const clearPeriod = () => { setPeriodFrom(""); setPeriodTo(""); };
+
+  const filteredInvoices = useMemo(
+    () => invoices.filter((inv) => (!periodFrom || inv.date >= periodFrom) && (!periodTo || inv.date <= periodTo)),
+    [invoices, periodFrom, periodTo]
+  );
+  const payouts = useMemo(
+    () => calcPayouts(agents, filteredInvoices, financeCompanies, personalTiers, overrides, company.commissionEntryMode),
+    [agents, filteredInvoices, financeCompanies, personalTiers, overrides, company.commissionEntryMode]
+  );
+  const total = payouts.reduce((a, p) => a + p.finalPayable, 0);
+  const payable = payouts.filter((p) => p.grossPayout > 0);
 
   const previewOne = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
@@ -3064,6 +3098,35 @@ function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> })
     doc.save(`override_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
+  // "Generate All" now produces ONE master summary covering every invoice in
+  // the selected period (all recipients together), instead of a separate
+  // one-person-at-a-time PDF per agent — kept in the same simple format as
+  // the per-invoice "Resumen maestro".
+  const generatePeriodSummary = () => {
+    const sections: InvoiceSummarySection[] = filteredInvoices
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((inv) => {
+        const c = calcInvoice(inv, financeCompanies);
+        const rows = computeInvolved(inv, c, agents, overrides, language, company.commissionEntryMode);
+        return {
+          invoiceNumber: inv.number,
+          date: inv.date,
+          customerName: inv.customerName || "",
+          salesAmount: inv.salesAmount || 0,
+          rows,
+        };
+      })
+      .filter((sec) => sec.rows.length > 0);
+    if (!sections.length) {
+      toast.error(isEs ? "No hay invoices con pagos en este período." : "No invoices with payouts in this period.");
+      return;
+    }
+    const label = periodFrom || periodTo ? `${periodFrom || "…"} – ${periodTo || "…"}` : periodLabel;
+    const filenameHint = periodFrom || periodTo ? `${periodFrom || "start"}_${periodTo || "end"}` : periodLabel.replace(/\s+/g, "_");
+    downloadPeriodMasterSummary(sections, company, label, filenameHint);
+  };
+
   return (
     <>
     <SectionCard
@@ -3074,17 +3137,34 @@ function GeneratePanel({ payouts }: { payouts: ReturnType<typeof calcPayouts> })
           <Button variant="outline" onClick={() => downloadSummary(payouts, company, periodLabel)} disabled={!payouts.length}>
             <FileDown className="w-4 h-4 mr-2" />{t("btn_xlsx_summary")}
           </Button>
-          <Button onClick={() => downloadAllCommissionPDFs(payable, company, invoiceDate, periodLabel, company.commissionEntryMode)}
+          <Button onClick={generatePeriodSummary}
             disabled={!payable.length} className="bg-gradient-primary">
             <Sparkles className="w-4 h-4 mr-2" />{t("btn_generate_all")} ({payable.length})
           </Button>
         </div>
       }
     >
+      <div className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-border/60">
+        <div>
+          <Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
+          <Input type="date" className="h-8" value={periodFrom} max={periodTo || undefined} onChange={(e) => setPeriodFrom(e.target.value)} />
+        </div>
+        <div>
+          <Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
+          <Input type="date" className="h-8" value={periodTo} min={periodFrom || undefined} max={todayStr} onChange={(e) => setPeriodTo(e.target.value)} />
+        </div>
+        <Button variant="outline" size="sm" onClick={setThisWeek}>{isEs ? "Esta semana" : "This week"}</Button>
+        <Button variant="outline" size="sm" onClick={setThisMonth}>{isEs ? "Este mes" : "This month"}</Button>
+        {(periodFrom || periodTo) && (
+          <Button variant="ghost" size="sm" onClick={clearPeriod}>{isEs ? "Ver todo" : "Show all"}</Button>
+        )}
+      </div>
       {payouts.length === 0 ? <Empty msg={t("empty_add_reps")} /> : (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm bg-muted/40 rounded-lg px-4 py-3">
-            <span className="text-muted-foreground">{t("gen_final_payable")} {periodLabel}</span>
+            <span className="text-muted-foreground">
+              {t("gen_final_payable")} {periodFrom || periodTo ? `${periodFrom || "…"} – ${periodTo || "…"}` : periodLabel}
+            </span>
             <span className="font-mono font-bold text-lg text-accent">{fmtMoney(total, company.currency)}</span>
           </div>
           <div className="overflow-x-auto">
