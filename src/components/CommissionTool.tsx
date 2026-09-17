@@ -114,6 +114,19 @@ function makeRepGroups(t: (key: any) => string): NavGroup[] {
   ];
 }
 
+/** A technician's own restricted portal — just their Work Statements.
+ * Deliberately smaller than repGroups: no Wallet/commission history/
+ * Invoices, since a pure technician isn't paid through commissions and has
+ * no business seeing that data (the client's "privacidad del portal de
+ * técnico" ask). */
+function makeTechnicianGroups(t: (key: any) => string): NavGroup[] {
+  return [
+    { id: "billing", label: t("nav_billing"), tabs: [
+      { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
+    ]},
+  ];
+}
+
 /* ---------- Multi-company Dashboard ---------- */
 const MC_COLORS = [
   "from-blue-500 to-blue-600",
@@ -266,6 +279,7 @@ export default function CommissionTool() {
   const t = useT();
   const navGroups = makeNavGroups(t);
   const repGroups = makeRepGroups(t);
+  const technicianGroups = makeTechnicianGroups(t);
   const { profile, signOut, companiesList, switchCompany, updateAvatar } = useAuth();
   const { dataLoaded } = useSupabaseSync();
 
@@ -282,9 +296,11 @@ export default function CommissionTool() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.role]);
 
-  // For reps: auto-set activeAgentId to their own agent record after data loads
+  // For reps and technicians: auto-set activeAgentId to their own agent
+  // record after data loads — both roles are scoped to "my own row" via
+  // this same linkage (agents.profile_id -> auth.uid()).
   useEffect(() => {
-    if (!dataLoaded || profile?.role !== "rep") return;
+    if (!dataLoaded || (profile?.role !== "rep" && profile?.role !== "technician")) return;
     supabase.rpc("my_agent_id").then(({ data: agentId }) => {
       if (agentId) s.setActiveAgentId(agentId);
     });
@@ -293,6 +309,7 @@ export default function CommissionTool() {
 
   const isAdmin = s.role === "admin";
   const isRep = s.role === "rep";
+  const isTechnician = s.role === "technician";
   const canManage = isAdmin; // accountant: view-only on management
   const [wizardOpen, setWizardOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -359,7 +376,7 @@ export default function CommissionTool() {
     if (companiesList.length > 1 && !pickerMode) setPickerMode(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companiesList.length]);
-  const showPicker = pickerMode && companiesList.length > 1 && !isRep;
+  const showPicker = pickerMode && companiesList.length > 1 && !isRep && !isTechnician;
 
   // Load pending user count and subscribe to realtime changes (admins only)
   useEffect(() => {
@@ -415,7 +432,7 @@ export default function CommissionTool() {
   // login email); never fall back to "the first agent" — that would show
   // someone else's data to a rep whose account isn't linked yet.
   const effectiveAgentId =
-    isRep
+    isRep || isTechnician
       ? s.activeAgentId && s.agents.some((a) => a.id === s.activeAgentId)
         ? s.activeAgentId
         : null
@@ -439,7 +456,7 @@ export default function CommissionTool() {
           </div>
 
           {/* Desktop stats */}
-          {!isRep && (
+          {!isRep && !isTechnician && (
             <div className="hidden lg:flex items-center gap-3 mx-4">
               <Stat label={t("stat_salespeople")} value={s.agents.length} />
               <Stat label={t("stat_sales_total")} value={fmtMoney(totalSales, s.company.currency)} />
@@ -460,7 +477,7 @@ export default function CommissionTool() {
             </button>
 
             {/* Multi-company picker shortcut */}
-            {companiesList.length > 1 && !isRep && !showPicker && (
+            {companiesList.length > 1 && !isRep && !isTechnician && !showPicker && (
               <button
                 onClick={() => setPickerMode(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all text-xs font-bold text-accent"
@@ -508,8 +525,8 @@ export default function CommissionTool() {
 
             <NotificationsBell />
 
-            {/* Reps only ever see their own linked agent — no switching. */}
-            {isRep && effectiveAgentId && (
+            {/* Reps/technicians only ever see their own linked agent — no switching. */}
+            {(isRep || isTechnician) && effectiveAgentId && (
               <span className="h-9 px-3 inline-flex items-center rounded-lg border border-border/60 bg-background/80 text-sm font-medium truncate max-w-[160px]">
                 {s.agents.find((a) => a.id === effectiveAgentId)?.name ?? ""}
               </span>
@@ -615,7 +632,7 @@ export default function CommissionTool() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {showPicker ? (
           <MultiCompanyDashboard onEnter={() => setPickerMode(false)} />
-        ) : isRep && !effectiveAgentId ? (
+        ) : (isRep || isTechnician) && !effectiveAgentId ? (
           <Card className="p-8 text-center">
             <UserRound className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
             <h2 className="text-lg font-semibold mb-1">{t("no_rep_title")}</h2>
@@ -624,7 +641,7 @@ export default function CommissionTool() {
         ) : (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           {(() => {
-            const groups = isRep ? repGroups : navGroups;
+            const groups = isRep ? repGroups : isTechnician ? technicianGroups : navGroups;
             const currentGroup = groups.find((g) => g.id === group) ?? groups[0];
             const openRequests = s.disputes.filter(
               (d) => d.status === "submitted" || d.status === "needs_info"
@@ -680,7 +697,7 @@ export default function CommissionTool() {
             );
           })()}
 
-          {!isRep && (
+          {!isRep && !isTechnician && (
             <TabsContent value="dashboard">
               <DashboardQuickActions onNav={(t, g) => { setGroup(g); setTab(t); }} onWizard={() => setWizardOpen(true)} />
               <div className="h-6" />
@@ -693,7 +710,7 @@ export default function CommissionTool() {
           <TabsContent value="calendar"><CalendarPanel /></TabsContent>
           <TabsContent value="disputes"><DisputesPanel /></TabsContent>
           <TabsContent value="work-statements"><WorkStatementsPanel /></TabsContent>
-          {!isRep && <>
+          {!isRep && !isTechnician && <>
             <TabsContent value="reports"><ReportsPanel /></TabsContent>
             <TabsContent value="yearend"><YearEnd1099Panel /></TabsContent>
           </>}
@@ -1350,8 +1367,8 @@ function PercentField({
 function InvoicesPanel() {
   const s = useStore();
   const t = useT();
-  const isAdmin = s.role !== "rep";
-  const myAgentId = s.role === "rep" ? s.activeAgentId : null;
+  const isAdmin = s.role !== "rep" && s.role !== "technician";
+  const myAgentId = (s.role === "rep" || s.role === "technician") ? s.activeAgentId : null;
   // Kept in the (persisted) store rather than component state, so switching
   // tabs — or reloading the page — never wipes out an invoice in progress.
   const editing = s.invoiceDraftEditingId;

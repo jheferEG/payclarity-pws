@@ -109,7 +109,7 @@ export function NotificationsBell() {
   }, []);
 
   const audience: Notification["audience"] = useMemo(
-    () => (s.role === "rep" && s.activeAgentId
+    () => ((s.role === "rep" || s.role === "technician") && s.activeAgentId
       ? { agentId: s.activeAgentId }
       : "admin"),
     [s.role, s.activeAgentId]

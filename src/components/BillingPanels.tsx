@@ -494,7 +494,7 @@ export function WorkStatementsPanel() {
   const s = useStore();
   const isEs = s.language === "es";
   const STATUS_LABEL = isEs ? WS_STATUS_LABEL_ES : WS_STATUS_LABEL_EN;
-  const isAdmin = s.role !== "rep";
+  const isAdmin = s.role !== "rep" && s.role !== "technician";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const [filter, setFilter] = useState<"all" | WorkStatementStatus>("all");
   const [editId, setEditId] = useState<string | null>(null);

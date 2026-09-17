@@ -154,7 +154,7 @@ function AICoachCard({ agent }: { agent: Agent }) {
 export function WalletPanel() {
   const t = useT();
   const s = useStore();
-  const isAdmin = s.role !== "rep";
+  const isAdmin = s.role !== "rep" && s.role !== "technician";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const wallets = useMemo(
     () =>
@@ -1808,7 +1808,7 @@ export function CalendarPanel() {
   const s = useStore();
   const isEs = s.language === "es";
   void isEs;
-  const isAdmin = s.role !== "rep";
+  const isAdmin = s.role !== "rep" && s.role !== "technician";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const cur = s.company.currency;
   const payouts = useMemo(

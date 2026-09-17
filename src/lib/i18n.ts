@@ -665,6 +665,7 @@ const D: Dict = {
   um_admin: { es: "Administrador", en: "Administrator" },
   um_rep: { es: "Vendedor", en: "Sales Rep" },
   um_accountant: { es: "Contador", en: "Accountant" },
+  um_technician: { es: "Técnico", en: "Technician" },
 
   // AdminGate
   ag_title: { es: "Panel de administración", en: "Admin Panel" },
