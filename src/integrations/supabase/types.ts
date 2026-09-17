@@ -1066,6 +1066,7 @@ export type Database = {
           level: string
           company_name: string | null
           payroll_type: "w2" | "contractor" | null
+          payment_treatment: "payroll" | "contractor_payables" | null
           created_at: string
           updated_at: string
         }
@@ -1087,6 +1088,7 @@ export type Database = {
           level?: string
           company_name?: string | null
           payroll_type?: "w2" | "contractor" | null
+          payment_treatment?: "payroll" | "contractor_payables" | null
           created_at?: string
           updated_at?: string
         }
@@ -1108,6 +1110,7 @@ export type Database = {
           level?: string
           company_name?: string | null
           payroll_type?: "w2" | "contractor" | null
+          payment_treatment?: "payroll" | "contractor_payables" | null
           created_at?: string
           updated_at?: string
         }
@@ -1128,6 +1131,43 @@ export type Database = {
             foreignKeyName: "agents_sponsor_id_fkey"
             columns: ["sponsor_id"]
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      agent_tax_ids: {
+        Row: {
+          agent_id: string
+          company_id: string
+          tax_id_last4: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          company_id: string
+          tax_id_last4?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          company_id?: string
+          tax_id_last4?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tax_ids_agent_id_fkey"
+            columns: ["agent_id"]
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tax_ids_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           }
         ]

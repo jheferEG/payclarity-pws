@@ -9,6 +9,7 @@ import type {
   InvoiceTemplateId, RateRule, TechnicianWorkStatement, WorkStatementStatus, WorkStatementAuditEntry,
   WeeklyTechnicianStatement, WeeklyStatementStatus, WeeklyAdjustment,
   PayrollRegister, PayrollRegisterStatus, PayrollEntry,
+  AgentTaxId,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,6 +78,7 @@ export function adaptAgent(row: Tables<"agents">): Agent {
     level: row.level ?? undefined,
     companyName: row.company_name ?? undefined,
     payrollType: (row.payroll_type as Agent["payrollType"]) ?? undefined,
+    paymentTreatment: (row.payment_treatment as Agent["paymentTreatment"]) ?? undefined,
   };
 }
 
@@ -98,7 +100,18 @@ export function agentToRow(a: Agent, companyId: string) {
     level: a.level ?? undefined,
     company_name: a.companyName ?? undefined,
     payroll_type: a.payrollType ?? undefined,
+    payment_treatment: a.paymentTreatment ?? undefined,
   };
+}
+
+// ─── AGENT TAX IDS (masked — last 4 digits only) ────────────────────────────
+
+export function adaptAgentTaxId(row: Tables<"agent_tax_ids">): AgentTaxId {
+  return { id: row.agent_id, last4: row.tax_id_last4, updatedAt: row.updated_at };
+}
+
+export function agentTaxIdToRow(t: AgentTaxId, companyId: string) {
+  return { agent_id: t.id, company_id: companyId, tax_id_last4: t.last4 };
 }
 
 // ─── FINANCE COMPANIES ───────────────────────────────────────────────────────

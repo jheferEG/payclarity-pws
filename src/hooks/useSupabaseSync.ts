@@ -15,6 +15,7 @@ import {
   adaptWorkStatement, workStatementToRow,
   adaptWeeklyStatement, weeklyStatementToRow,
   adaptPayrollRegister, payrollRegisterToRow,
+  adaptAgentTaxId, agentTaxIdToRow,
   adaptAdjustment, adjustmentToRow,
   adaptDispute, disputeToRow,
   adaptNotification, notificationToRow,
@@ -64,6 +65,7 @@ export function useSupabaseSync() {
         workStatements: [],
         weeklyStatements: [],
         payrollRegisters: [],
+        agentTaxIds: [],
         adjustments: [],
         disputes: [],
         notifications: [],
@@ -88,6 +90,7 @@ export function useSupabaseSync() {
         { data: workStatements },
         { data: weeklyStatements },
         { data: payrollRegisters },
+        { data: agentTaxIds },
         { data: adjustments },
         { data: disputes },
         { data: notifications },
@@ -111,6 +114,7 @@ export function useSupabaseSync() {
         supabase.from("technician_work_statements").select("*"),
         supabase.from("weekly_technician_statements").select("*"),
         supabase.from("payroll_registers").select("*"),
+        supabase.from("agent_tax_ids").select("*"),
         supabase.from("adjustments").select("*"),
         supabase.from("disputes").select("*, dispute_events(*)"),
         supabase.from("notifications").select("*").order("at", { ascending: false }),
@@ -133,6 +137,7 @@ export function useSupabaseSync() {
         workStatements: (workStatements ?? []).map(adaptWorkStatement),
         weeklyStatements: (weeklyStatements ?? []).map(adaptWeeklyStatement),
         payrollRegisters: (payrollRegisters ?? []).map(adaptPayrollRegister),
+        agentTaxIds: (agentTaxIds ?? []).map(adaptAgentTaxId),
         adjustments: (adjustments ?? []).map(adaptAdjustment),
         disputes: ((disputes ?? []) as any[]).map(adaptDispute),
         notifications: (notifications ?? []).map(adaptNotification),
@@ -315,6 +320,13 @@ export function useSupabaseSync() {
         prev.payrollRegisters, next.payrollRegisters,
         (r) => supabase.from("payroll_registers").upsert(payrollRegisterToRow(r, companyId), { onConflict: "id" }),
         (r) => supabase.from("payroll_registers").delete().eq("id", r.id),
+      );
+
+      // Agent tax IDs (masked, last 4 digits) — table's own PK is agent_id
+      syncItems(
+        prev.agentTaxIds, next.agentTaxIds,
+        (t) => supabase.from("agent_tax_ids").upsert(agentTaxIdToRow(t, companyId), { onConflict: "agent_id" }),
+        (t) => supabase.from("agent_tax_ids").delete().eq("agent_id", t.id),
       );
 
       // Adjustments

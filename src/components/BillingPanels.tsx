@@ -16,7 +16,7 @@ import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Penci
 import {
   useStore, customerInvoiceTotals, workStatementTotal,
   eligibleWorkStatements, weeklyStatementTotal,
-  payrollEntryAmounts, payrollRegisterTotal, PAYROLL_DISCLAIMER, technicianTerm,
+  payrollEntryAmounts, payrollRegisterTotal, PAYROLL_DISCLAIMER, technicianTerm, resolvePaymentTreatment,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
   type TechnicianWorkStatement, type WorkStatementStatus,
   type WeeklyTechnicianStatement, type ExclusionReason,
@@ -756,7 +756,10 @@ export function WeeklyStatementsPanel() {
 
   const technicians = s.agents.filter((a) => {
     const pos = s.positions.find((p) => p.name === a.level);
-    return pos?.isGeneralInvoice;
+    // Only agents actually routed through this contractor-payables pipeline —
+    // an agent whose paymentTreatment is "payroll" gets paid through the
+    // Payroll Register instead, even if their position is isGeneralInvoice.
+    return pos?.isGeneralInvoice && resolvePaymentTreatment(a) === "contractor_payables";
   });
 
   const [genTech, setGenTech] = useState("");
@@ -962,12 +965,12 @@ export function PayrollPanel() {
   const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().slice(0, 10));
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const w2Agents = s.agents.filter((a) => a.payrollType === "w2");
+  const w2Agents = s.agents.filter((a) => resolvePaymentTreatment(a) === "payroll");
   const list = s.payrollRegisters.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const open = s.payrollRegisters.find((r) => r.id === openId) ?? null;
 
   const generate = () => {
-    if (!w2Agents.length) return toast.error(isEs ? "No hay empleados W-2 marcados en Equipo." : "No agents are marked W-2 in Equipo.");
+    if (!w2Agents.length) return toast.error(isEs ? "No hay empleados con tratamiento de pago 'Nómina' en Equipo." : "No agents have 'Payroll' as their payment treatment in Equipo.");
     const id = s.createPayrollRegister(periodStart, periodEnd);
     setOpenId(id);
     toast.success(isEs ? "Nómina creada." : "Payroll register created.");
@@ -988,15 +991,57 @@ export function PayrollPanel() {
         </p>
 
         <div className="mb-4">
-          <Label className="text-xs font-semibold">{isEs ? "Marcar empleados como W-2" : "Mark agents as W-2"}</Label>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {s.agents.map((a) => (
-              <label key={a.id} className="flex items-center gap-1.5 text-xs border border-border rounded-full px-2.5 py-1">
-                <input type="checkbox" checked={a.payrollType === "w2"}
-                  onChange={(e) => s.updateAgent(a.id, { payrollType: e.target.checked ? "w2" : "contractor" })} />
-                {a.name}
-              </label>
-            ))}
+          <Label className="text-xs font-semibold">{isEs ? "Clasificación por empleado" : "Per-agent classification"}</Label>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+            {isEs
+              ? "Tres cosas separadas a propósito: relación laboral (legal) y tratamiento de pago (qué sistema los paga) no tienen que coincidir — ej. un empleado W-2 pagado por trabajo a través de Estados de trabajo."
+              : "Deliberately separate: worker relationship (legal) and payment treatment (which system pays them) don't have to match — e.g. a W-2 employee still paid per-job through Work Statements."}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left text-muted-foreground uppercase">
+                <tr>
+                  <th className="py-1 pr-2">{isEs ? "Empleado" : "Agent"}</th>
+                  <th className="pr-2">{isEs ? "Relación laboral" : "Worker relationship"}</th>
+                  <th className="pr-2">{isEs ? "Tratamiento de pago" : "Payment treatment"}</th>
+                  <th>{isEs ? "TIN/SSN (últimos 4)" : "TIN/SSN (last 4)"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.agents.map((a) => (
+                  <tr key={a.id} className="border-t border-border/60">
+                    <td className="py-1.5 pr-2 font-medium whitespace-nowrap">{a.name}</td>
+                    <td className="pr-2">
+                      <Select value={a.payrollType ?? "contractor"} onValueChange={(v: "w2" | "contractor") => s.updateAgent(a.id, { payrollType: v })}>
+                        <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="contractor">{isEs ? "Contratista (1099)" : "Contractor (1099)"}</SelectItem>
+                          <SelectItem value="w2">{isEs ? "Empleado (W-2)" : "Employee (W-2)"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="pr-2">
+                      <Select value={resolvePaymentTreatment(a)} onValueChange={(v: "payroll" | "contractor_payables") => s.updateAgent(a.id, { paymentTreatment: v })}>
+                        <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="contractor_payables">{isEs ? "Estados de trabajo" : "Work Statements"}</SelectItem>
+                          <SelectItem value="payroll">{isEs ? "Nómina" : "Payroll"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td>
+                      <Input
+                        className="h-8 w-20 font-mono"
+                        maxLength={4}
+                        placeholder="••••"
+                        value={s.agentTaxIds.find((t) => t.id === a.id)?.last4 ?? ""}
+                        onChange={(e) => s.setAgentTaxIdLast4(a.id, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

@@ -18,14 +18,38 @@ export type Agent = {
   level?: string;             // commission level label (e.g. Junior Rep, Sales Rep, Manager)
   avatarUrl?: string;         // base64 or URL for profile photo
   companyName?: string;       // LLC/business name this agent gets paid under, if any (e.g. subcontractors)
-  // Minimal payroll-basis flag for Phase 4 (Payroll Register). NOT the full
-  // Service Role / Worker Relationship / Payment Treatment split the
-  // client's later security pass asks for — that's a separate, bigger
-  // change deferred until that phase. This just says which pipeline an
-  // agent's pay runs through: the existing commission/contractor payables
-  // (undefined/"contractor", unchanged default) or the new W-2 Payroll
-  // Register ("w2").
+  // Three independent axes, per the client's financial-integrity request —
+  // deliberately NOT collapsed into one field:
+  //  1. Service role   → `level` (position name), already its own field.
+  //  2. Worker relationship → `payrollType`: the LEGAL employment
+  //     classification (W-2 employee vs. 1099 contractor).
+  //  3. Payment treatment → `paymentTreatment`: which system actually pays
+  //     them for job-based work. Usually mirrors payrollType, but they can
+  //     diverge on purpose — e.g. a W-2 installer who is still paid
+  //     piece-rate per job through Work Statements rather than through
+  //     hourly Payroll. Left unset, it's inferred from payrollType (see
+  //     resolvePaymentTreatment) so existing data behaves exactly as before.
   payrollType?: "w2" | "contractor";
+  paymentTreatment?: "payroll" | "contractor_payables";
+};
+
+/** The system that actually pays this agent for job-based work. Falls back
+ * to inferring from payrollType when not explicitly set, so a company that
+ * never touches this new field sees no change in behavior. */
+export function resolvePaymentTreatment(agent: Pick<Agent, "payrollType" | "paymentTreatment">): "payroll" | "contractor_payables" {
+  if (agent.paymentTreatment) return agent.paymentTreatment;
+  return agent.payrollType === "w2" ? "payroll" : "contractor_payables";
+}
+
+/** A technician's tax ID, MASKED: only ever the last 4 digits are stored —
+ * never the full SSN/EIN. Lives in its own table with its own RLS
+ * (admin/accountant only), separate from the company-wide-readable `agents`
+ * table, because Postgres RLS is row-level — a sensitive column bolted onto
+ * `agents` would be readable by every rep/technician in the company. */
+export type AgentTaxId = {
+  id: string; // == agentId (one row per agent, agent_id is this table's own primary key)
+  last4: string;
+  updatedAt: string;
 };
 
 export type FinanceCompany = {
@@ -792,6 +816,11 @@ type State = {
   approvePayrollRegister: (id: string, by: string) => void;
   markPayrollRegisterPaid: (id: string) => void;
   removePayrollRegister: (id: string) => void;
+
+  // Masked tax IDs — see AgentTaxId. Populated only for admin/accountant
+  // (RLS-restricted); empty for every other role, by design.
+  agentTaxIds: AgentTaxId[];
+  setAgentTaxIdLast4: (agentId: string, last4: string) => void;
 
   addDispute: (
     d: Omit<
@@ -1685,7 +1714,7 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         set((s) => {
           const now = new Date().toISOString();
           const seq = s.payrollRegisters.length + 1;
-          const w2Agents = s.agents.filter((a) => a.payrollType === "w2");
+          const w2Agents = s.agents.filter((a) => resolvePaymentTreatment(a) === "payroll");
           const entries: PayrollEntry[] = w2Agents.map((a) => {
             const pos = s.positions.find((p) => p.name === a.level);
             return {
@@ -1754,6 +1783,20 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       removePayrollRegister: (id) => set((s) => ({
         payrollRegisters: s.payrollRegisters.filter((r) => r.id !== id),
       })),
+
+      agentTaxIds: [],
+      setAgentTaxIdLast4: (agentId, last4) => set((s) => {
+        const clean = last4.replace(/\D/g, "").slice(0, 4);
+        const now = new Date().toISOString();
+        const exists = s.agentTaxIds.some((t) => t.id === agentId);
+        return {
+          agentTaxIds: clean
+            ? (exists
+                ? s.agentTaxIds.map((t) => (t.id === agentId ? { ...t, last4: clean, updatedAt: now } : t))
+                : [...s.agentTaxIds, { id: agentId, last4: clean, updatedAt: now }])
+            : s.agentTaxIds.filter((t) => t.id !== agentId),
+        };
+      }),
 
       addDispute: (d) => {
         const id = uid();
@@ -2025,6 +2068,7 @@ const storeCreator: StateCreator<State> = (set, get) => ({
           workStatements: [],
           weeklyStatements: [],
           payrollRegisters: [],
+          agentTaxIds: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",
@@ -2222,6 +2266,7 @@ export const useStore = create<State>()(
         if (persisted && !persisted.wizard)
           persisted.wizard = { currentStep: 0, completedSteps: [], completed: false };
         if (persisted && !persisted.notifications) persisted.notifications = [];
+        if (persisted && !persisted.agentTaxIds) persisted.agentTaxIds = [];
         if (persisted && !persisted.currentUserName) persisted.currentUserName = "Admin";
         if (persisted?.company) {
           persisted.company = {
