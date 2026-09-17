@@ -14,7 +14,7 @@ const D: Dict = {
   // Navigation groups
   nav_dashboard: { es: "Dashboard", en: "Dashboard" },
   nav_invoices: { es: "Invoices", en: "Invoices" },
-  nav_billing: { es: "Facturación", en: "Billing" },
+  nav_billing: { es: "Facturación y Técnicos", en: "Billing & Technicians" },
   nav_team: { es: "Equipo", en: "Team" },
   nav_compensation: { es: "Compensación", en: "Compensation" },
   nav_payouts: { es: "Pagos", en: "Payouts" },
