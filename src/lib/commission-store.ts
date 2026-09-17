@@ -18,6 +18,14 @@ export type Agent = {
   level?: string;             // commission level label (e.g. Junior Rep, Sales Rep, Manager)
   avatarUrl?: string;         // base64 or URL for profile photo
   companyName?: string;       // LLC/business name this agent gets paid under, if any (e.g. subcontractors)
+  // Minimal payroll-basis flag for Phase 4 (Payroll Register). NOT the full
+  // Service Role / Worker Relationship / Payment Treatment split the
+  // client's later security pass asks for — that's a separate, bigger
+  // change deferred until that phase. This just says which pipeline an
+  // agent's pay runs through: the existing commission/contractor payables
+  // (undefined/"contractor", unchanged default) or the new W-2 Payroll
+  // Register ("w2").
+  payrollType?: "w2" | "contractor";
 };
 
 export type FinanceCompany = {
@@ -211,6 +219,9 @@ export type CompensationPosition = {
   // matched by job type / territory / product, highest priority active match
   // wins. Falls back to installFixedPay/serviceFixedPay when nothing matches.
   rateRules?: RateRule[];
+  // Phase 4 (Payroll Register) — only meaningful for W-2 positions.
+  hourlyRate?: number;
+  overtimeMultiplier?: number; // × hourlyRate, e.g. 1.5
 };
 
 export type RateRule = {
@@ -497,6 +508,56 @@ export function weeklyStatementTotal(
   return Math.max(0, base + adj);
 }
 
+/** Phase 4: Payroll Register — W-2 EMPLOYEES ONLY, kept entirely separate
+ *  from the contractor/vendor payables above (Work Statements/Weekly
+ *  Statements/Company Payables never touch this). This is NOT a payroll
+ *  tax filer or a replacement for a licensed payroll provider — it
+ *  prepares numbers for review/export; withholding here is always an
+ *  internal estimate, never an official calculation. See
+ *  PAYROLL_DISCLAIMER, shown wherever this data is displayed or exported. */
+export const PAYROLL_DISCLAIMER =
+  "Transpare prepares payroll information for review and export. Final withholding, filing and payroll processing must be completed through an authorized payroll provider or qualified professional.";
+
+export type PayrollEntry = {
+  agentId: string;
+  regularHours: number;
+  overtimeHours: number;
+  hourlyRateSnapshot: number;
+  overtimeMultiplierSnapshot: number;
+  reimbursements: number;
+  deductions: number;
+  taxWithholdingPercent: number; // internal estimate only — see PAYROLL_DISCLAIMER
+};
+
+export type PayrollRegisterStatus = "draft" | "approved" | "paid";
+
+export type PayrollRegister = {
+  id: string;
+  number: string; // "PR-000001"
+  periodStart: string;
+  periodEnd: string;
+  status: PayrollRegisterStatus;
+  entries: PayrollEntry[];
+  approvedAt: string | null;
+  approvedBy: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function payrollEntryAmounts(e: PayrollEntry) {
+  const regularPay = e.regularHours * e.hourlyRateSnapshot;
+  const overtimePay = e.overtimeHours * e.hourlyRateSnapshot * e.overtimeMultiplierSnapshot;
+  const grossWage = regularPay + overtimePay;
+  const estimatedWithholding = Math.max(0, grossWage) * e.taxWithholdingPercent;
+  const netPay = grossWage + e.reimbursements - e.deductions - estimatedWithholding;
+  return { regularPay, overtimePay, grossWage, estimatedWithholding, netPay };
+}
+
+export function payrollRegisterTotal(reg: PayrollRegister) {
+  return reg.entries.reduce((sum, e) => sum + payrollEntryAmounts(e).netPay, 0);
+}
+
 export type RequestStatus =
   | "submitted"
   | "under_review"
@@ -708,6 +769,13 @@ type State = {
   approveWeeklyStatement: (id: string, by: string) => void;
   markWeeklyStatementPaid: (id: string, reference: string) => void;
   removeWeeklyStatement: (id: string) => void;
+
+  payrollRegisters: PayrollRegister[];
+  createPayrollRegister: (periodStart: string, periodEnd: string) => string;
+  updatePayrollEntry: (registerId: string, agentId: string, patch: Partial<PayrollEntry>) => void;
+  approvePayrollRegister: (id: string, by: string) => void;
+  markPayrollRegisterPaid: (id: string) => void;
+  removePayrollRegister: (id: string) => void;
 
   addDispute: (
     d: Omit<
@@ -1603,6 +1671,82 @@ export const useStore = create<State>()(
         workStatements: s.workStatements.map((w) => (w.weeklyStatementId === id ? { ...w, weeklyStatementId: null } : w)),
       })),
 
+      payrollRegisters: [],
+      createPayrollRegister: (periodStart, periodEnd) => {
+        const id = uid();
+        set((s) => {
+          const now = new Date().toISOString();
+          const seq = s.payrollRegisters.length + 1;
+          const w2Agents = s.agents.filter((a) => a.payrollType === "w2");
+          const entries: PayrollEntry[] = w2Agents.map((a) => {
+            const pos = s.positions.find((p) => p.name === a.level);
+            return {
+              agentId: a.id,
+              regularHours: 0,
+              overtimeHours: 0,
+              hourlyRateSnapshot: pos?.hourlyRate ?? 0,
+              overtimeMultiplierSnapshot: pos?.overtimeMultiplier ?? 1.5,
+              reimbursements: 0,
+              deductions: 0,
+              taxWithholdingPercent: 0,
+            };
+          });
+          const reg: PayrollRegister = {
+            id,
+            number: `PR-${String(seq).padStart(6, "0")}`,
+            periodStart,
+            periodEnd,
+            status: "draft",
+            entries,
+            approvedAt: null,
+            approvedBy: null,
+            paidAt: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          return { payrollRegisters: [...s.payrollRegisters, reg] };
+        });
+        return id;
+      },
+      updatePayrollEntry: (registerId, agentId, patch) => set((s) => ({
+        payrollRegisters: s.payrollRegisters.map((r) =>
+          r.id === registerId
+            ? { ...r, entries: r.entries.map((e) => (e.agentId === agentId ? { ...e, ...patch } : e)), updatedAt: new Date().toISOString() }
+            : r
+        ),
+      })),
+      approvePayrollRegister: (id, by) => set((s) => ({
+        payrollRegisters: s.payrollRegisters.map((r) =>
+          r.id === id ? { ...r, status: "approved", approvedAt: new Date().toISOString(), approvedBy: by, updatedAt: new Date().toISOString() } : r
+        ),
+      })),
+      markPayrollRegisterPaid: (id) => set((s) => {
+        const reg = s.payrollRegisters.find((r) => r.id === id);
+        if (!reg) return {};
+        const now = new Date().toISOString();
+        const newPayments = reg.entries
+          .filter((e) => payrollEntryAmounts(e).netPay > 0)
+          .map((e) => ({
+            id: uid(),
+            agentId: e.agentId,
+            date: now.slice(0, 10),
+            amount: payrollEntryAmounts(e).netPay,
+            method: "Payroll",
+            notes: `${reg.number} · ${reg.periodStart} – ${reg.periodEnd}`,
+            reference: reg.number,
+            status: "paid" as const,
+          }));
+        return {
+          payrollRegisters: s.payrollRegisters.map((r) =>
+            r.id === id ? { ...r, status: "paid", paidAt: now, updatedAt: now } : r
+          ),
+          payments: [...s.payments, ...newPayments],
+        };
+      }),
+      removePayrollRegister: (id) => set((s) => ({
+        payrollRegisters: s.payrollRegisters.filter((r) => r.id !== id),
+      })),
+
       addDispute: (d) => {
         const id = uid();
         set((s) => {
@@ -1872,6 +2016,7 @@ export const useStore = create<State>()(
           customerInvoices: [],
           workStatements: [],
           weeklyStatements: [],
+          payrollRegisters: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
           invoiceDraftProductId: "",

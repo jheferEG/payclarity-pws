@@ -17,7 +17,7 @@ import {
   Wallet, Calculator, CalendarDays, BookTemplate, MessageSquare, HelpCircle, Shield, UserRound,
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
-  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange,
+  Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -44,7 +44,7 @@ import {
   ExplainDialog, DisputeDialog,
 } from "@/components/ExtraPanels";
 import { DashboardPanel, ReportsPanel, YearEnd1099Panel, TaxReserveByStateEditor } from "@/components/NewPanels";
-import { CustomerInvoicesPanel, WorkStatementsPanel, WeeklyStatementsPanel } from "@/components/BillingPanels";
+import { CustomerInvoicesPanel, WorkStatementsPanel, WeeklyStatementsPanel, PayrollPanel } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
@@ -67,6 +67,7 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
       { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
       { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
       { id: "weekly-statements", label: t("tab_weekly_statements"), icon: CalendarRange },
+      { id: "payroll", label: t("tab_payroll"), icon: DollarSign },
     ]},
     { id: "team", label: t("nav_team"), tabs: [
       { id: "agents", label: t("tab_team"), icon: Users },
@@ -709,6 +710,7 @@ export default function CommissionTool() {
             <TabsContent value="users"><UserManagementPanel /></TabsContent>
             <TabsContent value="customer-invoices"><CustomerInvoicesPanel /></TabsContent>
             <TabsContent value="weekly-statements"><WeeklyStatementsPanel /></TabsContent>
+            <TabsContent value="payroll"><PayrollPanel /></TabsContent>
           </>}
         </Tabs>
         )}
@@ -2693,6 +2695,12 @@ function PlanPanel() {
                     <div><Label className="text-xs">{t("lbl_split_default")}</Label>
                       <PercentField step="1" value={p.splitDefaultPercent}
                         onChange={(n) => updatePosition(p.id, { splitDefaultPercent: n })} />
+                    </div>
+                    <div><Label className="text-xs">{isEs ? "Tarifa/hora (W-2)" : "Hourly rate (W-2)"}</Label>
+                      <NumField value={p.hourlyRate ?? 0} onChange={(n) => updatePosition(p.id, { hourlyRate: n })} />
+                    </div>
+                    <div><Label className="text-xs">{isEs ? "Multiplicador horas extra" : "Overtime multiplier"}</Label>
+                      <NumField step="0.1" value={p.overtimeMultiplier ?? 1.5} onChange={(n) => updatePosition(p.id, { overtimeMultiplier: n })} />
                     </div>
                     <div><Label className="text-xs">{t("lbl_effective_from")}</Label>
                       <Input type="date" value={p.effectiveFrom}

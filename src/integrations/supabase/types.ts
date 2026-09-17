@@ -486,6 +486,51 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_registers: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          period_start: string
+          period_end: string
+          status: "draft" | "approved" | "paid"
+          entries: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
+          approved_at: string | null
+          approved_by: string | null
+          paid_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          period_start: string
+          period_end: string
+          status?: "draft" | "approved" | "paid"
+          entries?: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
+          approved_at?: string | null
+          approved_by?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          period_start?: string
+          period_end?: string
+          status?: "draft" | "approved" | "paid"
+          entries?: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
+          approved_at?: string | null
+          approved_by?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       adjustments: {
         Row: {
           id: string
@@ -1014,6 +1059,7 @@ export type Database = {
           avatar_url: string | null
           level: string
           company_name: string | null
+          payroll_type: "w2" | "contractor" | null
           created_at: string
           updated_at: string
         }
@@ -1034,6 +1080,7 @@ export type Database = {
           avatar_url?: string | null
           level?: string
           company_name?: string | null
+          payroll_type?: "w2" | "contractor" | null
           created_at?: string
           updated_at?: string
         }
@@ -1054,6 +1101,7 @@ export type Database = {
           avatar_url?: string | null
           level?: string
           company_name?: string | null
+          payroll_type?: "w2" | "contractor" | null
           created_at?: string
           updated_at?: string
         }
@@ -1204,6 +1252,8 @@ export type Database = {
           install_fixed_pay: number | null
           service_fixed_pay: number | null
           rate_rules: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
+          hourly_rate: number | null
+          overtime_multiplier: number | null
           created_at: string
           updated_at: string
         }
@@ -1228,6 +1278,8 @@ export type Database = {
           install_fixed_pay?: number | null
           service_fixed_pay?: number | null
           rate_rules?: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
+          hourly_rate?: number | null
+          overtime_multiplier?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1252,6 +1304,8 @@ export type Database = {
           install_fixed_pay?: number | null
           service_fixed_pay?: number | null
           rate_rules?: { id: string; label: string; jobType: "installation" | "service" | "any"; territory: string; productRule: string; rateMode: "flat" | "multiplier"; baseRate: number; mileageRate: number; priority: number; active: boolean }[] | null
+          hourly_rate?: number | null
+          overtime_multiplier?: number | null
           created_at?: string
           updated_at?: string
         }

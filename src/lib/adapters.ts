@@ -8,6 +8,7 @@ import type {
   CustomerInvoice, CustomerInvoiceStatus, CustomerInvoiceLineItem, CustomerInvoicePayment,
   InvoiceTemplateId, RateRule, TechnicianWorkStatement, WorkStatementStatus, WorkStatementAuditEntry,
   WeeklyTechnicianStatement, WeeklyStatementStatus, WeeklyAdjustment,
+  PayrollRegister, PayrollRegisterStatus, PayrollEntry,
 } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,6 +72,7 @@ export function adaptAgent(row: Tables<"agents">): Agent {
     avatarUrl: row.avatar_url ?? undefined,
     level: row.level ?? undefined,
     companyName: row.company_name ?? undefined,
+    payrollType: (row.payroll_type as Agent["payrollType"]) ?? undefined,
   };
 }
 
@@ -91,6 +93,7 @@ export function agentToRow(a: Agent, companyId: string) {
     avatar_url: a.avatarUrl ?? undefined,
     level: a.level ?? undefined,
     company_name: a.companyName ?? undefined,
+    payroll_type: a.payrollType ?? undefined,
   };
 }
 
@@ -475,6 +478,39 @@ export function weeklyStatementToRow(w: WeeklyTechnicianStatement, companyId: st
   };
 }
 
+// ─── PAYROLL REGISTER ────────────────────────────────────────────────────────
+
+export function adaptPayrollRegister(row: Tables<"payroll_registers">): PayrollRegister {
+  return {
+    id: row.id,
+    number: row.number,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    status: row.status as PayrollRegisterStatus,
+    entries: (row.entries as unknown as PayrollEntry[] | null) ?? [],
+    approvedAt: row.approved_at,
+    approvedBy: row.approved_by,
+    paidAt: row.paid_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function payrollRegisterToRow(r: PayrollRegister, companyId: string) {
+  return {
+    id: r.id,
+    company_id: companyId,
+    number: r.number,
+    period_start: r.periodStart,
+    period_end: r.periodEnd,
+    status: r.status,
+    entries: r.entries,
+    approved_at: r.approvedAt,
+    approved_by: r.approvedBy,
+    paid_at: r.paidAt,
+  };
+}
+
 // ─── ADJUSTMENTS ─────────────────────────────────────────────────────────────
 
 export function adaptAdjustment(row: Tables<"adjustments">): Adjustment {
@@ -729,6 +765,8 @@ export function adaptPosition(row: Tables<"compensation_positions">): Compensati
     installFixedPay: row.install_fixed_pay != null ? Number(row.install_fixed_pay) : undefined,
     serviceFixedPay: row.service_fixed_pay != null ? Number(row.service_fixed_pay) : undefined,
     rateRules: (row.rate_rules as unknown as RateRule[] | null) ?? undefined,
+    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
+    overtimeMultiplier: row.overtime_multiplier != null ? Number(row.overtime_multiplier) : undefined,
   };
 }
 
@@ -754,5 +792,7 @@ export function positionToRow(p: CompensationPosition, companyId: string) {
     install_fixed_pay: p.installFixedPay ?? null,
     service_fixed_pay: p.serviceFixedPay ?? null,
     rate_rules: p.rateRules ?? null,
+    hourly_rate: p.hourlyRate ?? null,
+    overtime_multiplier: p.overtimeMultiplier ?? null,
   };
 }

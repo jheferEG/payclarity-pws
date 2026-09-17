@@ -16,9 +16,11 @@ import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Penci
 import {
   useStore, customerInvoiceTotals, workStatementTotal,
   eligibleWorkStatements, weeklyStatementTotal,
+  payrollEntryAmounts, payrollRegisterTotal, PAYROLL_DISCLAIMER,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
   type TechnicianWorkStatement, type WorkStatementStatus,
   type WeeklyTechnicianStatement, type ExclusionReason,
+  type PayrollRegister,
 } from "@/lib/commission-store";
 import { fmtMoney } from "@/lib/commission-calc";
 import { buildCustomerInvoicePDF, buildCustomerReceiptPDF } from "@/lib/generate-invoices";
@@ -942,5 +944,198 @@ export function WeeklyStatementsPanel() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* ========================================================================
+ * PAYROLL REGISTER — Phase 4 of Billing & Technician Payables.
+ * W-2 EMPLOYEES ONLY — entirely separate from the contractor/vendor
+ * payables above. NOT a payroll tax filer; see PAYROLL_DISCLAIMER.
+ * ======================================================================== */
+export function PayrollPanel() {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const [periodStart, setPeriodStart] = useState(new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const w2Agents = s.agents.filter((a) => a.payrollType === "w2");
+  const list = s.payrollRegisters.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const open = s.payrollRegisters.find((r) => r.id === openId) ?? null;
+
+  const generate = () => {
+    if (!w2Agents.length) return toast.error(isEs ? "No hay empleados W-2 marcados en Equipo." : "No agents are marked W-2 in Equipo.");
+    const id = s.createPayrollRegister(periodStart, periodEnd);
+    setOpenId(id);
+    toast.success(isEs ? "Nómina creada." : "Payroll register created.");
+  };
+
+  return (
+    <>
+      <Section
+        title={isEs ? "Nómina (Payroll Register)" : "Payroll Register"}
+        desc={isEs
+          ? "Solo empleados W-2 — separado por completo de los pagos a contratistas de arriba."
+          : "W-2 employees only — completely separate from the contractor payables above."}
+      >
+        <p className="text-xs text-muted-foreground italic bg-muted/40 rounded-lg px-3 py-2 mb-4">
+          {isEs
+            ? "Transpare prepara la información de nómina para revisión y exportación. La retención final, la declaración y el procesamiento de nómina deben completarse a través de un proveedor de nómina autorizado o un profesional calificado."
+            : PAYROLL_DISCLAIMER}
+        </p>
+
+        <div className="mb-4">
+          <Label className="text-xs font-semibold">{isEs ? "Marcar empleados como W-2" : "Mark agents as W-2"}</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {s.agents.map((a) => (
+              <label key={a.id} className="flex items-center gap-1.5 text-xs border border-border rounded-full px-2.5 py-1">
+                <input type="checkbox" checked={a.payrollType === "w2"}
+                  onChange={(e) => s.updateAgent(a.id, { payrollType: e.target.checked ? "w2" : "contractor" })} />
+                {a.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div><Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
+            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          </div>
+          <div><Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
+            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </div>
+          <Button onClick={generate}><Plus className="w-4 h-4 mr-2" />{isEs ? "Generar nómina" : "Generate register"}</Button>
+        </div>
+      </Section>
+
+      <Section title={isEs ? "Registros de nómina" : "Payroll registers"}>
+        {list.length === 0 ? (
+          <Empty msg={isEs ? "Sin registros todavía." : "No registers yet."} />
+        ) : (
+          <div className="space-y-3">
+            {list.map((r) => (
+              <Card key={r.id} className="p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">{r.number}</span>
+                      <Badge variant={r.status === "paid" ? "default" : r.status === "approved" ? "secondary" : "outline"}>{r.status}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CalendarRange className="w-3 h-3" />{r.periodStart} – {r.periodEnd} · {r.entries.length} {isEs ? "empleados" : "employees"}
+                    </p>
+                  </div>
+                  <p className="text-lg font-bold font-mono">{fmtMoney(payrollRegisterTotal(r), s.company.currency)}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                  <Button size="sm" variant="outline" onClick={() => setOpenId(r.id)}>
+                    <Pencil className="w-3.5 h-3.5 mr-1" />{isEs ? "Abrir" : "Open"}
+                  </Button>
+                  {r.status === "draft" && (
+                    <Button size="sm" onClick={() => { s.approvePayrollRegister(r.id, s.currentUserName); toast.success(isEs ? "Aprobado." : "Approved."); }}>
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />{isEs ? "Aprobar" : "Approve"}
+                    </Button>
+                  )}
+                  {r.status === "approved" && (
+                    <Button size="sm" onClick={() => { s.markPayrollRegisterPaid(r.id); toast.success(isEs ? "Marcado como pagado." : "Marked as paid."); }}>
+                      <DollarSign className="w-3.5 h-3.5 mr-1" />{isEs ? "Marcar pagado" : "Mark paid"}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" className="ml-auto" onClick={() => {
+                    if (!confirm(isEs ? "¿Eliminar esta nómina?" : "Delete this register?")) return;
+                    s.removePayrollRegister(r.id);
+                  }}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {open && <PayrollRegisterDialog reg={open} onClose={() => setOpenId(null)} />}
+    </>
+  );
+}
+
+function PayrollRegisterDialog({ reg, onClose }: { reg: PayrollRegister; onClose: () => void }) {
+  const s = useStore();
+  const isEs = s.language === "es";
+
+  const exportCSV = () => {
+    const rows: (string | number)[][] = [["Employee", "Regular hrs", "OT hrs", "Hourly rate", "OT multiplier", "Gross", "Reimbursements", "Deductions", "Est. withholding", "Net pay"]];
+    for (const e of reg.entries) {
+      const ag = s.agents.find((a) => a.id === e.agentId);
+      const amt = payrollEntryAmounts(e);
+      rows.push([ag?.name ?? "—", e.regularHours, e.overtimeHours, e.hourlyRateSnapshot, e.overtimeMultiplierSnapshot,
+        amt.grossWage.toFixed(2), e.reimbursements.toFixed(2), e.deductions.toFixed(2), amt.estimatedWithholding.toFixed(2), amt.netPay.toFixed(2)]);
+    }
+    downloadCSV(`${reg.number}_payroll.csv`, rows);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{reg.number}</DialogTitle>
+          <DialogDescription>{reg.periodStart} – {reg.periodEnd}</DialogDescription>
+        </DialogHeader>
+
+        <p className="text-xs text-muted-foreground italic bg-muted/40 rounded-lg px-3 py-2">
+          {isEs ? "La retención mostrada es solo un estimado interno — no es un cálculo oficial." : "Withholding shown is an internal estimate only — not an official calculation."}
+        </p>
+
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-xs">
+            <thead className="text-left text-muted-foreground uppercase">
+              <tr>
+                <th className="py-1">{isEs ? "Empleado" : "Employee"}</th>
+                <th>{isEs ? "Hrs reg." : "Reg hrs"}</th>
+                <th>{isEs ? "Hrs extra" : "OT hrs"}</th>
+                <th className="text-right">{isEs ? "Reembolsos" : "Reimb."}</th>
+                <th className="text-right">{isEs ? "Deducciones" : "Deduct."}</th>
+                <th className="text-right">{isEs ? "% retención" : "Tax %"}</th>
+                <th className="text-right">{isEs ? "Bruto" : "Gross"}</th>
+                <th className="text-right">{isEs ? "Neto" : "Net"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reg.entries.map((e) => {
+                const ag = s.agents.find((a) => a.id === e.agentId);
+                const amt = payrollEntryAmounts(e);
+                const disabled = reg.status !== "draft";
+                return (
+                  <tr key={e.agentId} className="border-t border-border/60">
+                    <td className="py-1 font-medium">{ag?.name ?? "—"}</td>
+                    <td><NumField className="h-7 w-16" step="0.25" value={e.regularHours} disabled={disabled}
+                      onChange={(n) => s.updatePayrollEntry(reg.id, e.agentId, { regularHours: n })} /></td>
+                    <td><NumField className="h-7 w-16" step="0.25" value={e.overtimeHours} disabled={disabled}
+                      onChange={(n) => s.updatePayrollEntry(reg.id, e.agentId, { overtimeHours: n })} /></td>
+                    <td className="text-right"><NumField className="h-7 w-20" step="0.01" value={e.reimbursements} disabled={disabled}
+                      onChange={(n) => s.updatePayrollEntry(reg.id, e.agentId, { reimbursements: n })} /></td>
+                    <td className="text-right"><NumField className="h-7 w-20" step="0.01" value={e.deductions} disabled={disabled}
+                      onChange={(n) => s.updatePayrollEntry(reg.id, e.agentId, { deductions: n })} /></td>
+                    <td className="text-right"><NumField className="h-7 w-16" step="0.1" value={Number((e.taxWithholdingPercent * 100).toFixed(2))} disabled={disabled}
+                      onChange={(n) => s.updatePayrollEntry(reg.id, e.agentId, { taxWithholdingPercent: n / 100 })} /></td>
+                    <td className="text-right font-mono">{fmtMoney(amt.grossWage, s.company.currency)}</td>
+                    <td className="text-right font-mono font-semibold">{fmtMoney(amt.netPay, s.company.currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-between items-center mt-3">
+          <Button variant="outline" size="sm" onClick={exportCSV}><FileDown className="w-3.5 h-3.5 mr-1" />CSV</Button>
+          <span className="font-bold text-accent">{isEs ? "Total del registro" : "Register total"}: {fmtMoney(payrollRegisterTotal(reg), s.company.currency)}</span>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{isEs ? "Cerrar" : "Close"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

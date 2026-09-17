@@ -14,6 +14,7 @@ import {
   adaptCustomerInvoice, customerInvoiceToRow,
   adaptWorkStatement, workStatementToRow,
   adaptWeeklyStatement, weeklyStatementToRow,
+  adaptPayrollRegister, payrollRegisterToRow,
   adaptAdjustment, adjustmentToRow,
   adaptDispute, disputeToRow,
   adaptNotification, notificationToRow,
@@ -62,6 +63,7 @@ export function useSupabaseSync() {
         customerInvoices: [],
         workStatements: [],
         weeklyStatements: [],
+        payrollRegisters: [],
         adjustments: [],
         disputes: [],
         notifications: [],
@@ -85,6 +87,7 @@ export function useSupabaseSync() {
         { data: customerInvoices },
         { data: workStatements },
         { data: weeklyStatements },
+        { data: payrollRegisters },
         { data: adjustments },
         { data: disputes },
         { data: notifications },
@@ -107,6 +110,7 @@ export function useSupabaseSync() {
         supabase.from("customer_invoices").select("*"),
         supabase.from("technician_work_statements").select("*"),
         supabase.from("weekly_technician_statements").select("*"),
+        supabase.from("payroll_registers").select("*"),
         supabase.from("adjustments").select("*"),
         supabase.from("disputes").select("*, dispute_events(*)"),
         supabase.from("notifications").select("*").order("at", { ascending: false }),
@@ -128,6 +132,7 @@ export function useSupabaseSync() {
         customerInvoices: (customerInvoices ?? []).map(adaptCustomerInvoice),
         workStatements: (workStatements ?? []).map(adaptWorkStatement),
         weeklyStatements: (weeklyStatements ?? []).map(adaptWeeklyStatement),
+        payrollRegisters: (payrollRegisters ?? []).map(adaptPayrollRegister),
         adjustments: (adjustments ?? []).map(adaptAdjustment),
         disputes: ((disputes ?? []) as any[]).map(adaptDispute),
         notifications: (notifications ?? []).map(adaptNotification),
@@ -303,6 +308,13 @@ export function useSupabaseSync() {
         prev.weeklyStatements, next.weeklyStatements,
         (w) => supabase.from("weekly_technician_statements").upsert(weeklyStatementToRow(w, companyId), { onConflict: "id" }),
         (w) => supabase.from("weekly_technician_statements").delete().eq("id", w.id),
+      );
+
+      // Payroll registers
+      syncItems(
+        prev.payrollRegisters, next.payrollRegisters,
+        (r) => supabase.from("payroll_registers").upsert(payrollRegisterToRow(r, companyId), { onConflict: "id" }),
+        (r) => supabase.from("payroll_registers").delete().eq("id", r.id),
       );
 
       // Adjustments
