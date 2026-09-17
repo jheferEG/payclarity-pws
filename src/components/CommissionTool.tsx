@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition, type RateRule } from "@/lib/commission-store";
+import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition, type RateRule, resolveRateRule, rateRuleAmount } from "@/lib/commission-store";
 import {
   calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
@@ -2456,6 +2456,48 @@ function RateRulesEditor({ position, isEs, currency, onChange }: {
   );
 }
 
+/** Live tester for a position's Rate Plan — lets the admin punch in a job
+ * type/territory/product and immediately see which rule (if any) matches
+ * and what it pays, without having to create a real Work Statement first. */
+function RatePlanTester({ position, isEs, currency }: {
+  position: CompensationPosition; isEs: boolean; currency: string;
+}) {
+  const [ctx, setCtx] = useState<{ jobType: "installation" | "service"; territory: string; productRule: string }>({
+    jobType: "installation", territory: "", productRule: "",
+  });
+  const rule = resolveRateRule(position, ctx);
+  const amount = rateRuleAmount(rule, position, ctx.jobType);
+
+  return (
+    <div className="border-t pt-3">
+      <Label className="text-xs font-semibold">{isEs ? "Probar Rate Plan" : "Test Rate Plan"}</Label>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end mt-2">
+        <div><Label className="text-[10px]">{isEs ? "Tipo" : "Job type"}</Label>
+          <Select value={ctx.jobType} onValueChange={(v: "installation" | "service") => setCtx((c) => ({ ...c, jobType: v }))}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="installation">{isEs ? "Instalación" : "Installation"}</SelectItem>
+              <SelectItem value="service">{isEs ? "Servicio" : "Service"}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label className="text-[10px]">{isEs ? "Territorio" : "Territory"}</Label>
+          <Input className="h-8" value={ctx.territory} onChange={(e) => setCtx((c) => ({ ...c, territory: e.target.value }))} />
+        </div>
+        <div><Label className="text-[10px]">{isEs ? "Producto" : "Product"}</Label>
+          <Input className="h-8" value={ctx.productRule} onChange={(e) => setCtx((c) => ({ ...c, productRule: e.target.value }))} />
+        </div>
+        <div className="rounded-md border border-border/60 px-3 py-1.5 text-sm">
+          <span className="text-muted-foreground text-xs block">
+            {rule ? rule.label : (isEs ? "Sin regla — pago fijo" : "No rule — flat pay")}
+          </span>
+          <span className="font-semibold">{fmtMoney(amount, currency)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Plan ---------- */
 function PlanPanel() {
   const {
@@ -2674,6 +2716,9 @@ function PlanPanel() {
                         <div className="md:col-span-4">
                           <RateRulesEditor position={p} isEs={isEs} currency={company.currency}
                             onChange={(rateRules) => updatePosition(p.id, { rateRules })} />
+                        </div>
+                        <div className="md:col-span-4">
+                          <RatePlanTester position={p} isEs={isEs} currency={company.currency} />
                         </div>
                       </>
                     ) : (

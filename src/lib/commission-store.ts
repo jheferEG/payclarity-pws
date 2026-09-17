@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type W9Status = "missing" | "pending" | "valid";
@@ -965,9 +965,12 @@ const todayPlus = (d: number) => {
   return x.toISOString().slice(0, 10);
 };
 
-export const useStore = create<State>()(
-  persist(
-    (set, get) => ({
+// Annotated explicitly (rather than left to inference through create<State>()(persist(...)))
+// because this object literal is large enough that TypeScript silently gives up
+// contextually typing it past a certain point, leaving everything after that point
+// an implicit `any` — an explicit StateCreator<State> annotation forces it to type
+// the whole thing directly instead.
+const storeCreator: StateCreator<State> = (set, get) => ({
       ...defaults,
       agents: [],
       financeCompanies: [],
@@ -1290,22 +1293,9 @@ export const useStore = create<State>()(
         return id;
       },
       updateInvoice: (id, i) =>
-        set((s) => {
-          const prev = s.invoices.find((x) => x.id === id);
-          const newNotifs: Notification[] = [];
-          if (prev && i.status && i.status !== prev.status && i.status === "approved") {
-            newNotifs.push({
-              id: uid(), at: new Date().toISOString(), read: false,
-              title: "Invoice aprobada",
-              message: `La invoice ${prev.number}${prev.customerName ? ` (${prev.customerName})` : ""} fue aprobada.`,
-              kind: "info" as const, audience: "admin" as const,
-            });
-          }
-          return {
-            invoices: s.invoices.map((x) => (x.id === id ? { ...x, ...i } : x)),
-            notifications: [...s.notifications, ...newNotifs],
-          };
-        }),
+        set((s) => ({
+          invoices: s.invoices.map((x) => (x.id === id ? { ...x, ...i } : x)),
+        })),
       removeInvoice: (id) =>
         set((s) => ({
           invoices: s.invoices.filter((x) => x.id !== id),
@@ -2180,7 +2170,11 @@ export const useStore = create<State>()(
         });
       },
 
-    }),
+});
+
+export const useStore = create<State>()(
+  persist(
+    storeCreator,
     {
       name: "commission-tool-v3",
       partialize: (state: any) => {
