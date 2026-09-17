@@ -300,7 +300,23 @@ export type Company = {
   // $ (per invoice — doubles as "Costo del producto") or as a %. Only the
   // matching field is shown across the app, instead of both at once.
   commissionEntryMode: "fixed" | "percent";
+  // Client-configurable label for the "General invoice" (isGeneralInvoice)
+  // role — some companies call them "Technicians", others "Installers",
+  // "Contractors", etc. Empty string = fall back to the built-in EN/ES
+  // default. Used anywhere the Billing & Technician Payables screens would
+  // otherwise hardcode "Technician"/"Técnico".
+  technicianTermSingular: string;
+  technicianTermPlural: string;
 };
+
+/** Resolves the configurable "technician" label — falls back to the
+ * built-in default per language when the company hasn't set one. */
+export function technicianTerm(company: Pick<Company, "technicianTermSingular" | "technicianTermPlural">, isEs: boolean, plural = false): string {
+  const custom = plural ? company.technicianTermPlural : company.technicianTermSingular;
+  if (custom?.trim()) return custom.trim();
+  if (isEs) return plural ? "Técnicos" : "Técnico";
+  return plural ? "Technicians" : "Technician";
+}
 
 export type Payment = {
   id: string;
@@ -895,6 +911,8 @@ const defaults = {
       "All amounts are subject to verification. Tax reserves are suggestions, not official tax advice.",
     invoiceTemplate: "classic",
     commissionEntryMode: "fixed",
+    technicianTermSingular: "",
+    technicianTermPlural: "",
   } as Company,
   personalTiers: [
     { minVolume: 0, rate: 0.05 },
@@ -2214,6 +2232,8 @@ export const useStore = create<State>()(
               "All amounts are subject to verification. Tax reserves are suggestions, not official tax advice.",
             invoiceTemplate: "classic",
             commissionEntryMode: "fixed",
+            technicianTermSingular: "",
+            technicianTermPlural: "",
             ...persisted.company,
           };
         }

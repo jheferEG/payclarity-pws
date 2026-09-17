@@ -31,6 +31,8 @@ export type Database = {
           disclaimer_text: string
           invoice_template: string
           commission_entry_mode: string
+          technician_term_singular: string | null
+          technician_term_plural: string | null
           invoice_date: string | null
           period_label: string
           next_payout_date: string | null
@@ -54,6 +56,8 @@ export type Database = {
           disclaimer_text?: string
           invoice_template?: string
           commission_entry_mode?: string
+          technician_term_singular?: string | null
+          technician_term_plural?: string | null
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null
@@ -77,6 +81,8 @@ export type Database = {
           disclaimer_text?: string
           invoice_template?: string
           commission_entry_mode?: string
+          technician_term_singular?: string | null
+          technician_term_plural?: string | null
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null

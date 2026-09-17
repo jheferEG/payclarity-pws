@@ -32,6 +32,8 @@ export function adaptCompany(row: Tables<"companies">): Partial<Company> {
     disclaimerText: row.disclaimer_text,
     invoiceTemplate: row.invoice_template as Company["invoiceTemplate"],
     commissionEntryMode: (row.commission_entry_mode as Company["commissionEntryMode"]) ?? "fixed",
+    technicianTermSingular: row.technician_term_singular ?? "",
+    technicianTermPlural: row.technician_term_plural ?? "",
   };
 }
 
@@ -51,6 +53,8 @@ export function companyToRow(c: Company) {
     disclaimer_text: c.disclaimerText,
     invoice_template: c.invoiceTemplate,
     commission_entry_mode: c.commissionEntryMode,
+    technician_term_singular: c.technicianTermSingular || null,
+    technician_term_plural: c.technicianTermPlural || null,
   };
 }
 

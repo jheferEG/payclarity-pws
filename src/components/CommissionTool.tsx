@@ -2339,10 +2339,10 @@ function LineEditor({
       <div className="space-y-2">
         {rows.length === 0 && <p className="text-xs text-muted-foreground">{t("empty_no_lines")}</p>}
         {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-[1fr_140px_auto] gap-2">
+          <div key={i} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_140px_auto] gap-2">
             <Input value={r.label} placeholder={t("lbl_description")} onChange={(e) => onChange(i, "label", e.target.value)} />
-            <NumField step="0.01" value={r.amount} onChange={(n) => onChange(i, "amount", String(n))} />
-            <Button variant="ghost" size="icon" onClick={() => onRemove(i)}><Trash2 className="w-4 h-4" /></Button>
+            <NumField className="w-24 sm:w-auto" step="0.01" value={r.amount} onChange={(n) => onChange(i, "amount", String(n))} />
+            <Button variant="ghost" size="icon" className="col-span-2 justify-self-end sm:col-span-1" onClick={() => onRemove(i)}><Trash2 className="w-4 h-4" /></Button>
           </div>
         ))}
       </div>
@@ -2371,11 +2371,11 @@ function CustomerPaymentsEditor({
       <div className="space-y-2">
         {rows.length === 0 && <p className="text-xs text-muted-foreground">{isEs ? "Sin abonos registrados." : "No payments recorded."}</p>}
         {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-[1fr_120px_140px_auto] gap-2">
-            <Input value={r.label} placeholder={isEs ? "Abono" : "Payment"} onChange={(e) => update(i, { label: e.target.value })} />
+          <div key={i} className="grid grid-cols-2 sm:grid-cols-[1fr_120px_140px_auto] gap-2 pb-2 mb-1 border-b border-border/50 sm:border-0 sm:pb-0 sm:mb-0">
+            <Input className="col-span-2 sm:col-span-1" value={r.label} placeholder={isEs ? "Abono" : "Payment"} onChange={(e) => update(i, { label: e.target.value })} />
             <NumField step="0.01" value={r.amount} onChange={(n) => update(i, { amount: n })} />
             <Input type="date" value={r.date} onChange={(e) => update(i, { date: e.target.value })} />
-            <Button variant="ghost" size="icon" onClick={() => remove(i)}><Trash2 className="w-4 h-4" /></Button>
+            <Button variant="ghost" size="icon" className="col-span-2 justify-self-end sm:col-span-1" onClick={() => remove(i)}><Trash2 className="w-4 h-4" /></Button>
           </div>
         ))}
       </div>
@@ -2945,8 +2945,9 @@ function ValidationList({ errs }: { errs: string[] }) {
 
 /* ---------- Company ---------- */
 function CompanyPanel() {
-  const { company, setCompany, invoiceDate, periodLabel, setInvoiceMeta, resetAll, currentUserName, setCurrentUserName } = useStore();
+  const { company, setCompany, invoiceDate, periodLabel, setInvoiceMeta, resetAll, currentUserName, setCurrentUserName, language } = useStore();
   const t = useT();
+  const isEs = language === "es";
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <SectionCard title={t("sect_company")} desc={t("sect_company_desc")}>
@@ -2995,6 +2996,28 @@ function CompanyPanel() {
           </Button>
         </div>
       </SectionCard>
+
+      <div className="md:col-span-2">
+        <SectionCard
+          title={isEs ? "Terminología" : "Terminology"}
+          desc={isEs
+            ? "Cómo se le llama en tu empresa a los que hacen instalaciones/servicios (Facturación → Estados de trabajo). Déjalo en blanco para usar el nombre por defecto."
+            : "What your company calls the people who do installs/service jobs (Billing → Work Statements). Leave blank to use the default."}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field
+              label={isEs ? "Singular (ej. Técnico)" : "Singular (e.g. Technician)"}
+              value={company.technicianTermSingular}
+              onChange={(v) => setCompany({ technicianTermSingular: v })}
+            />
+            <Field
+              label={isEs ? "Plural (ej. Técnicos)" : "Plural (e.g. Technicians)"}
+              value={company.technicianTermPlural}
+              onChange={(v) => setCompany({ technicianTermPlural: v })}
+            />
+          </div>
+        </SectionCard>
+      </div>
 
       <div className="md:col-span-2">
         <SectionCard title={t("sect_tax_reserve")} desc={t("sect_tax_reserve_desc")}>

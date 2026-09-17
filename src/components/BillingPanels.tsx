@@ -16,7 +16,7 @@ import { Plus, Trash2, FileDown, Mail, DollarSign, Receipt as ReceiptIcon, Penci
 import {
   useStore, customerInvoiceTotals, workStatementTotal,
   eligibleWorkStatements, weeklyStatementTotal,
-  payrollEntryAmounts, payrollRegisterTotal, PAYROLL_DISCLAIMER,
+  payrollEntryAmounts, payrollRegisterTotal, PAYROLL_DISCLAIMER, technicianTerm,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
   type TechnicianWorkStatement, type WorkStatementStatus,
   type WeeklyTechnicianStatement, type ExclusionReason,
@@ -351,7 +351,7 @@ function CustomerInvoiceEditDialog({ ci, onClose }: { ci: CustomerInvoice; onClo
           <div className="space-y-2">
             {draft.lineItems.length === 0 && <p className="text-xs text-muted-foreground">{isEs ? "Sin líneas." : "No lines."}</p>}
             {draft.lineItems.map((li, i) => (
-              <div key={li.id} className="grid grid-cols-[100px_1fr_70px_100px_auto] gap-2 items-center">
+              <div key={li.id} className="grid grid-cols-2 sm:grid-cols-[100px_1fr_70px_100px_auto] gap-2 items-center pb-2 mb-1 border-b border-border/50 sm:border-0 sm:pb-0 sm:mb-0">
                 <Select value={li.kind} onValueChange={(v: "product" | "service") => updateLine(i, { kind: v })}>
                   <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -362,7 +362,7 @@ function CustomerInvoiceEditDialog({ ci, onClose }: { ci: CustomerInvoice; onClo
                 <Input className="h-8" value={li.label} placeholder={isEs ? "Descripción" : "Description"} onChange={(e) => updateLine(i, { label: e.target.value })} />
                 <NumField className="h-8" step="1" value={li.quantity} onChange={(n) => updateLine(i, { quantity: n })} />
                 <NumField className="h-8" step="0.01" value={li.unitPrice} onChange={(n) => updateLine(i, { unitPrice: n })} />
-                <Button variant="ghost" size="icon" onClick={() => removeLine(i)}><Trash2 className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="col-span-2 justify-self-end sm:col-span-1" onClick={() => removeLine(i)}><Trash2 className="w-4 h-4" /></Button>
               </div>
             ))}
           </div>
@@ -501,6 +501,7 @@ export function WorkStatementsPanel() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  const techSingular = technicianTerm(s.company, isEs);
   const visible = isAdmin ? s.workStatements : s.workStatements.filter((w) => w.technicianId === myAgentId);
   const list = visible.filter((w) => filter === "all" || w.status === filter).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const counts: Record<string, number> = { all: visible.length };
@@ -520,10 +521,10 @@ export function WorkStatementsPanel() {
   return (
     <>
       <Section
-        title={isEs ? "Estados de trabajo del técnico" : "Technician Work Statements"}
+        title={isEs ? `Estados de trabajo del ${techSingular.toLowerCase()}` : `${techSingular} Work Statements`}
         desc={isEs
-          ? "Una hoja de aprobación por técnico y trabajo — no cambia el pago fijo del invoice general, solo el flujo de aprobación alrededor."
-          : "One approval sheet per technician per job — doesn't change the general invoice's fixed pay, just the approval workflow around it."}
+          ? `Una hoja de aprobación por ${techSingular.toLowerCase()} y trabajo — no cambia el pago fijo del invoice general, solo el flujo de aprobación alrededor.`
+          : `One approval sheet per ${techSingular.toLowerCase()} per job — doesn't change the general invoice's fixed pay, just the approval workflow around it.`}
       >
         <div className="flex flex-wrap gap-2 mb-4">
           <Button size="sm" variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
@@ -750,6 +751,8 @@ export function WeeklyStatementsPanel() {
   const s = useStore();
   const isEs = s.language === "es";
   const EXCLUSION_LABEL = isEs ? EXCLUSION_LABEL_ES : EXCLUSION_LABEL_EN;
+  const techSingular = technicianTerm(s.company, isEs);
+  const techPlural = technicianTerm(s.company, isEs, true);
 
   const technicians = s.agents.filter((a) => {
     const pos = s.positions.find((p) => p.name === a.level);
@@ -767,9 +770,9 @@ export function WeeklyStatementsPanel() {
   const preview = genTech ? eligibleWorkStatements(genTech, s.workStatements) : null;
 
   const generate = () => {
-    if (!genTech) return toast.error(isEs ? "Elige un técnico." : "Pick a technician.");
+    if (!genTech) return toast.error(isEs ? `Elige un ${techSingular.toLowerCase()}.` : `Pick a ${techSingular.toLowerCase()}.`);
     const id = s.generateWeeklyStatement(genTech, periodStart, periodEnd);
-    if (!id) return toast.error(isEs ? "Nada elegible para este técnico." : "Nothing eligible for this technician.");
+    if (!id) return toast.error(isEs ? `Nada elegible para este ${techSingular.toLowerCase()}.` : `Nothing eligible for this ${techSingular.toLowerCase()}.`);
     toast.success(isEs ? "Lote generado." : "Batch generated.");
   };
 
@@ -782,7 +785,7 @@ export function WeeklyStatementsPanel() {
   const summaryTotal = summaryList.reduce((sum, w) => sum + weeklyStatementTotal(w, s.workStatements, s.invoices), 0);
 
   const exportSummary = () => {
-    const rows: (string | number)[][] = [["Technician", "Statement", "Period start", "Period end", "Status", "Total"]];
+    const rows: (string | number)[][] = [[techSingular, "Statement", "Period start", "Period end", "Status", "Total"]];
     for (const w of summaryList) {
       const tech = s.agents.find((a) => a.id === w.technicianId);
       rows.push([tech?.name ?? "—", w.number, w.periodStart, w.periodEnd, w.status, weeklyStatementTotal(w, s.workStatements, s.invoices).toFixed(2)]);
@@ -794,7 +797,7 @@ export function WeeklyStatementsPanel() {
     <>
       <Section
         title={isEs ? "Resumen de pagos de la compañía" : "Company Payables Summary"}
-        desc={isEs ? "Total a pagar a técnicos en un período, a través de todos los lotes semanales." : "Total payable to technicians in a period, across all weekly batches."}
+        desc={isEs ? `Total a pagar a ${techPlural.toLowerCase()} en un período, a través de todos los lotes semanales.` : `Total payable to ${techPlural.toLowerCase()} in a period, across all weekly batches.`}
         action={
           <div className="flex flex-wrap items-end gap-2">
             <div><Label className="text-xs">{isEs ? "Desde" : "From"}</Label><Input type="date" className="h-8" value={summaryFrom} onChange={(e) => setSummaryFrom(e.target.value)} /></div>
@@ -813,10 +816,10 @@ export function WeeklyStatementsPanel() {
 
       <Section
         title={isEs ? "Generar lote semanal" : "Generate weekly batch"}
-        desc={isEs ? "Consolida los estados de trabajo aprobados de un técnico en un solo pago." : "Consolidates a technician's approved work statements into one payable."}
+        desc={isEs ? `Consolida los estados de trabajo aprobados de un ${techSingular.toLowerCase()} en un solo pago.` : `Consolidates a ${techSingular.toLowerCase()}'s approved work statements into one payable.`}
       >
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-          <div className="sm:col-span-2"><Label className="text-xs">{isEs ? "Técnico" : "Technician"}</Label>
+          <div className="sm:col-span-2"><Label className="text-xs">{techSingular}</Label>
             <Select value={genTech || "none"} onValueChange={(v) => setGenTech(v === "none" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder={isEs ? "Elegir…" : "Pick…"} /></SelectTrigger>
               <SelectContent>
