@@ -232,11 +232,17 @@ export function calcPayouts(
     // level/cost don't apply to that role, so there's nothing to walk up.
     if (commissionEntryMode === "fixed" && !c.invoice.isGeneralInvoice) {
       for (const row of costCascade(a, c.invoice.productCost || 0, agents)) {
-        cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + row.amount);
+        // Admin can manually correct one sponsor's override on this specific
+        // invoice from the "Who's involved" dialog — that override wins here
+        // too, not just in the preview, so the payout always matches what
+        // was shown before saving.
+        const manual = c.invoice.overrideAmountOverrides?.[row.agentId];
+        const amount = manual != null ? manual : row.amount;
+        cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + amount);
         if (!cascadeDetailByAgent.has(row.agentId)) cascadeDetailByAgent.set(row.agentId, new Map());
         const bySeller = cascadeDetailByAgent.get(row.agentId)!;
         const prev = bySeller.get(a) || { level: row.level, amount: 0 };
-        bySeller.set(a, { level: row.level, amount: prev.amount + row.amount });
+        bySeller.set(a, { level: row.level, amount: prev.amount + amount });
       }
     }
   }
@@ -290,9 +296,21 @@ export function calcPayouts(
           .filter((x): x is DownlineEntry => x !== null)
           .sort((x, y) => x.level - y.level || y.override - x.override)
       : dl.map(({ agent, level }) => {
-          const profit = Math.max(0, profitByAgent.get(agent.id) || 0);
           const rate = overrideMap.get(level) || 0;
-          return { agent, level, profit, rate, override: profit * rate };
+          // Summed per-invoice (not "total profit × rate" in one shot) so a
+          // manual override on one specific sale doesn't get swamped by the
+          // rest of that seller's invoices — same override amount shown in
+          // the "Who's involved" dialog and matches it exactly when set.
+          let profit = 0;
+          let override = 0;
+          for (const c of invoicesByAgent.get(agent.id) || []) {
+            if (c.invoice.isGeneralInvoice) continue; // general invoices never cascade
+            const invProfit = Math.max(0, c.commissionProfit);
+            profit += invProfit;
+            const manual = c.invoice.overrideAmountOverrides?.[a.id];
+            override += manual != null ? manual : invProfit * rate;
+          }
+          return { agent, level, profit, rate, override };
         });
     const overrideTotal = commissionEntryMode === "fixed"
       ? (cascadeOverrideByAgent.get(a.id) || 0)

@@ -667,7 +667,7 @@ export function computeCoachInsight(
 
 /* -------- Who this invoice pays: seller's upline (overrides) + seller/split -------- */
 
-export type InvolvedRow = { name: string; role: string; amount: number; agentId: string | null };
+export type InvolvedRow = { name: string; role: string; amount: number; agentId: string | null; level?: number; defaultAmount?: number };
 
 /** Everyone this invoice pays: the seller's sponsor chain (who earn an
  *  override on this profit — topmost sponsor first), then the seller
@@ -717,14 +717,20 @@ export function computeInvolved(
     ? new Map(costCascade(seller.id, inv.productCost || 0, agents).map((r) => [r.agentId, r.amount]))
     : null;
 
-  const rows: InvolvedRow[] = upline.map((u) => ({
-    name: payeeLabel(u.agent),
-    role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
-    amount: cascadeByAgent
+  const rows: InvolvedRow[] = upline.map((u) => {
+    const defaultAmount = cascadeByAgent
       ? (cascadeByAgent.get(u.agent.id) || 0)
-      : Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0),
-    agentId: u.agent.id,
-  }));
+      : Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0);
+    const manual = inv.overrideAmountOverrides?.[u.agent.id];
+    return {
+      name: payeeLabel(u.agent),
+      role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
+      amount: manual != null ? manual : defaultAmount,
+      agentId: u.agent.id,
+      level: u.level,
+      defaultAmount,
+    };
+  });
 
   if (splits.length > 0) {
     for (const p of splits) {

@@ -18,6 +18,7 @@ import {
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
   Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange, DollarSign,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -2015,14 +2016,53 @@ function InvoicesPanel() {
                 {s.language === "es" ? "Selecciona un vendedor primero." : "Select a salesperson first."}
               </p>
             ) : (
-              involved.map((row, i) => (
+              involved.map((row, i) => {
+                const isOverrideRow = row.level != null && !!row.agentId;
+                const hasManualOverride = isOverrideRow && draft.overrideAmountOverrides?.[row.agentId!] != null;
+                const setOverride = (n: number) => {
+                  if (!row.agentId) return;
+                  setDraft({ ...draft, overrideAmountOverrides: { ...(draft.overrideAmountOverrides || {}), [row.agentId]: n } });
+                };
+                const clearOverride = () => {
+                  if (!row.agentId) return;
+                  const next = { ...(draft.overrideAmountOverrides || {}) };
+                  delete next[row.agentId];
+                  setDraft({ ...draft, overrideAmountOverrides: next });
+                };
+                return (
                 <div key={i} className="flex items-center justify-between gap-3 border border-border rounded-md p-3">
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{row.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{row.role}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {row.role}
+                      {hasManualOverride && (
+                        <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-600 font-semibold">
+                          {s.language === "es" ? "· manual" : "· manual"}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
+                    {isAdmin && isOverrideRow ? (
+                      <div className="flex items-center gap-1">
+                        <NumField
+                          className="h-8 w-24 font-mono text-right"
+                          step="0.01"
+                          value={row.amount}
+                          onChange={setOverride}
+                          title={s.language === "es"
+                            ? `Por defecto: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`
+                            : `Default: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`}
+                        />
+                        {hasManualOverride && (
+                          <Button size="icon" variant="ghost" className="h-8 w-8" title={s.language === "es" ? "Volver al monto calculado" : "Reset to computed amount"} onClick={clearOverride}>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => {
                       const pdf = isAdmin
                         ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
@@ -2041,7 +2081,8 @@ function InvoicesPanel() {
                     </Button>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
           <DialogFooter>

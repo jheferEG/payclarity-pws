@@ -106,6 +106,13 @@ export type Invoice = {
   commissionLevel?: string;      // e.g. Junior Rep, Sales Rep, Manager (auto-pulled from agent)
   commissionBase?: "profit" | "product_cost"; // base used for commission % (default profit)
   commissionPercentOverride?: number; // admin-only per-invoice override of rep's commission % (decimal, e.g. 0.1 = 10%)
+  // Admin-only per-invoice override of a specific sponsor's override $
+  // amount on THIS sale — keyed by that sponsor agent's id. Used from the
+  // "Who's involved" dialog when the computed default needs a manual
+  // correction; feeds both the preview (computeInvolved) and the actual
+  // payout math (calcPayouts), so they never disagree. Unset agentIds fall
+  // back to the normal computed amount.
+  overrideAmountOverrides?: Record<string, number>;
   brandingSnapshot?: CompanyBranding & { companyName: string; address: string; email: string; phone: string; taxId: string; currency: string }; // captured at PDF generation
   split?: InvoiceSplit | null;
   pdfHistory?: InvoicePdfRecord[];
