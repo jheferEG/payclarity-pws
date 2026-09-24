@@ -11,10 +11,12 @@ import {
   adaptInvoice, invoiceCoreToRow,
   adaptPayment, paymentToRow,
   adaptPayoutDocument, payoutDocumentToRow,
+  adaptJob, jobToRow,
+  adaptRatePlan, ratePlanToRow,
   adaptCustomerInvoice, customerInvoiceToRow,
   adaptWorkStatement, workStatementToRow,
   adaptWeeklyStatement, weeklyStatementToRow,
-  adaptPayrollRegister, payrollRegisterToRow,
+  adaptPayrollRun, payrollRunToRow,
   adaptAgentTaxId, agentTaxIdToRow,
   adaptAdjustment, adjustmentToRow,
   adaptDispute, disputeToRow,
@@ -61,10 +63,12 @@ export function useSupabaseSync() {
         invoices: [],
         payments: [],
         payoutDocuments: [],
+        jobs: [],
+        techRatePlans: [],
         customerInvoices: [],
         workStatements: [],
         weeklyStatements: [],
-        payrollRegisters: [],
+        payrollRuns: [],
         agentTaxIds: [],
         adjustments: [],
         disputes: [],
@@ -86,10 +90,12 @@ export function useSupabaseSync() {
         { data: invoices },
         { data: payments },
         { data: payoutDocuments },
+        { data: jobs },
+        { data: techRatePlans },
         { data: customerInvoices },
         { data: workStatements },
         { data: weeklyStatements },
-        { data: payrollRegisters },
+        { data: payrollRuns },
         { data: agentTaxIds },
         { data: adjustments },
         { data: disputes },
@@ -110,10 +116,12 @@ export function useSupabaseSync() {
           .order("date", { ascending: false }),
         supabase.from("payments").select("*"),
         supabase.from("payout_documents").select("*"),
+        supabase.from("jobs").select("*"),
+        supabase.from("tech_rate_plans").select("*"),
         supabase.from("customer_invoices").select("*"),
         supabase.from("technician_work_statements").select("*"),
         supabase.from("weekly_technician_statements").select("*"),
-        supabase.from("payroll_registers").select("*"),
+        supabase.from("payroll_runs").select("*"),
         supabase.from("agent_tax_ids").select("*"),
         supabase.from("adjustments").select("*"),
         supabase.from("disputes").select("*, dispute_events(*)"),
@@ -133,10 +141,12 @@ export function useSupabaseSync() {
         invoices: ((invoices ?? []) as any[]).map(adaptInvoice),
         payments: (payments ?? []).map(adaptPayment),
         payoutDocuments: (payoutDocuments ?? []).map(adaptPayoutDocument),
+        jobs: (jobs ?? []).map(adaptJob),
+        techRatePlans: (techRatePlans ?? []).map(adaptRatePlan),
         customerInvoices: (customerInvoices ?? []).map(adaptCustomerInvoice),
         workStatements: (workStatements ?? []).map(adaptWorkStatement),
         weeklyStatements: (weeklyStatements ?? []).map(adaptWeeklyStatement),
-        payrollRegisters: (payrollRegisters ?? []).map(adaptPayrollRegister),
+        payrollRuns: (payrollRuns ?? []).map(adaptPayrollRun),
         agentTaxIds: (agentTaxIds ?? []).map(adaptAgentTaxId),
         adjustments: (adjustments ?? []).map(adaptAdjustment),
         disputes: ((disputes ?? []) as any[]).map(adaptDispute),
@@ -294,6 +304,20 @@ export function useSupabaseSync() {
         (d) => supabase.from("payout_documents").delete().eq("id", d.id),
       );
 
+      // Jobs
+      syncItems(
+        prev.jobs, next.jobs,
+        (j) => supabase.from("jobs").upsert(jobToRow(j, companyId), { onConflict: "id" }),
+        (j) => supabase.from("jobs").delete().eq("id", j.id),
+      );
+
+      // Rate plans
+      syncItems(
+        prev.techRatePlans, next.techRatePlans,
+        (p) => supabase.from("tech_rate_plans").upsert(ratePlanToRow(p, companyId), { onConflict: "id" }),
+        (p) => supabase.from("tech_rate_plans").delete().eq("id", p.id),
+      );
+
       // Customer invoices
       syncItems(
         prev.customerInvoices, next.customerInvoices,
@@ -315,11 +339,11 @@ export function useSupabaseSync() {
         (w) => supabase.from("weekly_technician_statements").delete().eq("id", w.id),
       );
 
-      // Payroll registers
+      // Payroll runs
       syncItems(
-        prev.payrollRegisters, next.payrollRegisters,
-        (r) => supabase.from("payroll_registers").upsert(payrollRegisterToRow(r, companyId), { onConflict: "id" }),
-        (r) => supabase.from("payroll_registers").delete().eq("id", r.id),
+        prev.payrollRuns, next.payrollRuns,
+        (r) => supabase.from("payroll_runs").upsert(payrollRunToRow(r, companyId), { onConflict: "id" }),
+        (r) => supabase.from("payroll_runs").delete().eq("id", r.id),
       );
 
       // Agent tax IDs (masked, last 4 digits) — table's own PK is agent_id

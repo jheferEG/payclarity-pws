@@ -6,11 +6,15 @@ import type {
   SplitTemplate, SplitParticipantRole, SplitRule, SplitRuleCriteria,
   Product, CompensationPosition, PayoutDocument, InvoiceExtra, CustomerPayment,
   CustomerInvoice, CustomerInvoiceStatus, CustomerInvoiceLineItem, CustomerInvoicePayment,
-  InvoiceTemplateId, RateRule, TechnicianWorkStatement, WorkStatementStatus, WorkStatementAuditEntry,
-  WeeklyTechnicianStatement, WeeklyStatementStatus, WeeklyAdjustment,
-  PayrollRegister, PayrollRegisterStatus, PayrollEntry,
-  AgentTaxId,
+  InvoiceTemplateId, AgentTaxId,
+  Job, JobStatus, GeoPoint, StatementAttachment, DocEvent, DocPdfRecord,
+  TechRatePlan, RatePlanRule,
+  TechWorkStatement, WorkStatementStatus, PayableStatus, StatementType, RateSnapshot, RateOverrideLog,
+  TechnicianClassification,
+  WeeklyTechStatement, WeeklyStatementStatus, WeeklyPaymentRecord, StatementTotals,
+  PayrollRun, PayrollStatus, PayrollLine, WithholdingRate,
 } from "./commission-store";
+import { DEFAULT_WITHHOLDINGS } from "./commission-store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (id: string) => UUID_RE.test(id);
@@ -35,6 +39,8 @@ export function adaptCompany(row: Tables<"companies">): Partial<Company> {
     commissionEntryMode: (row.commission_entry_mode as Company["commissionEntryMode"]) ?? "fixed",
     technicianTermSingular: row.technician_term_singular ?? "",
     technicianTermPlural: row.technician_term_plural ?? "",
+    allowMultipleOriginalStatements: row.allow_multiple_original_statements ?? false,
+    withholdingRates: (row.withholding_rates as unknown as WithholdingRate[] | null) ?? DEFAULT_WITHHOLDINGS,
   };
 }
 
@@ -56,6 +62,8 @@ export function companyToRow(c: Company) {
     commission_entry_mode: c.commissionEntryMode,
     technician_term_singular: c.technicianTermSingular || null,
     technician_term_plural: c.technicianTermPlural || null,
+    allow_multiple_original_statements: c.allowMultipleOriginalStatements ?? false,
+    withholding_rates: c.withholdingRates ?? DEFAULT_WITHHOLDINGS,
   };
 }
 
@@ -79,6 +87,10 @@ export function adaptAgent(row: Tables<"agents">): Agent {
     companyName: row.company_name ?? undefined,
     payrollType: (row.payroll_type as Agent["payrollType"]) ?? undefined,
     paymentTreatment: (row.payment_treatment as Agent["paymentTreatment"]) ?? undefined,
+    phone: row.phone ?? undefined,
+    classification: (row.classification as TechnicianClassification) ?? undefined,
+    active: row.active ?? undefined,
+    technicianNotes: row.technician_notes ?? undefined,
   };
 }
 
@@ -101,6 +113,10 @@ export function agentToRow(a: Agent, companyId: string) {
     company_name: a.companyName ?? undefined,
     payroll_type: a.payrollType ?? undefined,
     payment_treatment: a.paymentTreatment ?? undefined,
+    phone: a.phone ?? undefined,
+    classification: a.classification ?? undefined,
+    active: a.active ?? undefined,
+    technician_notes: a.technicianNotes ?? undefined,
   };
 }
 
@@ -348,18 +364,117 @@ export function payoutDocumentToRow(d: PayoutDocument, companyId: string) {
   };
 }
 
+// ─── JOBS ────────────────────────────────────────────────────────────────────
+
+export function adaptJob(row: Tables<"jobs">): Job {
+  return {
+    id: row.id,
+    number: row.number,
+    technicianId: row.technician_id,
+    customerName: row.customer_name,
+    billingAddress: row.billing_address,
+    serviceAddress: row.service_address,
+    serviceGeo: (row.service_geo as unknown as GeoPoint | null) ?? null,
+    date: row.date,
+    jobType: row.job_type,
+    productInstalled: row.product_installed,
+    territory: row.territory,
+    status: row.status as JobStatus,
+    attachments: (row.attachments as unknown as StatementAttachment[] | null) ?? [],
+    saleInvoiceId: row.sale_invoice_id,
+    salesAgentId: row.sales_agent_id ?? undefined,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function jobToRow(j: Job, companyId: string) {
+  return {
+    id: j.id,
+    company_id: companyId,
+    number: j.number,
+    technician_id: j.technicianId,
+    customer_name: j.customerName,
+    billing_address: j.billingAddress,
+    service_address: j.serviceAddress,
+    service_geo: j.serviceGeo ?? null,
+    date: j.date,
+    job_type: j.jobType,
+    product_installed: j.productInstalled,
+    territory: j.territory,
+    status: j.status,
+    attachments: j.attachments,
+    sale_invoice_id: j.saleInvoiceId,
+    sales_agent_id: j.salesAgentId ?? null,
+    notes: j.notes,
+  };
+}
+
+// ─── RATE PLANS ──────────────────────────────────────────────────────────────
+
+export function adaptRatePlan(row: Tables<"tech_rate_plans">): TechRatePlan {
+  return {
+    id: row.id,
+    name: row.name,
+    technicianId: row.technician_id,
+    effectiveFrom: row.effective_from,
+    effectiveTo: row.effective_to,
+    active: row.active,
+    fixedInstallRate: Number(row.fixed_install_rate),
+    serviceCallRate: Number(row.service_call_rate),
+    emergencyRate: Number(row.emergency_rate),
+    mileageRate: Number(row.mileage_rate),
+    extraLaborHourlyRate: Number(row.extra_labor_hourly_rate),
+    materialReimbursementPercent: Number(row.material_reimbursement_percent),
+    materialReimbursementCap: Number(row.material_reimbursement_cap),
+    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
+    overtimeMultiplier: row.overtime_multiplier != null ? Number(row.overtime_multiplier) : undefined,
+    rules: (row.rules as unknown as RatePlanRule[] | null) ?? [],
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function ratePlanToRow(p: TechRatePlan, companyId: string) {
+  return {
+    id: p.id,
+    company_id: companyId,
+    name: p.name,
+    technician_id: p.technicianId,
+    effective_from: p.effectiveFrom,
+    effective_to: p.effectiveTo,
+    active: p.active,
+    fixed_install_rate: p.fixedInstallRate,
+    service_call_rate: p.serviceCallRate,
+    emergency_rate: p.emergencyRate,
+    mileage_rate: p.mileageRate,
+    extra_labor_hourly_rate: p.extraLaborHourlyRate,
+    material_reimbursement_percent: p.materialReimbursementPercent,
+    material_reimbursement_cap: p.materialReimbursementCap,
+    hourly_rate: p.hourlyRate ?? null,
+    overtime_multiplier: p.overtimeMultiplier ?? null,
+    rules: p.rules,
+    notes: p.notes,
+  };
+}
+
 // ─── CUSTOMER INVOICES ───────────────────────────────────────────────────────
 
 export function adaptCustomerInvoice(row: Tables<"customer_invoices">): CustomerInvoice {
   return {
     id: row.id,
     number: row.number,
-    invoiceId: row.invoice_id,
+    jobId: row.job_id,
+    saleInvoiceId: row.sale_invoice_id,
     status: row.status as CustomerInvoiceStatus,
     customerName: row.customer_name,
     customerEmail: row.customer_email ?? "",
     billingAddress: row.billing_address,
+    billingGeo: (row.billing_geo as unknown as GeoPoint | null) ?? null,
     serviceAddress: row.service_address,
+    serviceGeo: (row.service_geo as unknown as GeoPoint | null) ?? null,
     invoiceDate: row.invoice_date,
     dueDate: row.due_date,
     lineItems: (row.line_items as unknown as CustomerInvoiceLineItem[] | null) ?? [],
@@ -371,7 +486,10 @@ export function adaptCustomerInvoice(row: Tables<"customer_invoices">): Customer
     notes: row.notes,
     warrantyInfo: row.warranty_info,
     templateId: (row.template_id as InvoiceTemplateId | null) ?? undefined,
+    attachments: (row.attachments as unknown as StatementAttachment[] | null) ?? [],
     payments: (row.payments as unknown as CustomerInvoicePayment[] | null) ?? [],
+    history: (row.history as unknown as DocEvent[] | null) ?? [],
+    pdfHistory: (row.pdf_history as unknown as DocPdfRecord[] | null) ?? [],
     sentAt: row.sent_at,
     viewedAt: row.viewed_at,
     brandingSnapshot: (row.branding_snapshot as any) ?? undefined,
@@ -385,12 +503,15 @@ export function customerInvoiceToRow(d: CustomerInvoice, companyId: string) {
     id: d.id,
     company_id: companyId,
     number: d.number,
-    invoice_id: d.invoiceId,
+    job_id: d.jobId,
+    sale_invoice_id: d.saleInvoiceId,
     status: d.status,
     customer_name: d.customerName,
     customer_email: d.customerEmail,
     billing_address: d.billingAddress,
+    billing_geo: d.billingGeo ?? null,
     service_address: d.serviceAddress,
+    service_geo: d.serviceGeo ?? null,
     invoice_date: d.invoiceDate,
     due_date: d.dueDate,
     line_items: d.lineItems,
@@ -402,7 +523,10 @@ export function customerInvoiceToRow(d: CustomerInvoice, companyId: string) {
     notes: d.notes,
     warranty_info: d.warrantyInfo,
     template_id: d.templateId ?? null,
+    attachments: d.attachments,
     payments: d.payments,
+    history: d.history,
+    pdf_history: d.pdfHistory,
     sent_at: d.sentAt,
     viewed_at: d.viewedAt,
     branding_snapshot: (d.brandingSnapshot as any) ?? null,
@@ -411,124 +535,180 @@ export function customerInvoiceToRow(d: CustomerInvoice, companyId: string) {
 
 // ─── TECHNICIAN WORK STATEMENTS ──────────────────────────────────────────────
 
-export function adaptWorkStatement(row: Tables<"technician_work_statements">): TechnicianWorkStatement {
+export function adaptWorkStatement(row: Tables<"technician_work_statements">): TechWorkStatement {
   return {
     id: row.id,
     number: row.number,
-    invoiceId: row.invoice_id,
+    jobId: row.job_id,
     technicianId: row.technician_id,
-    status: row.status as WorkStatementStatus,
-    rateRuleId: row.rate_rule_id,
-    rateLabelSnapshot: row.rate_label_snapshot,
-    baseRateSnapshot: Number(row.base_rate_snapshot),
-    mileageRateSnapshot: Number(row.mileage_rate_snapshot),
-    mileage: Number(row.mileage),
+    classification: (row.classification as TechnicianClassification | "") ?? "",
+    ratePlanId: row.rate_plan_id,
+    baseLaborRate: Number(row.base_labor_rate),
+    additionalLabor: Number(row.additional_labor),
+    extraPlumbing: Number(row.extra_plumbing),
+    mileageMiles: Number(row.mileage_miles),
+    mileageRate: Number(row.mileage_rate),
     materialReimbursement: Number(row.material_reimbursement),
     deductions: Number(row.deductions),
     chargebacks: Number(row.chargebacks),
     corrections: Number(row.corrections),
+    regularHours: row.regular_hours != null ? Number(row.regular_hours) : undefined,
+    overtimeHours: row.overtime_hours != null ? Number(row.overtime_hours) : undefined,
     notes: row.notes,
-    attachments: (row.attachments as unknown as { name: string; url: string }[] | null) ?? [],
-    approvalHistory: (row.approval_history as unknown as WorkStatementAuditEntry[] | null) ?? [],
-    weeklyStatementId: row.weekly_statement_id,
+    attachments: (row.attachments as unknown as StatementAttachment[] | null) ?? [],
+    status: row.status as WorkStatementStatus,
+    approval: (row.approval as unknown as { by: string; at: string; note: string } | null) ?? null,
+    approvalHistory: (row.approval_history as unknown as DocEvent[] | null) ?? [],
+    audit: (row.audit as unknown as DocEvent[] | null) ?? [],
+    paymentStatus: row.payment_status as PayableStatus,
+    includedInWeeklyBatchId: row.included_in_weekly_batch_id,
+    batchStatus: row.batch_status,
+    approvedAt: row.approved_at,
+    paidAt: row.paid_at,
+    isAdjustment: row.is_adjustment,
+    adjustsStatementId: row.adjusts_statement_id,
+    statementType: (row.statement_type as StatementType) ?? "original",
+    relatedStatementId: row.related_statement_id ?? undefined,
+    typeReason: row.type_reason ?? undefined,
+    supersededById: row.superseded_by_id ?? undefined,
+    supersededAt: row.superseded_at ?? undefined,
+    cancelled: row.cancelled ?? undefined,
+    rateSnapshot: (row.rate_snapshot as unknown as RateSnapshot | null) ?? null,
+    rateOverrides: (row.rate_overrides as unknown as RateOverrideLog[] | null) ?? [],
+    pdfHistory: (row.pdf_history as unknown as DocPdfRecord[] | null) ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-export function workStatementToRow(w: TechnicianWorkStatement, companyId: string) {
+export function workStatementToRow(w: TechWorkStatement, companyId: string) {
   return {
     id: w.id,
     company_id: companyId,
     number: w.number,
-    invoice_id: w.invoiceId,
+    job_id: w.jobId,
     technician_id: w.technicianId,
-    status: w.status,
-    rate_rule_id: w.rateRuleId,
-    rate_label_snapshot: w.rateLabelSnapshot,
-    base_rate_snapshot: w.baseRateSnapshot,
-    mileage_rate_snapshot: w.mileageRateSnapshot,
-    mileage: w.mileage,
+    classification: w.classification || null,
+    rate_plan_id: w.ratePlanId,
+    base_labor_rate: w.baseLaborRate,
+    additional_labor: w.additionalLabor,
+    extra_plumbing: w.extraPlumbing,
+    mileage_miles: w.mileageMiles,
+    mileage_rate: w.mileageRate,
     material_reimbursement: w.materialReimbursement,
     deductions: w.deductions,
     chargebacks: w.chargebacks,
     corrections: w.corrections,
+    regular_hours: w.regularHours ?? null,
+    overtime_hours: w.overtimeHours ?? null,
     notes: w.notes,
     attachments: w.attachments,
+    status: w.status,
+    approval: w.approval,
     approval_history: w.approvalHistory,
-    weekly_statement_id: w.weeklyStatementId,
+    audit: w.audit,
+    payment_status: w.paymentStatus,
+    included_in_weekly_batch_id: w.includedInWeeklyBatchId,
+    batch_status: w.batchStatus,
+    approved_at: w.approvedAt,
+    paid_at: w.paidAt,
+    is_adjustment: w.isAdjustment,
+    adjusts_statement_id: w.adjustsStatementId,
+    statement_type: w.statementType,
+    related_statement_id: w.relatedStatementId ?? null,
+    type_reason: w.typeReason ?? null,
+    superseded_by_id: w.supersededById ?? null,
+    superseded_at: w.supersededAt ?? null,
+    cancelled: w.cancelled ?? false,
+    rate_snapshot: w.rateSnapshot,
+    rate_overrides: w.rateOverrides,
+    pdf_history: w.pdfHistory,
   };
 }
 
 // ─── WEEKLY TECHNICIAN STATEMENTS ────────────────────────────────────────────
 
-export function adaptWeeklyStatement(row: Tables<"weekly_technician_statements">): WeeklyTechnicianStatement {
+export function adaptWeeklyStatement(row: Tables<"weekly_technician_statements">): WeeklyTechStatement {
   return {
     id: row.id,
     number: row.number,
     technicianId: row.technician_id,
-    periodStart: row.period_start,
-    periodEnd: row.period_end,
+    weekStart: row.week_start,
+    weekEnd: row.week_end,
+    statementIds: (row.statement_ids as string[] | null) ?? [],
+    totals: (row.totals as unknown as StatementTotals | null) ?? { base: 0, extras: 0, mileage: 0, reimbursements: 0, deductions: 0, total: 0 },
     status: row.status as WeeklyStatementStatus,
-    workStatementIds: (row.work_statement_ids as string[] | null) ?? [],
-    adjustments: (row.adjustments as unknown as WeeklyAdjustment[] | null) ?? [],
-    approvedAt: row.approved_at,
-    approvedBy: row.approved_by,
+    approval: (row.approval as unknown as { by: string; at: string; note: string } | null) ?? null,
+    scheduledFor: row.scheduled_for,
+    payments: (row.payments as unknown as WeeklyPaymentRecord[] | null) ?? [],
     paidAt: row.paid_at,
-    paymentReference: row.payment_reference,
+    correctionRequest: (row.correction_request as unknown as { by: string; at: string; reason: string } | null) ?? null,
+    reopenings: (row.reopenings as unknown as { by: string; at: string; reason: string }[] | null) ?? [],
+    audit: (row.audit as unknown as DocEvent[] | null) ?? [],
+    pdfHistory: (row.pdf_history as unknown as DocPdfRecord[] | null) ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-export function weeklyStatementToRow(w: WeeklyTechnicianStatement, companyId: string) {
+export function weeklyStatementToRow(w: WeeklyTechStatement, companyId: string) {
   return {
     id: w.id,
     company_id: companyId,
     number: w.number,
     technician_id: w.technicianId,
-    period_start: w.periodStart,
-    period_end: w.periodEnd,
+    week_start: w.weekStart,
+    week_end: w.weekEnd,
+    statement_ids: w.statementIds,
+    totals: w.totals,
     status: w.status,
-    work_statement_ids: w.workStatementIds,
-    adjustments: w.adjustments,
-    approved_at: w.approvedAt,
-    approved_by: w.approvedBy,
+    approval: w.approval,
+    scheduled_for: w.scheduledFor,
+    payments: w.payments,
     paid_at: w.paidAt,
-    payment_reference: w.paymentReference,
+    correction_request: w.correctionRequest,
+    reopenings: w.reopenings,
+    audit: w.audit,
+    pdf_history: w.pdfHistory,
   };
 }
 
-// ─── PAYROLL REGISTER ────────────────────────────────────────────────────────
+// ─── PAYROLL RUNS ────────────────────────────────────────────────────────────
 
-export function adaptPayrollRegister(row: Tables<"payroll_registers">): PayrollRegister {
+export function adaptPayrollRun(row: Tables<"payroll_runs">): PayrollRun {
   return {
     id: row.id,
     number: row.number,
     periodStart: row.period_start,
     periodEnd: row.period_end,
-    status: row.status as PayrollRegisterStatus,
-    entries: (row.entries as unknown as PayrollEntry[] | null) ?? [],
-    approvedAt: row.approved_at,
-    approvedBy: row.approved_by,
+    payDate: row.pay_date,
+    frequency: row.frequency as "weekly" | "biweekly",
+    status: row.status as PayrollStatus,
+    lines: (row.lines as unknown as PayrollLine[] | null) ?? [],
+    approval: (row.approval as unknown as { by: string; at: string; note: string } | null) ?? null,
     paidAt: row.paid_at,
+    audit: (row.audit as unknown as DocEvent[] | null) ?? [],
+    pdfHistory: (row.pdf_history as unknown as DocPdfRecord[] | null) ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-export function payrollRegisterToRow(r: PayrollRegister, companyId: string) {
+export function payrollRunToRow(r: PayrollRun, companyId: string) {
   return {
     id: r.id,
     company_id: companyId,
     number: r.number,
     period_start: r.periodStart,
     period_end: r.periodEnd,
+    pay_date: r.payDate,
+    frequency: r.frequency,
     status: r.status,
-    entries: r.entries,
-    approved_at: r.approvedAt,
-    approved_by: r.approvedBy,
+    lines: r.lines,
+    approval: r.approval,
     paid_at: r.paidAt,
+    audit: r.audit,
+    pdf_history: r.pdfHistory,
   };
 }
 
@@ -785,9 +965,6 @@ export function adaptPosition(row: Tables<"compensation_positions">): Compensati
     isGeneralInvoice: row.is_general_invoice ?? undefined,
     installFixedPay: row.install_fixed_pay != null ? Number(row.install_fixed_pay) : undefined,
     serviceFixedPay: row.service_fixed_pay != null ? Number(row.service_fixed_pay) : undefined,
-    rateRules: (row.rate_rules as unknown as RateRule[] | null) ?? undefined,
-    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
-    overtimeMultiplier: row.overtime_multiplier != null ? Number(row.overtime_multiplier) : undefined,
   };
 }
 
@@ -812,8 +989,5 @@ export function positionToRow(p: CompensationPosition, companyId: string) {
     is_general_invoice: p.isGeneralInvoice ?? false,
     install_fixed_pay: p.installFixedPay ?? null,
     service_fixed_pay: p.serviceFixedPay ?? null,
-    rate_rules: p.rateRules ?? null,
-    hourly_rate: p.hourlyRate ?? null,
-    overtime_multiplier: p.overtimeMultiplier ?? null,
   };
 }

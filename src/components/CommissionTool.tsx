@@ -18,7 +18,7 @@ import {
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
   Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange, DollarSign,
-  RotateCcw,
+  RotateCcw, Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition, type RateRule, resolveRateRule, rateRuleAmount } from "@/lib/commission-store";
+import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition } from "@/lib/commission-store";
 import {
   calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
@@ -46,7 +46,10 @@ import {
   ExplainDialog, DisputeDialog,
 } from "@/components/ExtraPanels";
 import { DashboardPanel, ReportsPanel, YearEnd1099Panel, TaxReserveByStateEditor } from "@/components/NewPanels";
-import { CustomerInvoicesPanel, WorkStatementsPanel, WeeklyStatementsPanel, PayrollPanel } from "@/components/BillingPanels";
+import {
+  TechniciansPanel, RatePlansPanel, JobsPanel, CustomerInvoicesPanel, WorkStatementsPanel,
+  WeeklyStatementsPanel, CompanyPayablesPanel, PayrollPanel, TaxFilingPanel,
+} from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
@@ -67,9 +70,14 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
     { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_invoices"), icon: Receipt }] },
     { id: "billing", label: t("nav_billing"), tabs: [
       { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
+      { id: "jobs", label: t("tab_jobs"), icon: Wrench },
       { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
       { id: "weekly-statements", label: t("tab_weekly_statements"), icon: CalendarRange },
+      { id: "company-payables", label: t("tab_company_payables"), icon: Building2 },
       { id: "payroll", label: t("tab_payroll"), icon: DollarSign },
+      { id: "tax-filing", label: t("tab_tax_filing"), icon: FileSpreadsheet },
+      { id: "rate-plans", label: t("tab_rate_plans"), icon: Shield },
+      { id: "technicians", label: t("tab_technicians"), icon: Users2 },
     ]},
     { id: "team", label: t("nav_team"), tabs: [
       { id: "agents", label: t("tab_team"), icon: Users },
@@ -728,8 +736,13 @@ export default function CommissionTool() {
             <TabsContent value="generate"><GeneratePanel /></TabsContent>
             <TabsContent value="users"><UserManagementPanel /></TabsContent>
             <TabsContent value="customer-invoices"><CustomerInvoicesPanel /></TabsContent>
+            <TabsContent value="jobs"><JobsPanel /></TabsContent>
             <TabsContent value="weekly-statements"><WeeklyStatementsPanel /></TabsContent>
+            <TabsContent value="company-payables"><CompanyPayablesPanel /></TabsContent>
             <TabsContent value="payroll"><PayrollPanel /></TabsContent>
+            <TabsContent value="tax-filing"><TaxFilingPanel /></TabsContent>
+            <TabsContent value="rate-plans"><RatePlansPanel /></TabsContent>
+            <TabsContent value="technicians"><TechniciansPanel /></TabsContent>
           </>}
         </Tabs>
         )}
@@ -1951,28 +1964,6 @@ function InvoicesPanel() {
                               <Layers className="w-4 h-4" />
                             </Button>
                           )}
-                          {isAdmin && (
-                            <Button variant="ghost" size="sm" title={s.language === "es" ? "Factura de cliente" : "Customer invoice"}
-                              onClick={() => {
-                                const existing = s.customerInvoices.find((ci) => ci.invoiceId === inv.id);
-                                const id = existing ? existing.id : s.createCustomerInvoice(inv.id);
-                                s.setDeepLink({ ts: Date.now(), tab: "customer-invoices", customerInvoiceId: id, openCustomerInvoice: true });
-                              }}>
-                              <ReceiptText className="w-4 h-4 mr-1" />
-                              {s.language === "es" ? "Facturar" : "Bill customer"}
-                            </Button>
-                          )}
-                          {isAdmin && inv.isGeneralInvoice && (
-                            <Button variant="ghost" size="sm" title={s.language === "es" ? "Estado de trabajo" : "Work statement"}
-                              onClick={() => {
-                                const existing = s.workStatements.find((w) => w.invoiceId === inv.id);
-                                const id = existing ? existing.id : s.createWorkStatement(inv.id);
-                                s.setDeepLink({ ts: Date.now(), tab: "work-statements", workStatementId: id, openWorkStatement: true });
-                              }}>
-                              <ClipboardCheck className="w-4 h-4 mr-1" />
-                              {s.language === "es" ? "Estado de trabajo" : "Work statement"}
-                            </Button>
-                          )}
                           {inv.saleType === "cash" && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Invoice para el cliente (efectivo)" : "Customer invoice (cash)"}
                               onClick={() => {
@@ -2517,120 +2508,6 @@ function CustomerPaymentsEditor({
   );
 }
 
-/** Rate Plans (Phase 2 of Billing & Technician Payables) — more specific
- * rules than the position's two flat rates, matched by job type/territory/
- * product; highest-priority active match wins (see resolveRateRule). */
-function RateRulesEditor({ position, isEs, currency, onChange }: {
-  position: CompensationPosition; isEs: boolean; currency: string; onChange: (rules: RateRule[]) => void;
-}) {
-  const rules = position.rateRules ?? [];
-  const add = () => onChange([...rules, {
-    id: crypto.randomUUID(), label: isEs ? "Nueva regla" : "New rule", jobType: "any",
-    territory: "", productRule: "", rateMode: "flat", baseRate: 0, mileageRate: 0.5, priority: 0, active: true,
-  }]);
-  const update = (i: number, patch: Partial<RateRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const remove = (i: number) => onChange(rules.filter((_, j) => j !== i));
-
-  return (
-    <div className="border-t pt-3">
-      <div className="flex items-center justify-between mb-2">
-        <Label className="text-xs font-semibold">{isEs ? "Rate Plans (reglas específicas)" : "Rate Plans (specific rules)"}</Label>
-        <Button variant="outline" size="sm" onClick={add}><Plus className="w-3 h-3 mr-1" />{isEs ? "Agregar regla" : "Add rule"}</Button>
-      </div>
-      {rules.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {isEs ? "Sin reglas — se usa siempre el pago fijo de arriba." : "No rules — the flat pay above always applies."}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {rules.map((r, i) => (
-            <div key={r.id} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end p-2 rounded-md border border-border/60">
-              <div className="lg:col-span-2"><Label className="text-[10px]">{isEs ? "Nombre" : "Label"}</Label>
-                <Input className="h-8" value={r.label} onChange={(e) => update(i, { label: e.target.value })} />
-              </div>
-              <div><Label className="text-[10px]">{isEs ? "Tipo" : "Job type"}</Label>
-                <Select value={r.jobType} onValueChange={(v: RateRule["jobType"]) => update(i, { jobType: v })}>
-                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">{isEs ? "Cualquiera" : "Any"}</SelectItem>
-                    <SelectItem value="installation">{isEs ? "Instalación" : "Installation"}</SelectItem>
-                    <SelectItem value="service">{isEs ? "Servicio" : "Service"}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-[10px]">{isEs ? "Territorio" : "Territory"}</Label>
-                <Input className="h-8" value={r.territory} placeholder={isEs ? "cualquiera" : "any"} onChange={(e) => update(i, { territory: e.target.value })} />
-              </div>
-              <div><Label className="text-[10px]">{isEs ? "Producto" : "Product"}</Label>
-                <Input className="h-8" value={r.productRule} placeholder={isEs ? "cualquiera" : "any"} onChange={(e) => update(i, { productRule: e.target.value })} />
-              </div>
-              <div><Label className="text-[10px]">{isEs ? "Modo" : "Mode"}</Label>
-                <Select value={r.rateMode} onValueChange={(v: RateRule["rateMode"]) => update(i, { rateMode: v })}>
-                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="flat">{isEs ? "Fijo $" : "Flat $"}</SelectItem>
-                    <SelectItem value="multiplier">{isEs ? "Multiplicador ×" : "Multiplier ×"}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-[10px]">{r.rateMode === "multiplier" ? "×" : `$ (${currency})`}</Label>
-                <NumField className="h-8" step={r.rateMode === "multiplier" ? "0.01" : "1"} value={r.baseRate} onChange={(n) => update(i, { baseRate: n })} />
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="flex-1"><Label className="text-[10px]">{isEs ? "Millaje $" : "Mileage $"}</Label>
-                  <NumField className="h-8" step="0.01" value={r.mileageRate} onChange={(n) => update(i, { mileageRate: n })} />
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => remove(i)}><Trash2 className="w-4 h-4" /></Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Live tester for a position's Rate Plan — lets the admin punch in a job
- * type/territory/product and immediately see which rule (if any) matches
- * and what it pays, without having to create a real Work Statement first. */
-function RatePlanTester({ position, isEs, currency }: {
-  position: CompensationPosition; isEs: boolean; currency: string;
-}) {
-  const [ctx, setCtx] = useState<{ jobType: "installation" | "service"; territory: string; productRule: string }>({
-    jobType: "installation", territory: "", productRule: "",
-  });
-  const rule = resolveRateRule(position, ctx);
-  const amount = rateRuleAmount(rule, position, ctx.jobType);
-
-  return (
-    <div className="border-t pt-3">
-      <Label className="text-xs font-semibold">{isEs ? "Probar Rate Plan" : "Test Rate Plan"}</Label>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end mt-2">
-        <div><Label className="text-[10px]">{isEs ? "Tipo" : "Job type"}</Label>
-          <Select value={ctx.jobType} onValueChange={(v: "installation" | "service") => setCtx((c) => ({ ...c, jobType: v }))}>
-            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="installation">{isEs ? "Instalación" : "Installation"}</SelectItem>
-              <SelectItem value="service">{isEs ? "Servicio" : "Service"}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div><Label className="text-[10px]">{isEs ? "Territorio" : "Territory"}</Label>
-          <Input className="h-8" value={ctx.territory} onChange={(e) => setCtx((c) => ({ ...c, territory: e.target.value }))} />
-        </div>
-        <div><Label className="text-[10px]">{isEs ? "Producto" : "Product"}</Label>
-          <Input className="h-8" value={ctx.productRule} onChange={(e) => setCtx((c) => ({ ...c, productRule: e.target.value }))} />
-        </div>
-        <div className="rounded-md border border-border/60 px-3 py-1.5 text-sm">
-          <span className="text-muted-foreground text-xs block">
-            {rule ? rule.label : (isEs ? "Sin regla — pago fijo" : "No rule — flat pay")}
-          </span>
-          <span className="font-semibold">{fmtMoney(amount, currency)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ---------- Plan ---------- */
 function PlanPanel() {
@@ -2703,7 +2580,6 @@ function PlanPanel() {
       isGeneralInvoice: false,
       installFixedPay: 450,
       serviceFixedPay: 325,
-      rateRules: [],
     });
     setJustAddedId(id);
   };
@@ -2844,16 +2720,9 @@ function PlanPanel() {
                         </div>
                         <p className="md:col-span-2 text-xs text-muted-foreground self-end pb-2">
                           {isEs
-                            ? "Pago plano por trabajo — no genera overrides hacia los sponsors. Nivel/costo no aplican para este rol."
-                            : "Flat pay per job — doesn't generate overrides to sponsors. Level/cost don't apply to this role."}
+                            ? "Pago plano por trabajo — no genera overrides hacia los sponsors. Nivel/costo no aplican para este rol. Las tarifas específicas por técnico ahora se administran en Facturación y Técnicos → Rate Plans."
+                            : "Flat pay per job — doesn't generate overrides to sponsors. Level/cost don't apply to this role. Per-technician rate plans are now managed under Billing & Technicians → Rate Plans."}
                         </p>
-                        <div className="md:col-span-4">
-                          <RateRulesEditor position={p} isEs={isEs} currency={company.currency}
-                            onChange={(rateRules) => updatePosition(p.id, { rateRules })} />
-                        </div>
-                        <div className="md:col-span-4">
-                          <RatePlanTester position={p} isEs={isEs} currency={company.currency} />
-                        </div>
                       </>
                     ) : (
                       <>
@@ -2874,12 +2743,6 @@ function PlanPanel() {
                     <div><Label className="text-xs">{t("lbl_split_default")}</Label>
                       <PercentField step="1" value={p.splitDefaultPercent}
                         onChange={(n) => updatePosition(p.id, { splitDefaultPercent: n })} />
-                    </div>
-                    <div><Label className="text-xs">{isEs ? "Tarifa/hora (W-2)" : "Hourly rate (W-2)"}</Label>
-                      <NumField value={p.hourlyRate ?? 0} onChange={(n) => updatePosition(p.id, { hourlyRate: n })} />
-                    </div>
-                    <div><Label className="text-xs">{isEs ? "Multiplicador horas extra" : "Overtime multiplier"}</Label>
-                      <NumField step="0.1" value={p.overtimeMultiplier ?? 1.5} onChange={(n) => updatePosition(p.id, { overtimeMultiplier: n })} />
                     </div>
                     <div><Label className="text-xs">{t("lbl_effective_from")}</Label>
                       <Input type="date" value={p.effectiveFrom}

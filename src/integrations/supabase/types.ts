@@ -33,6 +33,8 @@ export type Database = {
           commission_entry_mode: string
           technician_term_singular: string | null
           technician_term_plural: string | null
+          allow_multiple_original_statements: boolean
+          withholding_rates: { id: string; label: string; percent: number; active: boolean }[]
           invoice_date: string | null
           period_label: string
           next_payout_date: string | null
@@ -58,6 +60,8 @@ export type Database = {
           commission_entry_mode?: string
           technician_term_singular?: string | null
           technician_term_plural?: string | null
+          allow_multiple_original_statements?: boolean
+          withholding_rates?: { id: string; label: string; percent: number; active: boolean }[]
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null
@@ -83,6 +87,8 @@ export type Database = {
           commission_entry_mode?: string
           technician_term_singular?: string | null
           technician_term_plural?: string | null
+          allow_multiple_original_statements?: boolean
+          withholding_rates?: { id: string; label: string; percent: number; active: boolean }[]
           invoice_date?: string | null
           period_label?: string
           next_payout_date?: string | null
@@ -279,17 +285,155 @@ export type Database = {
         }
         Relationships: []
       }
+      jobs: {
+        Row: {
+          id: string
+          company_id: string
+          number: string
+          technician_id: string | null
+          customer_name: string
+          billing_address: string
+          service_address: string
+          service_geo: { lat: number; lng: number } | null
+          date: string
+          job_type: string
+          product_installed: string
+          territory: string
+          status: "scheduled" | "in_progress" | "completed" | "cancelled"
+          attachments: { id: string; name: string; url: string }[]
+          sale_invoice_id: string | null
+          sales_agent_id: string | null
+          notes: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          number?: string
+          technician_id?: string | null
+          customer_name?: string
+          billing_address?: string
+          service_address?: string
+          service_geo?: { lat: number; lng: number } | null
+          date?: string
+          job_type?: string
+          product_installed?: string
+          territory?: string
+          status?: "scheduled" | "in_progress" | "completed" | "cancelled"
+          attachments?: { id: string; name: string; url: string }[]
+          sale_invoice_id?: string | null
+          sales_agent_id?: string | null
+          notes?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          technician_id?: string | null
+          customer_name?: string
+          billing_address?: string
+          service_address?: string
+          service_geo?: { lat: number; lng: number } | null
+          date?: string
+          job_type?: string
+          product_installed?: string
+          territory?: string
+          status?: "scheduled" | "in_progress" | "completed" | "cancelled"
+          attachments?: { id: string; name: string; url: string }[]
+          sale_invoice_id?: string | null
+          sales_agent_id?: string | null
+          notes?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tech_rate_plans: {
+        Row: {
+          id: string
+          company_id: string
+          name: string
+          technician_id: string | null
+          effective_from: string
+          effective_to: string | null
+          active: boolean
+          fixed_install_rate: number
+          service_call_rate: number
+          emergency_rate: number
+          mileage_rate: number
+          extra_labor_hourly_rate: number
+          material_reimbursement_percent: number
+          material_reimbursement_cap: number
+          hourly_rate: number | null
+          overtime_multiplier: number | null
+          rules: { id: string; kind: "job_type" | "product" | "territory" | "service_call" | "emergency"; matchValue: string; amount: number; mode?: "amount" | "multiplier"; mileageRate?: number | null; notes: string }[]
+          notes: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          name?: string
+          technician_id?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          active?: boolean
+          fixed_install_rate?: number
+          service_call_rate?: number
+          emergency_rate?: number
+          mileage_rate?: number
+          extra_labor_hourly_rate?: number
+          material_reimbursement_percent?: number
+          material_reimbursement_cap?: number
+          hourly_rate?: number | null
+          overtime_multiplier?: number | null
+          rules?: { id: string; kind: "job_type" | "product" | "territory" | "service_call" | "emergency"; matchValue: string; amount: number; mode?: "amount" | "multiplier"; mileageRate?: number | null; notes: string }[]
+          notes?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          name?: string
+          technician_id?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          active?: boolean
+          fixed_install_rate?: number
+          service_call_rate?: number
+          emergency_rate?: number
+          mileage_rate?: number
+          extra_labor_hourly_rate?: number
+          material_reimbursement_percent?: number
+          material_reimbursement_cap?: number
+          hourly_rate?: number | null
+          overtime_multiplier?: number | null
+          rules?: { id: string; kind: "job_type" | "product" | "territory" | "service_call" | "emergency"; matchValue: string; amount: number; mode?: "amount" | "multiplier"; mileageRate?: number | null; notes: string }[]
+          notes?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_invoices: {
         Row: {
           id: string
           company_id: string
           number: string
-          invoice_id: string
+          job_id: string | null
+          sale_invoice_id: string | null
           status: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
           customer_name: string
           customer_email: string
           billing_address: string
+          billing_geo: { lat: number; lng: number } | null
           service_address: string
+          service_geo: { lat: number; lng: number } | null
           invoice_date: string
           due_date: string
           line_items: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
@@ -301,7 +445,10 @@ export type Database = {
           notes: string
           warranty_info: string
           template_id: string | null
+          attachments: { id: string; name: string; url: string }[]
           payments: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          history: { at: string; actor: string; type: string; message: string }[]
+          pdf_history: { at: string; by: string }[]
           sent_at: string | null
           viewed_at: string | null
           branding_snapshot: Record<string, unknown> | null
@@ -312,40 +459,15 @@ export type Database = {
           id?: string
           company_id: string
           number?: string
-          invoice_id: string
+          job_id?: string | null
+          sale_invoice_id?: string | null
           status?: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
           customer_name?: string
           customer_email?: string
           billing_address?: string
+          billing_geo?: { lat: number; lng: number } | null
           service_address?: string
-          invoice_date: string
-          due_date?: string
-          line_items?: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
-          discount?: number
-          tax_percent?: number
-          deposit?: number
-          financing_applied?: number
-          payment_terms?: string
-          notes?: string
-          warranty_info?: string
-          template_id?: string | null
-          payments?: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
-          sent_at?: string | null
-          viewed_at?: string | null
-          branding_snapshot?: Record<string, unknown> | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string
-          number?: string
-          invoice_id?: string
-          status?: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
-          customer_name?: string
-          customer_email?: string
-          billing_address?: string
-          service_address?: string
+          service_geo?: { lat: number; lng: number } | null
           invoice_date?: string
           due_date?: string
           line_items?: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
@@ -357,7 +479,44 @@ export type Database = {
           notes?: string
           warranty_info?: string
           template_id?: string | null
+          attachments?: { id: string; name: string; url: string }[]
           payments?: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          history?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
+          sent_at?: string | null
+          viewed_at?: string | null
+          branding_snapshot?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          number?: string
+          job_id?: string | null
+          sale_invoice_id?: string | null
+          status?: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "cancelled" | "refunded"
+          customer_name?: string
+          customer_email?: string
+          billing_address?: string
+          billing_geo?: { lat: number; lng: number } | null
+          service_address?: string
+          service_geo?: { lat: number; lng: number } | null
+          invoice_date?: string
+          due_date?: string
+          line_items?: { id: string; productId?: string | null; kind: "product" | "service"; label: string; quantity: number; unitPrice: number }[]
+          discount?: number
+          tax_percent?: number
+          deposit?: number
+          financing_applied?: number
+          payment_terms?: string
+          notes?: string
+          warranty_info?: string
+          template_id?: string | null
+          attachments?: { id: string; name: string; url: string }[]
+          payments?: { id: string; amount: number; date: string; method: string; reference: string; notes: string; recordedBy: string }[]
+          history?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
           sent_at?: string | null
           viewed_at?: string | null
           branding_snapshot?: Record<string, unknown> | null
@@ -371,22 +530,43 @@ export type Database = {
           id: string
           company_id: string
           number: string
-          invoice_id: string
+          job_id: string
           technician_id: string
-          status: "draft" | "submitted" | "approved" | "rejected" | "paid"
-          rate_rule_id: string | null
-          rate_label_snapshot: string
-          base_rate_snapshot: number
-          mileage_rate_snapshot: number
-          mileage: number
+          classification: string | null
+          rate_plan_id: string | null
+          base_labor_rate: number
+          additional_labor: number
+          extra_plumbing: number
+          mileage_miles: number
+          mileage_rate: number
           material_reimbursement: number
           deductions: number
           chargebacks: number
           corrections: number
+          regular_hours: number | null
+          overtime_hours: number | null
           notes: string
-          attachments: { name: string; url: string }[]
-          approval_history: { at: string; actor: string; action: string; message: string }[]
-          weekly_statement_id: string | null
+          attachments: { id: string; name: string; url: string }[]
+          status: "draft" | "pending_approval" | "approved" | "rejected"
+          approval: { by: string; at: string; note: string } | null
+          approval_history: { at: string; actor: string; type: string; message: string }[]
+          audit: { at: string; actor: string; type: string; message: string }[]
+          payment_status: "unpaid" | "in_batch" | "partially_paid" | "paid"
+          included_in_weekly_batch_id: string | null
+          batch_status: string | null
+          approved_at: string | null
+          paid_at: string | null
+          is_adjustment: boolean
+          adjusts_statement_id: string | null
+          statement_type: "original" | "additional_visit" | "supplemental" | "correction" | "reimbursement_only" | "warranty" | "rework"
+          related_statement_id: string | null
+          type_reason: string | null
+          superseded_by_id: string | null
+          superseded_at: string | null
+          cancelled: boolean
+          rate_snapshot: Record<string, unknown> | null
+          rate_overrides: { at: string; by: string; field: string; from: number; to: number; reason: string }[]
+          pdf_history: { at: string; by: string }[]
           created_at: string
           updated_at: string
         }
@@ -394,22 +574,43 @@ export type Database = {
           id?: string
           company_id: string
           number?: string
-          invoice_id: string
+          job_id: string
           technician_id: string
-          status?: "draft" | "submitted" | "approved" | "rejected" | "paid"
-          rate_rule_id?: string | null
-          rate_label_snapshot?: string
-          base_rate_snapshot?: number
-          mileage_rate_snapshot?: number
-          mileage?: number
+          classification?: string | null
+          rate_plan_id?: string | null
+          base_labor_rate?: number
+          additional_labor?: number
+          extra_plumbing?: number
+          mileage_miles?: number
+          mileage_rate?: number
           material_reimbursement?: number
           deductions?: number
           chargebacks?: number
           corrections?: number
+          regular_hours?: number | null
+          overtime_hours?: number | null
           notes?: string
-          attachments?: { name: string; url: string }[]
-          approval_history?: { at: string; actor: string; action: string; message: string }[]
-          weekly_statement_id?: string | null
+          attachments?: { id: string; name: string; url: string }[]
+          status?: "draft" | "pending_approval" | "approved" | "rejected"
+          approval?: { by: string; at: string; note: string } | null
+          approval_history?: { at: string; actor: string; type: string; message: string }[]
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          payment_status?: "unpaid" | "in_batch" | "partially_paid" | "paid"
+          included_in_weekly_batch_id?: string | null
+          batch_status?: string | null
+          approved_at?: string | null
+          paid_at?: string | null
+          is_adjustment?: boolean
+          adjusts_statement_id?: string | null
+          statement_type?: "original" | "additional_visit" | "supplemental" | "correction" | "reimbursement_only" | "warranty" | "rework"
+          related_statement_id?: string | null
+          type_reason?: string | null
+          superseded_by_id?: string | null
+          superseded_at?: string | null
+          cancelled?: boolean
+          rate_snapshot?: Record<string, unknown> | null
+          rate_overrides?: { at: string; by: string; field: string; from: number; to: number; reason: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
@@ -417,22 +618,43 @@ export type Database = {
           id?: string
           company_id?: string
           number?: string
-          invoice_id?: string
+          job_id?: string
           technician_id?: string
-          status?: "draft" | "submitted" | "approved" | "rejected" | "paid"
-          rate_rule_id?: string | null
-          rate_label_snapshot?: string
-          base_rate_snapshot?: number
-          mileage_rate_snapshot?: number
-          mileage?: number
+          classification?: string | null
+          rate_plan_id?: string | null
+          base_labor_rate?: number
+          additional_labor?: number
+          extra_plumbing?: number
+          mileage_miles?: number
+          mileage_rate?: number
           material_reimbursement?: number
           deductions?: number
           chargebacks?: number
           corrections?: number
+          regular_hours?: number | null
+          overtime_hours?: number | null
           notes?: string
-          attachments?: { name: string; url: string }[]
-          approval_history?: { at: string; actor: string; action: string; message: string }[]
-          weekly_statement_id?: string | null
+          attachments?: { id: string; name: string; url: string }[]
+          status?: "draft" | "pending_approval" | "approved" | "rejected"
+          approval?: { by: string; at: string; note: string } | null
+          approval_history?: { at: string; actor: string; type: string; message: string }[]
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          payment_status?: "unpaid" | "in_batch" | "partially_paid" | "paid"
+          included_in_weekly_batch_id?: string | null
+          batch_status?: string | null
+          approved_at?: string | null
+          paid_at?: string | null
+          is_adjustment?: boolean
+          adjusts_statement_id?: string | null
+          statement_type?: "original" | "additional_visit" | "supplemental" | "correction" | "reimbursement_only" | "warranty" | "rework"
+          related_statement_id?: string | null
+          type_reason?: string | null
+          superseded_by_id?: string | null
+          superseded_at?: string | null
+          cancelled?: boolean
+          rate_snapshot?: Record<string, unknown> | null
+          rate_overrides?: { at: string; by: string; field: string; from: number; to: number; reason: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
@@ -444,15 +666,19 @@ export type Database = {
           company_id: string
           number: string
           technician_id: string
-          period_start: string
-          period_end: string
-          status: "open" | "locked" | "approved" | "paid"
-          work_statement_ids: string[]
-          adjustments: { label: string; amount: number }[]
-          approved_at: string | null
-          approved_by: string | null
+          week_start: string
+          week_end: string
+          statement_ids: string[]
+          totals: { base: number; extras: number; mileage: number; reimbursements: number; deductions: number; total: number }
+          status: "draft" | "pending_review" | "approved" | "scheduled" | "partially_paid" | "paid" | "correction_requested" | "cancelled"
+          approval: { by: string; at: string; note: string } | null
+          scheduled_for: string | null
+          payments: { id: string; date: string; amount: number; method: string; note: string }[]
           paid_at: string | null
-          payment_reference: string | null
+          correction_request: { by: string; at: string; reason: string } | null
+          reopenings: { by: string; at: string; reason: string }[]
+          audit: { at: string; actor: string; type: string; message: string }[]
+          pdf_history: { at: string; by: string }[]
           created_at: string
           updated_at: string
         }
@@ -461,15 +687,19 @@ export type Database = {
           company_id: string
           number?: string
           technician_id: string
-          period_start: string
-          period_end: string
-          status?: "open" | "locked" | "approved" | "paid"
-          work_statement_ids?: string[]
-          adjustments?: { label: string; amount: number }[]
-          approved_at?: string | null
-          approved_by?: string | null
+          week_start: string
+          week_end: string
+          statement_ids?: string[]
+          totals?: { base: number; extras: number; mileage: number; reimbursements: number; deductions: number; total: number }
+          status?: "draft" | "pending_review" | "approved" | "scheduled" | "partially_paid" | "paid" | "correction_requested" | "cancelled"
+          approval?: { by: string; at: string; note: string } | null
+          scheduled_for?: string | null
+          payments?: { id: string; date: string; amount: number; method: string; note: string }[]
           paid_at?: string | null
-          payment_reference?: string | null
+          correction_request?: { by: string; at: string; reason: string } | null
+          reopenings?: { by: string; at: string; reason: string }[]
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
@@ -478,32 +708,39 @@ export type Database = {
           company_id?: string
           number?: string
           technician_id?: string
-          period_start?: string
-          period_end?: string
-          status?: "open" | "locked" | "approved" | "paid"
-          work_statement_ids?: string[]
-          adjustments?: { label: string; amount: number }[]
-          approved_at?: string | null
-          approved_by?: string | null
+          week_start?: string
+          week_end?: string
+          statement_ids?: string[]
+          totals?: { base: number; extras: number; mileage: number; reimbursements: number; deductions: number; total: number }
+          status?: "draft" | "pending_review" | "approved" | "scheduled" | "partially_paid" | "paid" | "correction_requested" | "cancelled"
+          approval?: { by: string; at: string; note: string } | null
+          scheduled_for?: string | null
+          payments?: { id: string; date: string; amount: number; method: string; note: string }[]
           paid_at?: string | null
-          payment_reference?: string | null
+          correction_request?: { by: string; at: string; reason: string } | null
+          reopenings?: { by: string; at: string; reason: string }[]
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
         Relationships: []
       }
-      payroll_registers: {
+      payroll_runs: {
         Row: {
           id: string
           company_id: string
           number: string
           period_start: string
           period_end: string
+          pay_date: string
+          frequency: "weekly" | "biweekly"
           status: "draft" | "approved" | "paid"
-          entries: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
-          approved_at: string | null
-          approved_by: string | null
+          lines: { id: string; technicianId: string; technicianName: string; classification: string; is1099: boolean; jobIds: string[]; statementIds: string[]; weeklyStatementIds: string[]; jobs: number; regularHours: number; overtimeHours: number; hourlyRate: number; overtimeMultiplier: number; laborPay: number; reimbursements: number; deductions: number; withholdings: { id: string; label: string; percent: number; amount: number; manual: boolean }[]; customerInvoiced: number; note: string }[]
+          approval: { by: string; at: string; note: string } | null
           paid_at: string | null
+          audit: { at: string; actor: string; type: string; message: string }[]
+          pdf_history: { at: string; by: string }[]
           created_at: string
           updated_at: string
         }
@@ -513,11 +750,14 @@ export type Database = {
           number?: string
           period_start: string
           period_end: string
+          pay_date: string
+          frequency?: "weekly" | "biweekly"
           status?: "draft" | "approved" | "paid"
-          entries?: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
-          approved_at?: string | null
-          approved_by?: string | null
+          lines?: { id: string; technicianId: string; technicianName: string; classification: string; is1099: boolean; jobIds: string[]; statementIds: string[]; weeklyStatementIds: string[]; jobs: number; regularHours: number; overtimeHours: number; hourlyRate: number; overtimeMultiplier: number; laborPay: number; reimbursements: number; deductions: number; withholdings: { id: string; label: string; percent: number; amount: number; manual: boolean }[]; customerInvoiced: number; note: string }[]
+          approval?: { by: string; at: string; note: string } | null
           paid_at?: string | null
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
@@ -527,11 +767,14 @@ export type Database = {
           number?: string
           period_start?: string
           period_end?: string
+          pay_date?: string
+          frequency?: "weekly" | "biweekly"
           status?: "draft" | "approved" | "paid"
-          entries?: { agentId: string; regularHours: number; overtimeHours: number; hourlyRateSnapshot: number; overtimeMultiplierSnapshot: number; reimbursements: number; deductions: number; taxWithholdingPercent: number }[]
-          approved_at?: string | null
-          approved_by?: string | null
+          lines?: { id: string; technicianId: string; technicianName: string; classification: string; is1099: boolean; jobIds: string[]; statementIds: string[]; weeklyStatementIds: string[]; jobs: number; regularHours: number; overtimeHours: number; hourlyRate: number; overtimeMultiplier: number; laborPay: number; reimbursements: number; deductions: number; withholdings: { id: string; label: string; percent: number; amount: number; manual: boolean }[]; customerInvoiced: number; note: string }[]
+          approval?: { by: string; at: string; note: string } | null
           paid_at?: string | null
+          audit?: { at: string; actor: string; type: string; message: string }[]
+          pdf_history?: { at: string; by: string }[]
           created_at?: string
           updated_at?: string
         }
@@ -1073,6 +1316,10 @@ export type Database = {
           company_name: string | null
           payroll_type: "w2" | "contractor" | null
           payment_treatment: "payroll" | "contractor_payables" | null
+          phone: string | null
+          classification: "installer" | "plumber" | "electrician" | "service_tech" | "lead_tech" | "apprentice" | "subcontractor" | null
+          active: boolean
+          technician_notes: string | null
           created_at: string
           updated_at: string
         }
@@ -1095,6 +1342,10 @@ export type Database = {
           company_name?: string | null
           payroll_type?: "w2" | "contractor" | null
           payment_treatment?: "payroll" | "contractor_payables" | null
+          phone?: string | null
+          classification?: "installer" | "plumber" | "electrician" | "service_tech" | "lead_tech" | "apprentice" | "subcontractor" | null
+          active?: boolean
+          technician_notes?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1117,6 +1368,10 @@ export type Database = {
           company_name?: string | null
           payroll_type?: "w2" | "contractor" | null
           payment_treatment?: "payroll" | "contractor_payables" | null
+          phone?: string | null
+          classification?: "installer" | "plumber" | "electrician" | "service_tech" | "lead_tech" | "apprentice" | "subcontractor" | null
+          active?: boolean
+          technician_notes?: string | null
           created_at?: string
           updated_at?: string
         }

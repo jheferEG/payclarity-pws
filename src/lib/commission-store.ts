@@ -31,6 +31,29 @@ export type Agent = {
   //     resolvePaymentTreatment) so existing data behaves exactly as before.
   payrollType?: "w2" | "contractor";
   paymentTreatment?: "payroll" | "contractor_payables";
+  // Technicians tab fields (Billing & Technicians rebuild) — an agent is
+  // treated as a technician there once `classification` is set. Reuses this
+  // same Agent record (not a separate table) so the technician login role,
+  // my_agent_id() linkage and the masked tax-id table all keep working
+  // without a second, parallel identity.
+  phone?: string;
+  classification?: TechnicianClassification;
+  active?: boolean; // default true when undefined — soft-disable without deleting history
+  technicianNotes?: string;
+};
+
+export const TECH_CLASSIFICATIONS = [
+  "installer", "plumber", "electrician", "service_tech", "lead_tech", "apprentice", "subcontractor",
+] as const;
+export type TechnicianClassification = typeof TECH_CLASSIFICATIONS[number];
+export const TECH_CLASSIFICATION_LABEL: Record<TechnicianClassification, { es: string; en: string }> = {
+  installer: { es: "Instalador", en: "Installer" },
+  plumber: { es: "Plomero", en: "Plumber" },
+  electrician: { es: "Electricista", en: "Electrician" },
+  service_tech: { es: "Técnico de servicio", en: "Service Tech" },
+  lead_tech: { es: "Técnico líder", en: "Lead Tech" },
+  apprentice: { es: "Aprendiz", en: "Apprentice" },
+  subcontractor: { es: "Subcontratista", en: "Subcontractor" },
 };
 
 /** The system that actually pays this agent for job-based work. Falls back
@@ -250,57 +273,9 @@ export type CompensationPosition = {
   // flat amount per job — installation vs. service — with no product-cost
   // cascade and no override to sponsors. Level/cost don't apply to them.
   isGeneralInvoice?: boolean;
-  installFixedPay?: number;        // flat $ for an "installation" job — used when no rateRules match
+  installFixedPay?: number;        // flat $ for an "installation" job
   serviceFixedPay?: number;        // flat $ for a "service" job — rates vary by office, so both are editable
-  // Rate Plans (Phase 2): more specific rules than the two flat rates above —
-  // matched by job type / territory / product, highest priority active match
-  // wins. Falls back to installFixedPay/serviceFixedPay when nothing matches.
-  rateRules?: RateRule[];
-  // Phase 4 (Payroll Register) — only meaningful for W-2 positions.
-  hourlyRate?: number;
-  overtimeMultiplier?: number; // × hourlyRate, e.g. 1.5
 };
-
-export type RateRule = {
-  id: string;
-  label: string;
-  jobType: "installation" | "service" | "any";
-  territory: string;   // free-text match against the job's service address/state; "" = any
-  productRule: string; // free-text match against the job's product; "" = any
-  rateMode: "flat" | "multiplier"; // multiplier × the position's installFixedPay/serviceFixedPay
-  baseRate: number;
-  mileageRate: number;
-  priority: number; // higher wins when multiple rules match
-  active: boolean;
-};
-
-/** Highest-priority active rule matching the given context, or null to fall
- *  back to the position's flat installFixedPay/serviceFixedPay. Territory/
- *  product match by simple case-insensitive substring — good enough for a
- *  free-text filter, no address-parsing needed. */
-export function resolveRateRule(
-  position: CompensationPosition | undefined,
-  ctx: { jobType: "installation" | "service"; territory?: string; productRule?: string }
-): RateRule | null {
-  if (!position?.rateRules?.length) return null;
-  const territory = (ctx.territory || "").toLowerCase();
-  const product = (ctx.productRule || "").toLowerCase();
-  const matches = position.rateRules.filter((r) =>
-    r.active &&
-    (r.jobType === "any" || r.jobType === ctx.jobType) &&
-    (!r.territory || territory.includes(r.territory.toLowerCase())) &&
-    (!r.productRule || product.includes(r.productRule.toLowerCase()))
-  );
-  if (!matches.length) return null;
-  return matches.reduce((best, r) => (r.priority > best.priority ? r : best), matches[0]);
-}
-
-/** The $ amount a rate rule (or the position's flat fallback) resolves to. */
-export function rateRuleAmount(rule: RateRule | null, position: CompensationPosition | undefined, jobType: "installation" | "service"): number {
-  const flatFallback = jobType === "installation" ? position?.installFixedPay ?? 450 : position?.serviceFixedPay ?? 325;
-  if (!rule) return flatFallback;
-  return rule.rateMode === "multiplier" ? flatFallback * rule.baseRate : rule.baseRate;
-}
 
 export type InvoiceTemplateId =
   | "classic"
@@ -344,6 +319,13 @@ export type Company = {
   // otherwise hardcode "Technician"/"Técnico".
   technicianTermSingular: string;
   technicianTermPlural: string;
+  // Off by default — a second "original" work statement for the same job +
+  // technician + classification requires an explicit non-original type
+  // (supplemental/correction/etc.) unless an admin turns this on.
+  allowMultipleOriginalStatements: boolean;
+  // Configurable withholding lines (name + %) applied to W-2 Payroll Runs —
+  // see withholdingsFor(). Defaults to DEFAULT_WITHHOLDINGS.
+  withholdingRates: WithholdingRate[];
 };
 
 /** Resolves the configurable "technician" label — falls back to the
@@ -393,17 +375,54 @@ export type PayoutDocument = {
   updatedAt: string;
 };
 
-/** Customer-facing billing document — a separate document type from the
- *  internal sales/commission Invoice. Linked to (but never writes into) the
- *  master Invoice, so it can never create a second commission or double-
- *  count the sale. Phase 1 of "Billing & Technician Payables". */
+/* ========================================================================
+ * BILLING & TECHNICIANS — rebuilt to match the client's Lovable mockups.
+ * Job is now the central operational entity (who went where, when, to do
+ * what) — separate from the sales/commission Invoice. A Job optionally
+ * links to a sale Invoice (`saleInvoiceId`) for reference only; it NEVER
+ * creates or touches a commission. Customer Invoices and Work Statements
+ * both hang off a Job, independently — a Job can have a customer invoice,
+ * technician pay, both, or neither.
+ * ======================================================================== */
+
+export type GeoPoint = { lat: number; lng: number };
+export type StatementAttachment = { id: string; name: string; url: string };
+export type DocEvent = { at: string; actor: string; type: string; message: string };
+export type DocPdfRecord = { at: string; by: string };
+
+// ---------- Jobs ----------
+export type JobStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
+export const JOB_TYPES = ["Installation", "Repair", "Service Call", "Emergency", "Maintenance", "Warranty"] as const;
+
+export type Job = {
+  id: string;
+  number: string; // "JOB-000001"
+  technicianId: string | null;
+  customerName: string;
+  billingAddress: string;
+  serviceAddress: string;
+  serviceGeo?: GeoPoint | null;
+  date: string;
+  jobType: string;
+  productInstalled: string;
+  territory: string;
+  status: JobStatus;
+  attachments: StatementAttachment[];
+  saleInvoiceId: string | null; // reference only — never generates commission from here
+  salesAgentId?: string | null; // label only — never generates commission
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ---------- Customer Invoices ----------
 export type CustomerInvoiceStatus =
   | "draft" | "sent" | "viewed" | "partially_paid"
   | "paid" | "overdue" | "cancelled" | "refunded";
 
 export type CustomerInvoiceLineItem = {
   id: string;
-  productId?: string | null; // optional link back to the Products catalog
+  productId?: string | null;
   kind: "product" | "service";
   label: string;
   quantity: number;
@@ -414,7 +433,7 @@ export type CustomerInvoicePayment = {
   id: string;
   amount: number;
   date: string;
-  method: string; // "cash" | "check" | "card" | "financing" | ...
+  method: string;
   reference: string;
   notes: string;
   recordedBy: string;
@@ -423,24 +442,30 @@ export type CustomerInvoicePayment = {
 export type CustomerInvoice = {
   id: string;
   number: string; // "CINV-000001"
-  invoiceId: string; // link to the master sale/job Invoice — never duplicated
+  jobId: string | null;
+  saleInvoiceId: string | null;
   status: CustomerInvoiceStatus;
   customerName: string;
-  customerEmail: string; // not on the client's field list, but needed to actually address "Email Customer"
+  customerEmail: string;
   billingAddress: string;
+  billingGeo?: GeoPoint | null;
   serviceAddress: string;
+  serviceGeo?: GeoPoint | null;
   invoiceDate: string;
   dueDate: string;
   lineItems: CustomerInvoiceLineItem[];
   discount: number;
   taxPercent: number;
   deposit: number;
-  financingApplied: number; // $ amount already covered by financing
+  financingApplied: number;
   paymentTerms: string;
   notes: string;
   warrantyInfo: string;
-  templateId?: InvoiceTemplateId; // optional override; falls back to Company.invoiceTemplate
+  templateId?: InvoiceTemplateId;
+  attachments: StatementAttachment[];
   payments: CustomerInvoicePayment[];
+  history: DocEvent[];
+  pdfHistory: DocPdfRecord[];
   sentAt: string | null;
   viewedAt: string | null;
   brandingSnapshot?: Invoice["brandingSnapshot"];
@@ -448,8 +473,7 @@ export type CustomerInvoice = {
   updatedAt: string;
 };
 
-/** Balance is always derived, never stored. Shared by the store, the UI and
- *  the PDF builder so they can never disagree. */
+/** Overdue is derived from dueDate, not stored — see displayCustomerInvoiceStatus. */
 export function customerInvoiceTotals(ci: CustomerInvoice) {
   const lineTotal = ci.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0);
   const total = Math.max(0, lineTotal - ci.discount + lineTotal * ci.taxPercent - ci.deposit - ci.financingApplied);
@@ -458,157 +482,472 @@ export function customerInvoiceTotals(ci: CustomerInvoice) {
   return { lineTotal, total, paid, balance };
 }
 
-/** Phase 2: the approval/audit workflow layer on top of a "general invoice"
- *  job (isGeneralInvoice=true) — one per technician per job, same
- *  1:1-with-the-master-Invoice pattern as PayoutDocument/CustomerInvoice.
- *  The Invoice itself keeps being the actual pay record (fixedPay/extras
- *  feed calcPayouts); this document is the paperwork around it: rate
- *  snapshot, mileage/materials/deductions, attachments, approval history,
- *  and a link to the Weekly Technician Statement that will eventually
- *  batch it (Phase 3 — null until then). */
-export type WorkStatementStatus = "draft" | "submitted" | "approved" | "rejected" | "paid";
+/** Auto-flips a non-final status to "overdue" once dueDate has passed and a
+ *  balance remains — display-only, never stored, so it's always accurate. */
+export function displayCustomerInvoiceStatus(ci: CustomerInvoice): CustomerInvoiceStatus {
+  const finalStatuses: CustomerInvoiceStatus[] = ["paid", "cancelled", "refunded"];
+  if (finalStatuses.includes(ci.status)) return ci.status;
+  const { balance } = customerInvoiceTotals(ci);
+  if (balance > 0 && ci.dueDate && ci.dueDate < new Date().toISOString().slice(0, 10)) return "overdue";
+  return ci.status;
+}
 
-export type WorkStatementAuditEntry = { at: string; actor: string; action: string; message: string };
+// ---------- Rate Plans ----------
+export type RateRuleKind = "job_type" | "product" | "territory" | "service_call" | "emergency";
 
-export type TechnicianWorkStatement = {
+export type RatePlanRule = {
   id: string;
-  number: string; // "WS-000001"
-  invoiceId: string; // the job — an Invoice with isGeneralInvoice=true
-  technicianId: string; // == invoice.agentId, denormalized for convenience
-  status: WorkStatementStatus;
-  rateRuleId: string | null;
-  rateLabelSnapshot: string; // e.g. "Standard Installation Plan" or "Flat rate" — frozen at creation
-  baseRateSnapshot: number;
-  mileageRateSnapshot: number;
-  mileage: number;
+  kind: RateRuleKind;
+  matchValue: string;
+  amount: number;
+  mode?: "amount" | "multiplier";
+  mileageRate?: number | null;
+  notes: string;
+};
+
+export type TechRatePlan = {
+  id: string;
+  name: string;
+  technicianId: string | null; // null = company-wide
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  active: boolean;
+  fixedInstallRate: number;
+  serviceCallRate: number;
+  emergencyRate: number;
+  mileageRate: number;
+  extraLaborHourlyRate: number;
+  materialReimbursementPercent: number; // 0..1
+  materialReimbursementCap: number; // 0 = no cap
+  hourlyRate?: number; // used by Payroll Register (W-2)
+  overtimeMultiplier?: number;
+  rules: RatePlanRule[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RateContext = { technicianId: string; date?: string; jobType?: string; product?: string; territory?: string };
+export type ResolvedRate = { plan: TechRatePlan | null; baseLaborRate: number; mileageRate: number; source: string };
+
+function planApplies(p: TechRatePlan, ctx: RateContext): boolean {
+  if (!p.active) return false;
+  if (p.technicianId && p.technicianId !== ctx.technicianId) return false;
+  if (p.effectiveFrom && ctx.date && ctx.date < p.effectiveFrom) return false;
+  if (p.effectiveTo && ctx.date && ctx.date > p.effectiveTo) return false;
+  return true;
+}
+
+/** Newest applicable plan; technician-specific plans win over company-wide ones. */
+export function resolveRatePlan(plans: TechRatePlan[], ctx: RateContext): TechRatePlan | null {
+  const applicable = plans.filter((p) => planApplies(p, ctx));
+  if (!applicable.length) return null;
+  applicable.sort((a, b) => {
+    const spec = Number(!!b.technicianId) - Number(!!a.technicianId);
+    if (spec !== 0) return spec;
+    return (b.effectiveFrom || "").localeCompare(a.effectiveFrom || "");
+  });
+  return applicable[0] ?? null;
+}
+
+const matchKey = (v: string) => (v || "").trim().toLowerCase();
+
+/** Resolution: technician-specific plan wins over company-wide, then within
+ *  the chosen plan, territory -> job type -> product rules apply in order
+ *  (product applied last, so it wins ties), falling back to the plan's
+ *  emergency/service-call/fixed-install rate. */
+export function resolveRate(plans: TechRatePlan[], ctx: RateContext): ResolvedRate {
+  const plan = resolveRatePlan(plans, ctx);
+  if (!plan) return { plan: null, baseLaborRate: 0, mileageRate: 0, source: "No rate plan" };
+  const find = (kind: RateRuleKind, value: string) =>
+    plan.rules.find((r) => r.kind === kind && matchKey(r.matchValue) === matchKey(value));
+  const byProduct = ctx.product ? find("product", ctx.product) : undefined;
+  const byJobType = ctx.jobType ? find("job_type", ctx.jobType) : undefined;
+  const byTerritory = ctx.territory ? find("territory", ctx.territory) : undefined;
+
+  let baseLaborRate = plan.fixedInstallRate;
+  let source = `${plan.name} — fixed installation rate`;
+  const jt = (ctx.jobType || "").toLowerCase();
+  if (jt.includes("emergency") && plan.emergencyRate > 0) { baseLaborRate = plan.emergencyRate; source = `${plan.name} — emergency rate`; }
+  else if (jt.includes("service") && plan.serviceCallRate > 0) { baseLaborRate = plan.serviceCallRate; source = `${plan.name} — service call rate`; }
+  let mileageRate = plan.mileageRate;
+
+  const applyRule = (r: RatePlanRule, label: string) => {
+    if (r.mode === "multiplier") { baseLaborRate = baseLaborRate * (r.amount || 0); source = `${plan.name} — ${label}: ${r.matchValue} (x${r.amount})`; }
+    else { baseLaborRate = r.amount; source = `${plan.name} — ${label}: ${r.matchValue}`; }
+    if (typeof r.mileageRate === "number" && r.mileageRate > 0) mileageRate = r.mileageRate;
+  };
+  if (byTerritory) applyRule(byTerritory, "territory");
+  if (byJobType) applyRule(byJobType, "job type");
+  if (byProduct) applyRule(byProduct, "product");
+  if (plan.technicianId) source += " (technician-specific plan)";
+  return { plan, baseLaborRate, mileageRate, source };
+}
+
+export function reimbursementFor(plan: TechRatePlan | null, receiptAmount: number): number {
+  if (!plan) return 0;
+  const raw = receiptAmount * (plan.materialReimbursementPercent || 0);
+  return plan.materialReimbursementCap > 0 ? Math.min(raw, plan.materialReimbursementCap) : raw;
+}
+
+// ---------- Work Statements ----------
+export type WorkStatementStatus = "draft" | "pending_approval" | "approved" | "rejected";
+export type PayableStatus = "unpaid" | "in_batch" | "partially_paid" | "paid";
+export type StatementType =
+  | "original" | "additional_visit" | "supplemental" | "correction" | "reimbursement_only" | "warranty" | "rework";
+
+export const STATEMENT_TYPES: { id: StatementType; label: { es: string; en: string } }[] = [
+  { id: "original", label: { es: "Trabajo original", en: "Original Work" } },
+  { id: "additional_visit", label: { es: "Visita adicional", en: "Additional Visit" } },
+  { id: "supplemental", label: { es: "Suplementario", en: "Supplemental" } },
+  { id: "correction", label: { es: "Corrección", en: "Correction" } },
+  { id: "reimbursement_only", label: { es: "Solo reembolso", en: "Reimbursement Only" } },
+  { id: "warranty", label: { es: "Garantía", en: "Warranty" } },
+  { id: "rework", label: { es: "Retrabajo", en: "Rework" } },
+];
+
+export type RateSnapshot = {
+  ratePlanId: string | null;
+  ratePlanName: string;
+  effectiveFrom: string;
+  baseRate: number;
+  mileageRate: number;
+  extraLaborHourlyRate: number;
+  serviceCallRate: number;
+  emergencyRate: number;
+  reimbursementPercent: number;
+  reimbursementCap: number;
+  source: string;
+  capturedAt: string;
+};
+
+export type RateOverrideLog = { at: string; by: string; field: string; from: number; to: number; reason: string };
+
+export type TechWorkStatement = {
+  id: string;
+  number: string; // "TWS-000001"
+  jobId: string;
+  technicianId: string;
+  classification: TechnicianClassification | "";
+  ratePlanId: string | null;
+  baseLaborRate: number;
+  additionalLabor: number;
+  extraPlumbing: number;
+  mileageMiles: number;
+  mileageRate: number;
   materialReimbursement: number;
   deductions: number;
   chargebacks: number;
   corrections: number;
+  regularHours?: number;
+  overtimeHours?: number;
   notes: string;
-  attachments: { name: string; url: string }[]; // photos/files as data URLs, same pattern as agent/product photos
-  approvalHistory: WorkStatementAuditEntry[];
-  weeklyStatementId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** Total due is derived, never stored — same principle as customerInvoiceTotals. */
-export function workStatementTotal(ws: TechnicianWorkStatement, inv: Invoice | undefined) {
-  const jobPay = inv ? (inv.fixedPay || 0) + (inv.extras || []).reduce((s, x) => s + (x.amount || 0), 0) : 0;
-  const mileagePay = ws.mileage * ws.mileageRateSnapshot;
-  return Math.max(0, jobPay + mileagePay + ws.materialReimbursement - ws.deductions - ws.chargebacks - ws.corrections);
-}
-
-/** Phase 3: consolidates one technician's approved Work Statements for a
- *  pay period into a single payable batch. A Work Statement belongs to at
- *  most one active batch — generating a batch stamps weeklyStatementId on
- *  each one it includes, so it can never be double-batched or double-paid.
- *  Marking this paid posts a Payment (reusing the same Payment/Wallet the
- *  commission side already has — technicians are agents too), which is
- *  what surfaces it in the Payout Calendar and year-end 1099 totals. */
-export type WeeklyStatementStatus = "open" | "locked" | "approved" | "paid";
-
-export type WeeklyAdjustment = { label: string; amount: number };
-
-export type WeeklyTechnicianStatement = {
-  id: string;
-  number: string; // "WKS-000001"
-  technicianId: string;
-  periodStart: string;
-  periodEnd: string;
-  status: WeeklyStatementStatus;
-  workStatementIds: string[];
-  adjustments: WeeklyAdjustment[]; // batch-level corrections, on top of the individual statements
+  attachments: StatementAttachment[];
+  status: WorkStatementStatus;
+  approval: { by: string; at: string; note: string } | null;
+  approvalHistory: DocEvent[];
+  audit: DocEvent[];
+  paymentStatus: PayableStatus;
+  includedInWeeklyBatchId: string | null;
+  batchStatus: string | null;
   approvedAt: string | null;
-  approvedBy: string | null;
   paidAt: string | null;
-  paymentReference: string | null;
+  isAdjustment: boolean;
+  adjustsStatementId: string | null;
+  statementType: StatementType;
+  relatedStatementId?: string | null;
+  typeReason?: string;
+  supersededById?: string | null;
+  supersededAt?: string | null;
+  cancelled?: boolean;
+  rateSnapshot: RateSnapshot | null;
+  rateOverrides: RateOverrideLog[];
+  pdfHistory: DocPdfRecord[];
   createdAt: string;
   updatedAt: string;
 };
 
-/** Why a technician's Work Statement can't go into a new weekly batch,
- *  shown to the admin when generating one (per the client's spec). */
-export type ExclusionReason =
-  | "already_batched" | "not_approved" | "cancelled" | "superseded" | "already_paid";
+export type StatementTotals = { base: number; extras: number; mileage: number; reimbursements: number; deductions: number; total: number };
 
-export function eligibleWorkStatements(
-  technicianId: string,
-  workStatements: TechnicianWorkStatement[]
-): { eligible: TechnicianWorkStatement[]; excluded: { ws: TechnicianWorkStatement; reason: ExclusionReason }[] } {
-  const mine = workStatements.filter((w) => w.technicianId === technicianId);
-  const eligible: TechnicianWorkStatement[] = [];
-  const excluded: { ws: TechnicianWorkStatement; reason: ExclusionReason }[] = [];
-  for (const w of mine) {
-    if (w.weeklyStatementId) { excluded.push({ ws: w, reason: "already_batched" }); continue; }
-    if (w.status === "paid") { excluded.push({ ws: w, reason: "already_paid" }); continue; }
-    if (w.status === "rejected") { excluded.push({ ws: w, reason: "cancelled" }); continue; }
-    if (w.status !== "approved") { excluded.push({ ws: w, reason: "not_approved" }); continue; }
-    eligible.push(w);
+export function calcWorkStatement(ws: TechWorkStatement): StatementTotals {
+  const n = (x: number | undefined) => x || 0;
+  const base = n(ws.baseLaborRate);
+  const mileage = n(ws.mileageMiles) * n(ws.mileageRate);
+  const extras = n(ws.additionalLabor) + n(ws.extraPlumbing) + mileage;
+  const reimbursements = n(ws.materialReimbursement);
+  const deductions = n(ws.deductions) + n(ws.chargebacks);
+  const total = base + extras + reimbursements - deductions + n(ws.corrections);
+  return { base, extras, mileage, reimbursements, deductions, total };
+}
+
+export function sumTotals(list: StatementTotals[]): StatementTotals {
+  return list.reduce(
+    (a, t) => ({
+      base: a.base + t.base, extras: a.extras + t.extras, mileage: a.mileage + t.mileage,
+      reimbursements: a.reimbursements + t.reimbursements, deductions: a.deductions + t.deductions, total: a.total + t.total,
+    }),
+    { base: 0, extras: 0, mileage: 0, reimbursements: 0, deductions: 0, total: 0 }
+  );
+}
+
+export const statementTypeOf = (ws: TechWorkStatement): StatementType => ws.statementType ?? "original";
+
+export function isActiveStatement(ws: TechWorkStatement): boolean {
+  if (ws.cancelled) return false;
+  if (ws.supersededById) return false;
+  if (ws.status === "rejected") return false;
+  return true;
+}
+
+/** Existing active statement for the same job + technician + classification
+ *  + statement type — used to block a duplicate "original" work statement. */
+export function findActiveStatement(
+  list: TechWorkStatement[],
+  opts: { jobId: string; technicianId: string; classification: string; statementType?: StatementType; excludeId?: string }
+): TechWorkStatement | undefined {
+  const type = opts.statementType ?? "original";
+  return list.find((ws) =>
+    ws.id !== opts.excludeId &&
+    ws.jobId === opts.jobId &&
+    ws.technicianId === opts.technicianId &&
+    (ws.classification || "") === (opts.classification || "") &&
+    statementTypeOf(ws) === type &&
+    isActiveStatement(ws)
+  );
+}
+
+export function isPayoutEligible(ws: TechWorkStatement): { ok: boolean; reason: string | null } {
+  if (ws.cancelled) return { ok: false, reason: "Cancelled" };
+  if (ws.supersededById) return { ok: false, reason: "Superseded" };
+  if (ws.status !== "approved") return { ok: false, reason: "Not approved" };
+  if (ws.paymentStatus === "paid") return { ok: false, reason: "Already paid" };
+  return { ok: true, reason: null };
+}
+
+// ---------- Weekly Statements ----------
+export type WeeklyStatementStatus =
+  | "draft" | "pending_review" | "approved" | "scheduled"
+  | "partially_paid" | "paid" | "correction_requested" | "cancelled";
+
+export const LOCKED_BATCH_STATUSES: WeeklyStatementStatus[] = ["approved", "scheduled", "partially_paid", "paid"];
+
+export type WeeklyPaymentRecord = { id: string; date: string; amount: number; method: string; note: string };
+
+export type WeeklyTechStatement = {
+  id: string;
+  number: string; // "WTS-000001"
+  technicianId: string;
+  weekStart: string;
+  weekEnd: string;
+  statementIds: string[];
+  totals: StatementTotals;
+  status: WeeklyStatementStatus;
+  approval: { by: string; at: string; note: string } | null;
+  scheduledFor: string | null;
+  payments: WeeklyPaymentRecord[];
+  paidAt: string | null;
+  correctionRequest: { by: string; at: string; reason: string } | null;
+  reopenings: { by: string; at: string; reason: string }[];
+  audit: DocEvent[];
+  pdfHistory: DocPdfRecord[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Why a Work Statement can't go into a (new) weekly batch — a statement
+ *  belongs to at most one active batch, so it can never be double-paid. */
+export function batchExclusionReason(
+  ws: TechWorkStatement,
+  ctx: { batches: WeeklyTechStatement[]; technicians: Agent[]; currentBatchId?: string | null }
+): string | null {
+  const eligible = isPayoutEligible(ws);
+  if (!eligible.ok) return eligible.reason;
+  if (!ctx.technicians.some((t) => t.id === ws.technicianId)) return "Missing technician";
+  if (!ws.ratePlanId && !ws.rateSnapshot && ws.baseLaborRate <= 0) return "Missing rate plan — no rate resolved";
+  const other = ctx.batches.find((b) => b.id !== ctx.currentBatchId && b.status !== "cancelled" && b.statementIds.includes(ws.id));
+  if (other) return `Already included in ${other.number}`;
+  if (ws.includedInWeeklyBatchId && ws.includedInWeeklyBatchId !== ctx.currentBatchId) {
+    const b = ctx.batches.find((x) => x.id === ws.includedInWeeklyBatchId);
+    if (b && b.status !== "cancelled") return `Already included in ${b.number}`;
   }
-  return { eligible, excluded };
+  const mine = ctx.batches.find((b) => b.id === ws.includedInWeeklyBatchId);
+  if (mine?.status === "correction_requested") return "Correction requested on its weekly statement";
+  return null;
 }
 
-export function weeklyStatementTotal(
-  wk: WeeklyTechnicianStatement,
-  workStatements: TechnicianWorkStatement[],
-  invoices: Invoice[]
-): number {
-  const included = workStatements.filter((w) => wk.workStatementIds.includes(w.id));
-  const base = included.reduce((sum, w) => sum + workStatementTotal(w, invoices.find((i) => i.id === w.invoiceId)), 0);
-  const adj = wk.adjustments.reduce((s, a) => s + (a.amount || 0), 0);
-  return Math.max(0, base + adj);
+// ---------- Company Payables (report only — no persisted table) ----------
+export type PayablesSummaryRow = {
+  technicianId: string; technicianName: string; jobs: number;
+  base: number; extras: number; reimbursements: number; deductions: number; total: number;
+};
+
+export function buildPayablesSummary(
+  technicians: Agent[], statements: TechWorkStatement[], jobs: Job[], weekStart: string, weekEnd: string
+): { rows: PayablesSummaryRow[]; totalJobs: number; totalPayable: number } {
+  const inWeek = statements.filter((ws) => {
+    if (ws.status !== "approved") return false;
+    const job = jobs.find((j) => j.id === ws.jobId);
+    const d = job?.date ?? "";
+    return d >= weekStart && d <= weekEnd;
+  });
+  const rows: PayablesSummaryRow[] = technicians
+    .map((t) => {
+      const mine = inWeek.filter((ws) => ws.technicianId === t.id);
+      const totals = sumTotals(mine.map(calcWorkStatement));
+      return {
+        technicianId: t.id,
+        technicianName: t.companyName?.trim() ? `${t.companyName.trim()} — ${t.name}` : t.name,
+        jobs: mine.length,
+        ...totals,
+      };
+    })
+    .filter((r) => r.jobs > 0);
+  return { rows, totalJobs: rows.reduce((a, r) => a + r.jobs, 0), totalPayable: rows.reduce((a, r) => a + r.total, 0) };
 }
 
-/** Phase 4: Payroll Register — W-2 EMPLOYEES ONLY, kept entirely separate
- *  from the contractor/vendor payables above (Work Statements/Weekly
- *  Statements/Company Payables never touch this). This is NOT a payroll
- *  tax filer or a replacement for a licensed payroll provider — it
- *  prepares numbers for review/export; withholding here is always an
- *  internal estimate, never an official calculation. See
- *  PAYROLL_DISCLAIMER, shown wherever this data is displayed or exported. */
+// ---------- Payroll Register & Export (W-2 only) ----------
 export const PAYROLL_DISCLAIMER =
   "Transpare prepares payroll information for review and export. Final withholding, filing and payroll processing must be completed through an authorized payroll provider or qualified professional.";
 
-export type PayrollEntry = {
-  agentId: string;
+export type WithholdingRate = { id: string; label: string; percent: number; active: boolean };
+export const DEFAULT_WITHHOLDINGS: WithholdingRate[] = [
+  { id: "federal", label: "Federal income tax", percent: 0.1, active: true },
+  { id: "state", label: "State income tax", percent: 0.04, active: true },
+  { id: "ss", label: "Social Security", percent: 0.062, active: true },
+  { id: "medicare", label: "Medicare", percent: 0.0145, active: true },
+];
+
+export type PayrollStatus = "draft" | "approved" | "paid";
+export type PayrollWithholdingLine = { id: string; label: string; percent: number; amount: number; manual: boolean };
+
+export type PayrollLine = {
+  id: string;
+  technicianId: string;
+  technicianName: string;
+  classification: string;
+  is1099: boolean;
+  jobIds: string[];
+  statementIds: string[];
+  weeklyStatementIds: string[];
+  jobs: number;
   regularHours: number;
   overtimeHours: number;
-  hourlyRateSnapshot: number;
-  overtimeMultiplierSnapshot: number;
+  hourlyRate: number;
+  overtimeMultiplier: number;
+  laborPay: number;
   reimbursements: number;
   deductions: number;
-  taxWithholdingPercent: number; // internal estimate only — see PAYROLL_DISCLAIMER
+  withholdings: PayrollWithholdingLine[];
+  customerInvoiced: number; // reference only, never added to pay
+  note: string;
 };
 
-export type PayrollRegisterStatus = "draft" | "approved" | "paid";
-
-export type PayrollRegister = {
+export type PayrollRun = {
   id: string;
   number: string; // "PR-000001"
   periodStart: string;
   periodEnd: string;
-  status: PayrollRegisterStatus;
-  entries: PayrollEntry[];
-  approvedAt: string | null;
-  approvedBy: string | null;
+  payDate: string;
+  frequency: "weekly" | "biweekly";
+  status: PayrollStatus;
+  lines: PayrollLine[];
+  approval: { by: string; at: string; note: string } | null;
   paidAt: string | null;
+  audit: DocEvent[];
+  pdfHistory: DocPdfRecord[];
   createdAt: string;
   updatedAt: string;
 };
 
-export function payrollEntryAmounts(e: PayrollEntry) {
-  const regularPay = e.regularHours * e.hourlyRateSnapshot;
-  const overtimePay = e.overtimeHours * e.hourlyRateSnapshot * e.overtimeMultiplierSnapshot;
-  const grossWage = regularPay + overtimePay;
-  const estimatedWithholding = Math.max(0, grossWage) * e.taxWithholdingPercent;
-  const netPay = grossWage + e.reimbursements - e.deductions - estimatedWithholding;
-  return { regularPay, overtimePay, grossWage, estimatedWithholding, netPay };
+export function withholdingsFor(rates: WithholdingRate[], taxableWages: number): PayrollWithholdingLine[] {
+  return rates.filter((r) => r.active).map((r) => ({
+    id: r.id, label: r.label, percent: r.percent,
+    amount: Math.max(0, taxableWages * r.percent), manual: false,
+  }));
 }
 
-export function payrollRegisterTotal(reg: PayrollRegister) {
-  return reg.entries.reduce((sum, e) => sum + payrollEntryAmounts(e).netPay, 0);
+/** Net pay — withholdings only apply to W-2 lines; a 1099 line is paid gross
+ *  (and, per the payroll-provider export, isn't even part of that export —
+ *  contractors are paid through contractor payables, not payroll). */
+export function payrollLineNet(l: PayrollLine): number {
+  const gross = l.laborPay + l.reimbursements - l.deductions;
+  const withheld = l.withholdings.reduce((s, w) => s + w.amount, 0);
+  return gross - (l.is1099 ? 0 : withheld);
+}
+
+// ---------- Tax Filing (Form 1099-NEC) ----------
+export type Tech1099Line = { date: string; doc: string; jobs: number; base: number; extras: number; reimbursements: number; deductions: number; total: number };
+
+export type Form1099Row = {
+  id: string;
+  technicianName: string;
+  classification: string;
+  is1099: boolean;
+  customerInvoiced: number;
+  lines: Tech1099Line[];
+  total: number; // Box 1
+  address: string;
+  tinLast4: string;
+  federalWithheld: number; // Box 4
+  stateWithheld: number; // Box 5
+  stateName: string;
+  accountNumber: string;
+};
+
+/** Box 1 (cash-basis) comes from Weekly Statements paid in `year` — never
+ *  from Payroll Runs, which is a separate W-2 pipeline. Box 4/5 come from
+ *  paid Payroll Runs, summing withholding lines whose label matches
+ *  /federal/i or /state/i — so a custom withholding rate's name matters:
+ *  rename it away from those words and it silently stops feeding the 1099. */
+export function compute1099Rows(
+  year: string,
+  technicians: Agent[],
+  weeklyStatements: WeeklyTechStatement[],
+  workStatements: TechWorkStatement[],
+  customerInvoices: CustomerInvoice[],
+  payrollRuns: PayrollRun[]
+): Form1099Row[] {
+  const out: Form1099Row[] = [];
+  for (const t of technicians) {
+    const paid = weeklyStatements.filter((w) => w.technicianId === t.id && w.status === "paid" && (w.paidAt ?? "").startsWith(year));
+    if (!paid.length) continue;
+    const lines: Tech1099Line[] = paid.map((w) => ({
+      date: (w.paidAt ?? "").slice(0, 10), doc: w.number, jobs: w.statementIds.length,
+      base: w.totals.base, extras: w.totals.extras, reimbursements: w.totals.reimbursements,
+      deductions: w.totals.deductions, total: w.totals.total,
+    }));
+    const jobIds = new Set(
+      paid.flatMap((w) => w.statementIds)
+        .map((id) => workStatements.find((ws) => ws.id === id)?.jobId)
+        .filter((x): x is string => !!x)
+    );
+    const customerInvoiced = customerInvoices
+      .filter((ci) => ci.jobId && jobIds.has(ci.jobId))
+      .reduce((a, ci) => a + customerInvoiceTotals(ci).total, 0);
+
+    const payrollLines = payrollRuns
+      .filter((r) => r.status === "paid" && (r.payDate ?? "").startsWith(year))
+      .flatMap((r) => r.lines.filter((l) => l.technicianId === t.id));
+    const withheldFor = (re: RegExp) =>
+      payrollLines.reduce((a, l) => a + l.withholdings.filter((w) => re.test(w.label)).reduce((x, w) => x + w.amount, 0), 0);
+
+    out.push({
+      id: t.id,
+      technicianName: t.companyName?.trim() ? `${t.companyName.trim()} (Attn: ${t.name})` : t.name,
+      classification: t.classification ?? "",
+      is1099: resolvePaymentTreatment(t) !== "payroll",
+      customerInvoiced,
+      lines: lines.sort((a, b) => (a.date < b.date ? -1 : 1)),
+      total: lines.reduce((a, l) => a + l.total, 0),
+      address: "",
+      tinLast4: "",
+      federalWithheld: withheldFor(/federal/i),
+      stateWithheld: withheldFor(/state/i),
+      stateName: t.state || "",
+      accountNumber: t.id.slice(0, 8).toUpperCase(),
+    });
+  }
+  return out.sort((a, b) => b.total - a.total);
 }
 
 export type RequestStatus =
@@ -800,35 +1139,58 @@ type State = {
   recordPayoutDocumentDelivery: (id: string) => void;
   regeneratePayoutDocument: (id: string, by: string) => void;
 
+  // ---- Jobs ----
+  jobs: Job[];
+  addJob: (j: Omit<Job, "id" | "number" | "createdAt" | "updatedAt">) => string;
+  updateJob: (id: string, patch: Partial<Job>) => void;
+  removeJob: (id: string) => void;
+
+  // ---- Rate Plans ----
+  techRatePlans: TechRatePlan[];
+  addRatePlan: (p: Omit<TechRatePlan, "id" | "createdAt" | "updatedAt">) => string;
+  updateRatePlan: (id: string, patch: Partial<TechRatePlan>) => void;
+  removeRatePlan: (id: string) => void;
+
+  // ---- Customer Invoices (jobId-based) ----
   customerInvoices: CustomerInvoice[];
-  createCustomerInvoice: (invoiceId: string) => string;
+  createCustomerInvoice: (jobId: string | null) => string;
   updateCustomerInvoice: (id: string, patch: Partial<CustomerInvoice>) => void;
   setCustomerInvoiceStatus: (id: string, status: CustomerInvoiceStatus) => void;
   recordCustomerInvoicePayment: (id: string, payment: Omit<CustomerInvoicePayment, "id">) => void;
   removeCustomerInvoice: (id: string) => void;
 
-  workStatements: TechnicianWorkStatement[];
-  createWorkStatement: (invoiceId: string) => string;
-  updateWorkStatement: (id: string, patch: Partial<TechnicianWorkStatement>) => void;
+  // ---- Work Statements ----
+  workStatements: TechWorkStatement[];
+  /** Returns the new statement's id, OR (when a matching active statement
+   *  already exists and statementType wasn't explicitly overridden) the
+   *  existing duplicate so the UI can offer the DuplicateStatementDialog
+   *  instead of silently creating a second original. */
+  createWorkStatement: (jobId: string, opts?: { statementType?: StatementType; typeReason?: string; relatedStatementId?: string }) =>
+    { id: string | null; duplicateOf: TechWorkStatement | null };
+  updateWorkStatement: (id: string, patch: Partial<TechWorkStatement>) => void;
   submitWorkStatement: (id: string, by: string) => void;
-  approveWorkStatement: (id: string, by: string) => void;
+  approveWorkStatement: (id: string, by: string, note?: string) => void;
   rejectWorkStatement: (id: string, by: string, reason: string) => void;
-  addWorkStatementAttachment: (id: string, attachment: { name: string; url: string }) => void;
+  addWorkStatementAttachment: (id: string, attachment: StatementAttachment) => void;
   removeWorkStatement: (id: string) => void;
 
-  weeklyStatements: WeeklyTechnicianStatement[];
-  generateWeeklyStatement: (technicianId: string, periodStart: string, periodEnd: string) => string | null;
-  updateWeeklyStatement: (id: string, patch: Partial<WeeklyTechnicianStatement>) => void;
-  approveWeeklyStatement: (id: string, by: string) => void;
-  markWeeklyStatementPaid: (id: string, reference: string) => void;
+  // ---- Weekly Statements ----
+  weeklyStatements: WeeklyTechStatement[];
+  buildWeeklyStatement: (technicianId: string, weekStart: string, weekEnd: string, by: string) =>
+    { id: string | null; included: number; skipped: { number: string; reason: string }[] };
+  approveWeeklyStatement: (id: string, by: string, note?: string) => void;
+  markWeeklyStatementPaid: (id: string, payment: { amount: number; method: string; note: string }) => void;
+  requestWeeklyStatementCorrection: (id: string, by: string, reason: string) => void;
   removeWeeklyStatement: (id: string) => void;
 
-  payrollRegisters: PayrollRegister[];
-  createPayrollRegister: (periodStart: string, periodEnd: string) => string;
-  updatePayrollEntry: (registerId: string, agentId: string, patch: Partial<PayrollEntry>) => void;
-  approvePayrollRegister: (id: string, by: string) => void;
-  markPayrollRegisterPaid: (id: string) => void;
-  removePayrollRegister: (id: string) => void;
+  // ---- Payroll Register & Export (W-2) ----
+  // withholdingRates lives on Company (see setCompany); allowMultipleOriginalStatements too.
+  payrollRuns: PayrollRun[];
+  buildPayrollRun: (periodStart: string, periodEnd: string, payDate: string, frequency: "weekly" | "biweekly") => string;
+  updatePayrollLine: (runId: string, lineId: string, patch: Partial<PayrollLine>) => void;
+  approvePayrollRun: (id: string, by: string) => void;
+  markPayrollRunPaid: (id: string) => void;
+  removePayrollRun: (id: string) => void;
 
   // Masked tax IDs — see AgentTaxId. Populated only for admin/accountant
   // (RLS-restricted); empty for every other role, by design.
@@ -955,6 +1317,8 @@ const defaults = {
     commissionEntryMode: "fixed",
     technicianTermSingular: "",
     technicianTermPlural: "",
+    allowMultipleOriginalStatements: false,
+    withholdingRates: DEFAULT_WITHHOLDINGS,
   } as Company,
   personalTiers: [
     { minVolume: 0, rate: 0.05 },
@@ -1484,51 +1848,73 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         };
       }),
 
-      customerInvoices: [],
-      createCustomerInvoice: (invoiceId) => {
+      jobs: [],
+      addJob: (j) => {
         const id = uid();
         set((s) => {
-          const inv = s.invoices.find((i) => i.id === invoiceId);
-          if (!inv) return {};
+          const now = new Date().toISOString();
+          const seq = s.jobs.length + 1;
+          const job: Job = { ...j, id, number: `JOB-${String(seq).padStart(6, "0")}`, createdAt: now, updatedAt: now };
+          return { jobs: [...s.jobs, job] };
+        });
+        return id;
+      },
+      updateJob: (id, patch) => set((s) => ({
+        jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...patch, updatedAt: new Date().toISOString() } : j)),
+      })),
+      removeJob: (id) => set((s) => ({ jobs: s.jobs.filter((j) => j.id !== id) })),
+
+      techRatePlans: [],
+      addRatePlan: (p) => {
+        const id = uid();
+        set((s) => {
+          const now = new Date().toISOString();
+          const plan: TechRatePlan = { ...p, id, createdAt: now, updatedAt: now };
+          return { techRatePlans: [...s.techRatePlans, plan] };
+        });
+        return id;
+      },
+      updateRatePlan: (id, patch) => set((s) => ({
+        techRatePlans: s.techRatePlans.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p)),
+      })),
+      removeRatePlan: (id) => set((s) => ({ techRatePlans: s.techRatePlans.filter((p) => p.id !== id) })),
+
+      customerInvoices: [],
+      createCustomerInvoice: (jobId) => {
+        const id = uid();
+        set((s) => {
+          const job = jobId ? s.jobs.find((j) => j.id === jobId) ?? null : null;
           const seq = s.customerInvoices.length + 1;
           const now = new Date().toISOString();
-          // Seed from the master invoice, including last session's flat
-          // cash-invoice fields when present, so nothing already entered is lost.
-          const lineItems: CustomerInvoiceLineItem[] = [
-            {
-              id: uid(),
-              productId: null,
-              kind: "product",
-              label: inv.invoiceItemLabel || (inv.isGeneralInvoice ? "Service" : "Product/Service"),
-              quantity: 1,
-              unitPrice: inv.isGeneralInvoice ? (inv.fixedPay || 0) : inv.salesAmount,
-            },
-            ...inv.charges.map((c): CustomerInvoiceLineItem => ({
-              id: uid(), productId: null, kind: "service", label: c.label, quantity: 1, unitPrice: c.amount,
-            })),
-          ];
+          const lineItems: CustomerInvoiceLineItem[] = job
+            ? [{ id: uid(), productId: null, kind: "product", label: job.productInstalled || "Product/Service", quantity: 1, unitPrice: 0 }]
+            : [];
           const doc: CustomerInvoice = {
             id,
             number: `CINV-${String(seq).padStart(6, "0")}`,
-            invoiceId,
+            jobId,
+            saleInvoiceId: job?.saleInvoiceId ?? null,
             status: "draft",
-            customerName: inv.customerName,
+            customerName: job?.customerName ?? "",
             customerEmail: "",
-            billingAddress: inv.customerAddress || "",
-            serviceAddress: inv.customerAddress || "",
-            invoiceDate: inv.date,
-            dueDate: inv.date,
+            billingAddress: job?.billingAddress ?? "",
+            billingGeo: null,
+            serviceAddress: job?.serviceAddress ?? "",
+            serviceGeo: job?.serviceGeo ?? null,
+            invoiceDate: now.slice(0, 10),
+            dueDate: now.slice(0, 10),
             lineItems,
-            discount: inv.discount || 0,
+            discount: 0,
             taxPercent: 0,
             deposit: 0,
             financingApplied: 0,
             paymentTerms: "",
             notes: "",
             warrantyInfo: "",
-            payments: (inv.customerPayments || []).map((p): CustomerInvoicePayment => ({
-              id: uid(), amount: p.amount, date: p.date, method: "cash", reference: "", notes: p.label, recordedBy: "",
-            })),
+            attachments: [],
+            payments: [],
+            history: [{ at: now, actor: s.currentUserName, type: "created", message: "" }],
+            pdfHistory: [],
             sentAt: null,
             viewedAt: null,
             createdAt: now,
@@ -1561,8 +1947,6 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         if (!doc) return {};
         const nextPayments = [...doc.payments, { ...payment, id: uid() }];
         const { total, paid } = customerInvoiceTotals({ ...doc, payments: nextPayments });
-        // Never touches Payment[]/agent wallets — customer money is a
-        // separate ledger from commission payouts.
         const nextStatus: CustomerInvoiceStatus =
           paid >= total && total > 0 ? "paid" : paid > 0 ? "partially_paid" : doc.status;
         return {
@@ -1576,62 +1960,94 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       })),
 
       workStatements: [],
-      createWorkStatement: (invoiceId) => {
+      createWorkStatement: (jobId, opts) => {
+        const s0 = get();
+        const job = s0.jobs.find((j) => j.id === jobId);
+        if (!job || !job.technicianId) return { id: null, duplicateOf: null };
+        const tech = s0.agents.find((a) => a.id === job.technicianId);
+        const classification = tech?.classification ?? "";
+        const statementType = opts?.statementType ?? "original";
+        const existing = findActiveStatement(s0.workStatements, {
+          jobId, technicianId: job.technicianId, classification, statementType,
+        });
+        if (existing) return { id: null, duplicateOf: existing };
+
         const id = uid();
         set((s) => {
-          const inv = s.invoices.find((i) => i.id === invoiceId);
-          if (!inv) return {};
-          const agent = s.agents.find((a) => a.id === inv.agentId);
-          const position = s.positions.find((p) => p.name === agent?.level);
-          const jobType = inv.jobType ?? "installation";
-          const rule = resolveRateRule(position, { jobType, territory: agent?.state, productRule: position?.productRule });
           const now = new Date().toISOString();
           const seq = s.workStatements.length + 1;
-          const doc: TechnicianWorkStatement = {
+          const rate = resolveRate(s.techRatePlans, {
+            technicianId: job.technicianId!, date: job.date, jobType: job.jobType, product: job.productInstalled, territory: job.territory,
+          });
+          const rateSnapshot: RateSnapshot | null = rate.plan ? {
+            ratePlanId: rate.plan.id, ratePlanName: rate.plan.name, effectiveFrom: rate.plan.effectiveFrom,
+            baseRate: rate.baseLaborRate, mileageRate: rate.mileageRate, extraLaborHourlyRate: rate.plan.extraLaborHourlyRate,
+            serviceCallRate: rate.plan.serviceCallRate, emergencyRate: rate.plan.emergencyRate,
+            reimbursementPercent: rate.plan.materialReimbursementPercent, reimbursementCap: rate.plan.materialReimbursementCap,
+            source: rate.source, capturedAt: now,
+          } : null;
+          const doc: TechWorkStatement = {
             id,
-            number: `WS-${String(seq).padStart(6, "0")}`,
-            invoiceId,
-            technicianId: inv.agentId,
-            status: "draft",
-            rateRuleId: rule?.id ?? null,
-            rateLabelSnapshot: rule?.label ?? (s.language === "es" ? "Tarifa fija" : "Flat rate"),
-            baseRateSnapshot: rateRuleAmount(rule, position, jobType),
-            mileageRateSnapshot: rule?.mileageRate ?? 0,
-            mileage: 0,
+            number: `TWS-${String(seq).padStart(6, "0")}`,
+            jobId,
+            technicianId: job.technicianId!,
+            classification,
+            ratePlanId: rate.plan?.id ?? null,
+            baseLaborRate: rate.baseLaborRate,
+            additionalLabor: 0,
+            extraPlumbing: 0,
+            mileageMiles: 0,
+            mileageRate: rate.mileageRate,
             materialReimbursement: 0,
             deductions: 0,
             chargebacks: 0,
             corrections: 0,
             notes: "",
             attachments: [],
-            approvalHistory: [{ at: now, actor: s.currentUserName, action: "created", message: "" }],
-            weeklyStatementId: null,
+            status: "draft",
+            approval: null,
+            approvalHistory: [{ at: now, actor: s.currentUserName, type: "created", message: "" }],
+            audit: [],
+            paymentStatus: "unpaid",
+            includedInWeeklyBatchId: null,
+            batchStatus: null,
+            approvedAt: null,
+            paidAt: null,
+            isAdjustment: statementType !== "original",
+            adjustsStatementId: opts?.relatedStatementId ?? null,
+            statementType,
+            relatedStatementId: opts?.relatedStatementId ?? null,
+            typeReason: opts?.typeReason ?? "",
+            rateSnapshot,
+            rateOverrides: [],
+            pdfHistory: [],
             createdAt: now,
             updatedAt: now,
           };
           return { workStatements: [...s.workStatements, doc] };
         });
-        return id;
+        return { id, duplicateOf: null };
       },
       updateWorkStatement: (id, patch) => set((s) => ({
         workStatements: s.workStatements.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w)),
       })),
       submitWorkStatement: (id, by) => set((s) => ({
         workStatements: s.workStatements.map((w) => w.id === id
-          ? { ...w, status: "submitted", updatedAt: new Date().toISOString(),
-              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "submitted", message: "" }] }
+          ? { ...w, status: "pending_approval", updatedAt: new Date().toISOString(),
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, type: "submitted", message: "" }] }
           : w),
       })),
-      approveWorkStatement: (id, by) => set((s) => ({
+      approveWorkStatement: (id, by, note) => set((s) => ({
         workStatements: s.workStatements.map((w) => w.id === id
-          ? { ...w, status: "approved", updatedAt: new Date().toISOString(),
-              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "approved", message: "" }] }
+          ? { ...w, status: "approved", approvedAt: new Date().toISOString(), approval: { by, at: new Date().toISOString(), note: note ?? "" },
+              updatedAt: new Date().toISOString(),
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, type: "approved", message: note ?? "" }] }
           : w),
       })),
       rejectWorkStatement: (id, by, reason) => set((s) => ({
         workStatements: s.workStatements.map((w) => w.id === id
           ? { ...w, status: "rejected", updatedAt: new Date().toISOString(),
-              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, action: "rejected", message: reason }] }
+              approvalHistory: [...w.approvalHistory, { at: new Date().toISOString(), actor: by, type: "rejected", message: reason }] }
           : w),
       })),
       addWorkStatementAttachment: (id, attachment) => set((s) => ({
@@ -1644,158 +2060,187 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       })),
 
       weeklyStatements: [],
-      generateWeeklyStatement: (technicianId, periodStart, periodEnd) => {
-        const { eligible } = eligibleWorkStatements(technicianId, get().workStatements);
-        if (!eligible.length) return null;
-        const id = uid();
+      buildWeeklyStatement: (technicianId, weekStart, weekEnd, by) => {
+        const s0 = get();
+        const existingDraft = s0.weeklyStatements.find((w) =>
+          w.technicianId === technicianId && w.weekStart === weekStart && (w.status === "draft" || w.status === "pending_review")
+        );
+        const skipped: { number: string; reason: string }[] = [];
+        const candidates = s0.workStatements.filter((ws) => {
+          if (ws.technicianId !== technicianId) return false;
+          const job = s0.jobs.find((j) => j.id === ws.jobId);
+          const d = job?.date ?? "";
+          if (!(d >= weekStart && d <= weekEnd)) return false;
+          const reason = batchExclusionReason(ws, { batches: s0.weeklyStatements, technicians: s0.agents, currentBatchId: existingDraft?.id ?? null });
+          if (reason) { skipped.push({ number: ws.number, reason }); return false; }
+          return true;
+        });
+        if (!candidates.length && !existingDraft) return { id: null, included: 0, skipped };
+
+        const id = existingDraft?.id ?? uid();
         set((s) => {
           const now = new Date().toISOString();
+          const totals = sumTotals(candidates.map(calcWorkStatement));
           const seq = s.weeklyStatements.length + 1;
-          const wk: WeeklyTechnicianStatement = {
-            id,
-            number: `WKS-${String(seq).padStart(6, "0")}`,
-            technicianId,
-            periodStart,
-            periodEnd,
-            status: "locked",
-            workStatementIds: eligible.map((w) => w.id),
-            adjustments: [],
-            approvedAt: null,
-            approvedBy: null,
-            paidAt: null,
-            paymentReference: null,
-            createdAt: now,
-            updatedAt: now,
-          };
+          const wk: WeeklyTechStatement = existingDraft
+            ? { ...existingDraft, statementIds: candidates.map((c) => c.id), totals, updatedAt: now }
+            : {
+                id, number: `WTS-${String(seq).padStart(6, "0")}`, technicianId, weekStart, weekEnd,
+                statementIds: candidates.map((c) => c.id), totals, status: "draft", approval: null, scheduledFor: null,
+                payments: [], paidAt: null, correctionRequest: null, reopenings: [],
+                audit: [{ at: now, actor: by, type: "created", message: "" }], pdfHistory: [], createdAt: now, updatedAt: now,
+              };
+          const includedIds = new Set(candidates.map((c) => c.id));
           return {
-            weeklyStatements: [...s.weeklyStatements, wk],
-            // Stamp weeklyStatementId on everything just batched — this is
-            // what makes it ineligible for a second batch (double-payment
-            // prevention, per the client's spec).
-            workStatements: s.workStatements.map((w) =>
-              eligible.some((e) => e.id === w.id) ? { ...w, weeklyStatementId: id, updatedAt: now } : w
-            ),
+            weeklyStatements: existingDraft
+              ? s.weeklyStatements.map((w) => (w.id === id ? wk : w))
+              : [...s.weeklyStatements, wk],
+            // Stamp includedInWeeklyBatchId on everything just batched (double-
+            // payment prevention) and release anything that fell out of a
+            // rebuilt draft so it becomes eligible again.
+            workStatements: s.workStatements.map((w) => {
+              if (includedIds.has(w.id)) return { ...w, includedInWeeklyBatchId: id, batchStatus: "draft", paymentStatus: "in_batch", updatedAt: now };
+              if (existingDraft && w.includedInWeeklyBatchId === id) return { ...w, includedInWeeklyBatchId: null, batchStatus: null, paymentStatus: "unpaid", updatedAt: now };
+              return w;
+            }),
           };
         });
-        return id;
+        return { id, included: candidates.length, skipped };
       },
-      updateWeeklyStatement: (id, patch) => set((s) => ({
-        weeklyStatements: s.weeklyStatements.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w)),
-      })),
-      approveWeeklyStatement: (id, by) => set((s) => ({
+      approveWeeklyStatement: (id, by, note) => set((s) => ({
         weeklyStatements: s.weeklyStatements.map((w) =>
-          w.id === id ? { ...w, status: "approved", approvedAt: new Date().toISOString(), approvedBy: by, updatedAt: new Date().toISOString() } : w
+          w.id === id ? { ...w, status: "approved", approval: { by, at: new Date().toISOString(), note: note ?? "" }, updatedAt: new Date().toISOString() } : w
         ),
       })),
-      markWeeklyStatementPaid: (id, reference) => set((s) => {
+      markWeeklyStatementPaid: (id, payment) => set((s) => {
         const wk = s.weeklyStatements.find((w) => w.id === id);
         if (!wk) return {};
-        const total = weeklyStatementTotal(wk, s.workStatements, s.invoices);
         const now = new Date().toISOString();
         return {
           weeklyStatements: s.weeklyStatements.map((w) =>
-            w.id === id ? { ...w, status: "paid", paidAt: now, paymentReference: reference, updatedAt: now } : w
+            w.id === id
+              ? { ...w, status: "paid", paidAt: now, payments: [...w.payments, { id: uid(), date: now.slice(0, 10), ...payment }], updatedAt: now }
+              : w
           ),
           // Same downstream reuse as markPayoutDocumentPaid — technicians are
           // agents, so this posts to the SAME Payment/Wallet the commission
           // side already has, which is what surfaces it in the Payout
           // Calendar and year-end 1099 totals without a parallel system.
           workStatements: s.workStatements.map((w) =>
-            wk.workStatementIds.includes(w.id) ? { ...w, status: "paid", updatedAt: now } : w
+            wk.statementIds.includes(w.id) ? { ...w, paymentStatus: "paid", paidAt: now, updatedAt: now } : w
           ),
           payments: [...s.payments, {
             id: uid(),
             agentId: wk.technicianId,
             date: now.slice(0, 10),
-            amount: total,
+            amount: payment.amount,
             method: "Weekly technician statement",
-            notes: `${wk.number} · ${wk.periodStart} – ${wk.periodEnd}`,
-            reference: reference || wk.number,
+            notes: `${wk.number} · ${wk.weekStart} – ${wk.weekEnd}`,
+            reference: wk.number,
             status: "paid" as const,
           }],
         };
       }),
+      requestWeeklyStatementCorrection: (id, by, reason) => set((s) => ({
+        weeklyStatements: s.weeklyStatements.map((w) =>
+          w.id === id ? { ...w, status: "correction_requested", correctionRequest: { by, at: new Date().toISOString(), reason }, updatedAt: new Date().toISOString() } : w
+        ),
+      })),
       removeWeeklyStatement: (id) => set((s) => ({
         weeklyStatements: s.weeklyStatements.filter((w) => w.id !== id),
         // Un-batch its statements so they become eligible again
-        workStatements: s.workStatements.map((w) => (w.weeklyStatementId === id ? { ...w, weeklyStatementId: null } : w)),
+        workStatements: s.workStatements.map((w) =>
+          w.includedInWeeklyBatchId === id ? { ...w, includedInWeeklyBatchId: null, batchStatus: null, paymentStatus: "unpaid" } : w
+        ),
       })),
 
-      payrollRegisters: [],
-      createPayrollRegister: (periodStart, periodEnd) => {
+      payrollRuns: [],
+      buildPayrollRun: (periodStart, periodEnd, payDate, frequency) => {
         const id = uid();
         set((s) => {
           const now = new Date().toISOString();
-          const seq = s.payrollRegisters.length + 1;
-          const w2Agents = s.agents.filter((a) => resolvePaymentTreatment(a) === "payroll");
-          const entries: PayrollEntry[] = w2Agents.map((a) => {
-            const pos = s.positions.find((p) => p.name === a.level);
-            return {
-              agentId: a.id,
-              regularHours: 0,
-              overtimeHours: 0,
-              hourlyRateSnapshot: pos?.hourlyRate ?? 0,
-              overtimeMultiplierSnapshot: pos?.overtimeMultiplier ?? 1.5,
-              reimbursements: 0,
-              deductions: 0,
-              taxWithholdingPercent: 0,
-            };
+          const seq = s.payrollRuns.length + 1;
+          const relevantStatements = s.workStatements.filter((ws) => {
+            if (ws.status !== "approved") return false;
+            const job = s.jobs.find((j) => j.id === ws.jobId);
+            const d = job?.date ?? "";
+            return d >= periodStart && d <= periodEnd;
           });
-          const reg: PayrollRegister = {
-            id,
-            number: `PR-${String(seq).padStart(6, "0")}`,
-            periodStart,
-            periodEnd,
-            status: "draft",
-            entries,
-            approvedAt: null,
-            approvedBy: null,
-            paidAt: null,
-            createdAt: now,
-            updatedAt: now,
+          const byTech = new Map<string, TechWorkStatement[]>();
+          for (const ws of relevantStatements) {
+            if (!byTech.has(ws.technicianId)) byTech.set(ws.technicianId, []);
+            byTech.get(ws.technicianId)!.push(ws);
+          }
+          const lines: PayrollLine[] = [];
+          for (const [technicianId, statements] of byTech) {
+            const tech = s.agents.find((a) => a.id === technicianId);
+            if (!tech) continue;
+            const is1099 = resolvePaymentTreatment(tech) !== "payroll";
+            const totals = sumTotals(statements.map(calcWorkStatement));
+            const plan = resolveRatePlan(s.techRatePlans, { technicianId });
+            const jobIds = [...new Set(statements.map((w) => w.jobId))];
+            const customerInvoiced = s.customerInvoices
+              .filter((ci) => ci.jobId && jobIds.includes(ci.jobId))
+              .reduce((a, ci) => a + customerInvoiceTotals(ci).total, 0);
+            const laborPay = totals.base + totals.extras;
+            const netBase = Math.max(0, laborPay + totals.reimbursements - totals.deductions);
+            const withholdings = is1099 ? [] : withholdingsFor(s.company.withholdingRates, netBase);
+            lines.push({
+              id: uid(), technicianId,
+              technicianName: tech.companyName?.trim() ? `${tech.companyName.trim()} — ${tech.name}` : tech.name,
+              classification: tech.classification ?? "", is1099,
+              jobIds, statementIds: statements.map((w) => w.id), weeklyStatementIds: [],
+              jobs: jobIds.length,
+              regularHours: statements.reduce((a, w) => a + (w.regularHours || 0), 0),
+              overtimeHours: statements.reduce((a, w) => a + (w.overtimeHours || 0), 0),
+              hourlyRate: plan?.hourlyRate ?? 0, overtimeMultiplier: plan?.overtimeMultiplier ?? 1.5,
+              laborPay, reimbursements: totals.reimbursements, deductions: totals.deductions,
+              withholdings, customerInvoiced, note: "",
+            });
+          }
+          const run: PayrollRun = {
+            id, number: `PR-${String(seq).padStart(6, "0")}`, periodStart, periodEnd, payDate, frequency,
+            status: "draft", lines, approval: null, paidAt: null,
+            audit: [{ at: now, actor: s.currentUserName, type: "created", message: "" }], pdfHistory: [], createdAt: now, updatedAt: now,
           };
-          return { payrollRegisters: [...s.payrollRegisters, reg] };
+          return { payrollRuns: [...s.payrollRuns, run] };
         });
         return id;
       },
-      updatePayrollEntry: (registerId, agentId, patch) => set((s) => ({
-        payrollRegisters: s.payrollRegisters.map((r) =>
-          r.id === registerId
-            ? { ...r, entries: r.entries.map((e) => (e.agentId === agentId ? { ...e, ...patch } : e)), updatedAt: new Date().toISOString() }
+      updatePayrollLine: (runId, lineId, patch) => set((s) => ({
+        payrollRuns: s.payrollRuns.map((r) =>
+          r.id === runId
+            ? { ...r, lines: r.lines.map((l) => (l.id === lineId ? { ...l, ...patch } : l)), updatedAt: new Date().toISOString() }
             : r
         ),
       })),
-      approvePayrollRegister: (id, by) => set((s) => ({
-        payrollRegisters: s.payrollRegisters.map((r) =>
-          r.id === id ? { ...r, status: "approved", approvedAt: new Date().toISOString(), approvedBy: by, updatedAt: new Date().toISOString() } : r
+      approvePayrollRun: (id, by) => set((s) => ({
+        payrollRuns: s.payrollRuns.map((r) =>
+          r.id === id ? { ...r, status: "approved", approval: { by, at: new Date().toISOString(), note: "" }, updatedAt: new Date().toISOString() } : r
         ),
       })),
-      markPayrollRegisterPaid: (id) => set((s) => {
-        const reg = s.payrollRegisters.find((r) => r.id === id);
-        if (!reg) return {};
+      markPayrollRunPaid: (id) => set((s) => {
+        const run = s.payrollRuns.find((r) => r.id === id);
+        if (!run) return {};
         const now = new Date().toISOString();
-        const newPayments = reg.entries
-          .filter((e) => payrollEntryAmounts(e).netPay > 0)
-          .map((e) => ({
-            id: uid(),
-            agentId: e.agentId,
-            date: now.slice(0, 10),
-            amount: payrollEntryAmounts(e).netPay,
-            method: "Payroll",
-            notes: `${reg.number} · ${reg.periodStart} – ${reg.periodEnd}`,
-            reference: reg.number,
-            status: "paid" as const,
+        // 1099 lines are reference-only here — they're paid through
+        // contractor payables (Weekly Statements), not this run, to avoid
+        // double payment. Only W-2 lines post a payment when marked paid.
+        const newPayments = run.lines
+          .filter((l) => !l.is1099)
+          .map((l) => ({ l, net: payrollLineNet(l) }))
+          .filter(({ net }) => net > 0)
+          .map(({ l, net }) => ({
+            id: uid(), agentId: l.technicianId, date: now.slice(0, 10), amount: net,
+            method: "Payroll", notes: `${run.number} · ${run.periodStart} – ${run.periodEnd}`,
+            reference: run.number, status: "paid" as const,
           }));
         return {
-          payrollRegisters: s.payrollRegisters.map((r) =>
-            r.id === id ? { ...r, status: "paid", paidAt: now, updatedAt: now } : r
-          ),
+          payrollRuns: s.payrollRuns.map((r) => (r.id === id ? { ...r, status: "paid", paidAt: now, updatedAt: now } : r)),
           payments: [...s.payments, ...newPayments],
         };
       }),
-      removePayrollRegister: (id) => set((s) => ({
-        payrollRegisters: s.payrollRegisters.filter((r) => r.id !== id),
-      })),
+      removePayrollRun: (id) => set((s) => ({ payrollRuns: s.payrollRuns.filter((r) => r.id !== id) })),
 
       agentTaxIds: [],
       setAgentTaxIdLast4: (agentId, last4) => set((s) => {
@@ -2077,10 +2522,12 @@ const storeCreator: StateCreator<State> = (set, get) => ({
           splitRules: [],
           products: [],
           payoutDocuments: [],
+          jobs: [],
+          techRatePlans: [],
           customerInvoices: [],
           workStatements: [],
           weeklyStatements: [],
-          payrollRegisters: [],
+          payrollRuns: [],
           agentTaxIds: [],
           invoiceDraft: null,
           invoiceDraftEditingId: null,
@@ -2292,6 +2739,8 @@ export const useStore = create<State>()(
             commissionEntryMode: "fixed",
             technicianTermSingular: "",
             technicianTermPlural: "",
+            allowMultipleOriginalStatements: false,
+            withholdingRates: DEFAULT_WITHHOLDINGS,
             ...persisted.company,
           };
         }
