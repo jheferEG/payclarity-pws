@@ -695,6 +695,7 @@ export type Database = {
           commission_base: "profit" | "product_cost"
           commission_percent_override: number | null
           override_amount_overrides: Record<string, number>
+          override_deductions: Record<string, { id: string; label: string; amount: number }[]>
           branding_snapshot: Record<string, unknown> | null
           is_general_invoice: boolean
           job_type: "installation" | "service" | null
@@ -736,6 +737,7 @@ export type Database = {
           commission_base?: "profit" | "product_cost"
           commission_percent_override?: number | null
           override_amount_overrides?: Record<string, number>
+          override_deductions?: Record<string, { id: string; label: string; amount: number }[]>
           branding_snapshot?: Record<string, unknown> | null
           is_general_invoice?: boolean
           job_type?: "installation" | "service" | null
@@ -777,6 +779,7 @@ export type Database = {
           commission_base?: "profit" | "product_cost"
           commission_percent_override?: number | null
           override_amount_overrides?: Record<string, number>
+          override_deductions?: Record<string, { id: string; label: string; amount: number }[]>
           branding_snapshot?: Record<string, unknown> | null
           is_general_invoice?: boolean
           job_type?: "installation" | "service" | null

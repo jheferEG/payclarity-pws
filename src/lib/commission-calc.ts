@@ -237,7 +237,9 @@ export function calcPayouts(
         // too, not just in the preview, so the payout always matches what
         // was shown before saving.
         const manual = c.invoice.overrideAmountOverrides?.[row.agentId];
-        const amount = manual != null ? manual : row.amount;
+        const gross = manual != null ? manual : row.amount;
+        const deducted = (c.invoice.overrideDeductions?.[row.agentId] ?? []).reduce((s, d) => s + (d.amount || 0), 0);
+        const amount = Math.max(0, gross - deducted);
         cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + amount);
         if (!cascadeDetailByAgent.has(row.agentId)) cascadeDetailByAgent.set(row.agentId, new Map());
         const bySeller = cascadeDetailByAgent.get(row.agentId)!;
@@ -308,7 +310,9 @@ export function calcPayouts(
             const invProfit = Math.max(0, c.commissionProfit);
             profit += invProfit;
             const manual = c.invoice.overrideAmountOverrides?.[a.id];
-            override += manual != null ? manual : invProfit * rate;
+            const gross = manual != null ? manual : invProfit * rate;
+            const deducted = (c.invoice.overrideDeductions?.[a.id] ?? []).reduce((s, d) => s + (d.amount || 0), 0);
+            override += Math.max(0, gross - deducted);
           }
           return { agent, level, profit, rate, override };
         });

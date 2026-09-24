@@ -1413,6 +1413,9 @@ function InvoicesPanel() {
   const [splitId, setSplitId] = useState<string | null>(null);
   const [timelineId, setTimelineId] = useState<string | null>(null);
   const [involvedOpen, setInvolvedOpen] = useState(false);
+  // Which override row (by agentId) currently has its "add deduction" mini-form open.
+  const [addingDeductionFor, setAddingDeductionFor] = useState<string | null>(null);
+  const [deductionDraft, setDeductionDraft] = useState({ label: "", amount: 0 });
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
   const closePdfPreview = () => {
@@ -2029,57 +2032,131 @@ function InvoicesPanel() {
                   delete next[row.agentId];
                   setDraft({ ...draft, overrideAmountOverrides: next });
                 };
+                const deductions = row.deductions ?? [];
+                const addDeduction = () => {
+                  if (!row.agentId) return;
+                  const label = deductionDraft.label.trim();
+                  if (!label || !deductionDraft.amount) return;
+                  const list = draft.overrideDeductions?.[row.agentId] ?? [];
+                  setDraft({
+                    ...draft,
+                    overrideDeductions: {
+                      ...(draft.overrideDeductions || {}),
+                      [row.agentId]: [...list, { id: crypto.randomUUID(), label, amount: deductionDraft.amount }],
+                    },
+                  });
+                  setAddingDeductionFor(null);
+                  setDeductionDraft({ label: "", amount: 0 });
+                };
+                const removeDeduction = (id: string) => {
+                  if (!row.agentId) return;
+                  const list = (draft.overrideDeductions?.[row.agentId] ?? []).filter((d) => d.id !== id);
+                  const next = { ...(draft.overrideDeductions || {}) };
+                  if (list.length) next[row.agentId] = list; else delete next[row.agentId];
+                  setDraft({ ...draft, overrideDeductions: next });
+                };
                 return (
-                <div key={i} className="flex items-center justify-between gap-3 border border-border rounded-md p-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{row.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {row.role}
-                      {hasManualOverride && (
-                        <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-600 font-semibold">
-                          {s.language === "es" ? "· manual" : "· manual"}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isAdmin && isOverrideRow ? (
-                      <div className="flex items-center gap-1">
-                        <NumField
-                          className="h-8 w-24 font-mono text-right"
-                          step="0.01"
-                          value={row.amount}
-                          onChange={setOverride}
-                          title={s.language === "es"
-                            ? `Por defecto: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`
-                            : `Default: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`}
-                        />
+                <div key={i} className="border border-border rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{row.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {row.role}
                         {hasManualOverride && (
-                          <Button size="icon" variant="ghost" className="h-8 w-8" title={s.language === "es" ? "Volver al monto calculado" : "Reset to computed amount"} onClick={clearOverride}>
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          </Button>
+                          <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-600 font-semibold">
+                            {s.language === "es" ? "· manual" : "· manual"}
+                          </span>
                         )}
-                      </div>
-                    ) : (
-                      <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => {
-                      const pdf = isAdmin
-                        ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
-                        : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
-                      setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
-                    }}>
-                      <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => {
-                      const pdf = isAdmin
-                        ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
-                        : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
-                      pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
-                    }}>
-                      {s.language === "es" ? "Descargar" : "Download"}
-                    </Button>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isAdmin && isOverrideRow ? (
+                        <div className="flex items-center gap-1">
+                          <NumField
+                            className="h-8 w-24 font-mono text-right"
+                            step="0.01"
+                            value={row.grossAmount ?? row.amount}
+                            onChange={setOverride}
+                            title={s.language === "es"
+                              ? `Por defecto: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`
+                              : `Default: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`}
+                          />
+                          {hasManualOverride && (
+                            <Button size="icon" variant="ghost" className="h-8 w-8" title={s.language === "es" ? "Volver al monto calculado" : "Reset to computed amount"} onClick={clearOverride}>
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-mono text-sm">{fmtMoney(row.amount, s.company.currency)}</span>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => {
+                        const pdf = isAdmin
+                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
+                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                        setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
+                      }}>
+                        <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => {
+                        const pdf = isAdmin
+                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
+                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                        pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
+                      }}>
+                        {s.language === "es" ? "Descargar" : "Download"}
+                      </Button>
+                    </div>
                   </div>
+
+                  {isAdmin && isOverrideRow && (
+                    <div className="pt-2 border-t border-border/60">
+                      {deductions.length > 0 && (
+                        <div className="space-y-1 mb-2">
+                          {deductions.map((d) => (
+                            <div key={d.id} className="flex items-center justify-between text-xs bg-destructive/5 rounded px-2 py-1">
+                              <span className="truncate">{d.label}</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-mono text-destructive">-{fmtMoney(d.amount, s.company.currency)}</span>
+                                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeDeduction(d.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-xs font-semibold px-2">
+                            <span>{s.language === "es" ? "Neto a pagar" : "Net payable"}</span>
+                            <span className="font-mono">{fmtMoney(row.amount, s.company.currency)}</span>
+                          </div>
+                        </div>
+                      )}
+                      {addingDeductionFor === row.agentId ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            className="h-8 flex-1"
+                            placeholder={s.language === "es" ? "Nombre del descuento" : "Deduction name"}
+                            value={deductionDraft.label}
+                            onChange={(e) => setDeductionDraft({ ...deductionDraft, label: e.target.value })}
+                            autoFocus
+                          />
+                          <NumField
+                            className="h-8 w-24"
+                            step="0.01"
+                            value={deductionDraft.amount}
+                            onChange={(n) => setDeductionDraft({ ...deductionDraft, amount: n })}
+                          />
+                          <Button size="sm" onClick={addDeduction}>{s.language === "es" ? "Agregar" : "Add"}</Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setAddingDeductionFor(null); setDeductionDraft({ label: "", amount: 0 }); }}>
+                            {s.language === "es" ? "Cancelar" : "Cancel"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="ghost" onClick={() => { setAddingDeductionFor(row.agentId); setDeductionDraft({ label: "", amount: 0 }); }}>
+                          <Plus className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Descuento" : "Deduction"}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 );
               })

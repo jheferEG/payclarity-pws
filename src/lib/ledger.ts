@@ -667,7 +667,10 @@ export function computeCoachInsight(
 
 /* -------- Who this invoice pays: seller's upline (overrides) + seller/split -------- */
 
-export type InvolvedRow = { name: string; role: string; amount: number; agentId: string | null; level?: number; defaultAmount?: number };
+export type InvolvedRow = {
+  name: string; role: string; amount: number; agentId: string | null; level?: number;
+  defaultAmount?: number; grossAmount?: number; deductions?: { id: string; label: string; amount: number }[];
+};
 
 /** Everyone this invoice pays: the seller's sponsor chain (who earn an
  *  override on this profit — topmost sponsor first), then the seller
@@ -722,13 +725,18 @@ export function computeInvolved(
       ? (cascadeByAgent.get(u.agent.id) || 0)
       : Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0);
     const manual = inv.overrideAmountOverrides?.[u.agent.id];
+    const grossAmount = manual != null ? manual : defaultAmount;
+    const deductions = inv.overrideDeductions?.[u.agent.id] ?? [];
+    const deductionTotal = deductions.reduce((s, d) => s + (d.amount || 0), 0);
     return {
       name: payeeLabel(u.agent),
       role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
-      amount: manual != null ? manual : defaultAmount,
+      amount: Math.max(0, grossAmount - deductionTotal),
       agentId: u.agent.id,
       level: u.level,
       defaultAmount,
+      grossAmount,
+      deductions,
     };
   });
 

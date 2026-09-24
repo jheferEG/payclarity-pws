@@ -113,6 +113,12 @@ export type Invoice = {
   // payout math (calcPayouts), so they never disagree. Unset agentIds fall
   // back to the normal computed amount.
   overrideAmountOverrides?: Record<string, number>;
+  // Itemized deductions against a specific sponsor's override on THIS sale
+  // (e.g. a chargeback, a correction) — keyed by that sponsor agent's id.
+  // Subtracted from the gross override (computed default, or the manual
+  // override above when set) everywhere that amount is used: the "Who's
+  // involved" preview, generated PDFs, and calcPayouts.
+  overrideDeductions?: Record<string, { id: string; label: string; amount: number }[]>;
   brandingSnapshot?: CompanyBranding & { companyName: string; address: string; email: string; phone: string; taxId: string; currency: string }; // captured at PDF generation
   split?: InvoiceSplit | null;
   pdfHistory?: InvoicePdfRecord[];
