@@ -835,9 +835,9 @@ function DashboardQuickActions({
   );
 }
 
-function SectionCard({ title, desc, children, action }: any) {
+function SectionCard({ title, desc, children, action, className }: any) {
   return (
-    <Card className="p-6 shadow-card">
+    <Card className={cn("p-6 shadow-card", className)}>
       <div className="flex items-start justify-between mb-5 gap-4">
         <div>
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -1436,6 +1436,13 @@ function InvoicesPanel() {
     setPdfPreview(null);
   };
 
+  // Clicking "Editar" on a row far down the list used to update the form at
+  // the top with no visible cue — Victoria couldn't tell whether it had
+  // worked. Now it scrolls the form into view, flashes it yellow briefly,
+  // and shows a toast.
+  const editFormRef = useRef<HTMLDivElement>(null);
+  const [justStartedEdit, setJustStartedEdit] = useState(false);
+
   useEffect(() => {
     const dl = s.deepLink;
     if (!dl || !dl.invoiceId) return;
@@ -1453,6 +1460,10 @@ function InvoicesPanel() {
     setEditing(id);
     setDraft(inv);
     setSelectedProductId("");
+    toast.success(s.language === "es" ? `Editando ${inv.number} — mira el formulario arriba.` : `Editing ${inv.number} — see the form above.`);
+    setJustStartedEdit(true);
+    setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    setTimeout(() => setJustStartedEdit(false), 2000);
   };
 
   const save = () => {
@@ -1507,8 +1518,23 @@ function InvoicesPanel() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
       {(isAdmin || editing) && (
+      <div ref={editFormRef}>
       <SectionCard
-        title={t(editing ? "sect_invoice_edit" : "sect_invoice_new")}
+        className={cn(
+          "transition-shadow duration-500",
+          editing && "border-l-4 border-l-amber-400",
+          justStartedEdit && "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-950/30"
+        )}
+        title={
+          <span className="flex items-center gap-2">
+            {t(editing ? "sect_invoice_edit" : "sect_invoice_new")}
+            {editing && (
+              <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400">
+                {s.language === "es" ? "Editando" : "Editing"}
+              </Badge>
+            )}
+          </span>
+        }
         desc={t("sect_invoice_desc")}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -1797,6 +1823,7 @@ function InvoicesPanel() {
           )}
         </div>
       </SectionCard>
+      </div>
       )}
 
       {(isAdmin || editing) && (
