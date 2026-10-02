@@ -1944,7 +1944,7 @@ function InvoicesPanel() {
                         <td className="text-right font-mono">{fmtMoney(inv.salesAmount, s.company.currency)}</td>
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
                         <td className="text-right">
-                          <Button variant="ghost" size="sm" className={isAdmin ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40 font-semibold" : undefined} onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
+                          <Button variant="ghost" size="sm" className={isAdmin ? "bg-amber-100 text-amber-700 hover:bg-amber-200 hover:text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-950/70 font-semibold" : undefined} onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2210,6 +2210,29 @@ function InvoicesPanel() {
   );
 }
 
+/** Buffers the typed amount locally and only commits it (toast + store
+ * write) once "Guardar" is clicked — typing alone never silently saves. */
+function PayoutAmountEditor({ value, onSave, isEs, className }: {
+  value: number; onSave: (n: number) => void; isEs: boolean; className?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft !== value;
+  return (
+    <div className="flex items-center gap-1.5">
+      <NumField className={className} step="0.01" value={draft} onChange={setDraft} />
+      {dirty && (
+        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => {
+          onSave(draft);
+          toast.success(isEs ? "Monto guardado." : "Amount saved.");
+        }}>
+          {isEs ? "Guardar" : "Save"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function PayoutDocumentsDialog({
   invoiceId, open, onClose,
 }: { invoiceId: string | null; open: boolean; onClose: () => void }) {
@@ -2331,11 +2354,11 @@ function PayoutDocumentsDialog({
                         <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <NumField
+                        <PayoutAmountEditor
                           className="h-8 w-28 font-mono"
-                          step="0.01"
                           value={d.amount}
-                          onChange={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                          isEs={isEs}
+                          onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
                         />
                         {d.manualAmountOverride != null && (
                           <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
@@ -2386,11 +2409,11 @@ function PayoutDocumentsDialog({
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       {d.status === "pending" ? (
-                        <NumField
+                        <PayoutAmountEditor
                           className="h-9 w-32 text-xl font-bold"
-                          step="0.01"
                           value={d.amount}
-                          onChange={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                          isEs={isEs}
+                          onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
                         />
                       ) : (
                         <p className="text-2xl font-bold">{fmt(d.amount)}</p>
