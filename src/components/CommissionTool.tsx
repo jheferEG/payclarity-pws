@@ -1521,15 +1521,15 @@ function InvoicesPanel() {
       <div ref={editFormRef}>
       <SectionCard
         className={cn(
-          "transition-shadow duration-500",
-          editing && "border-l-4 border-l-amber-400",
-          justStartedEdit && "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-950/30"
+          "transition-all duration-500",
+          editing && "border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30",
+          justStartedEdit && "ring-4 ring-amber-400"
         )}
         title={
           <span className="flex items-center gap-2">
             {t(editing ? "sect_invoice_edit" : "sect_invoice_new")}
             {editing && (
-              <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400">
+              <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400 animate-pulse">
                 {s.language === "es" ? "Editando" : "Editing"}
               </Badge>
             )}
