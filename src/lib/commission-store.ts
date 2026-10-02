@@ -363,7 +363,9 @@ export type PayoutDocument = {
   agentId: string;
   roleLabel: string; // e.g. "Manager", "Senior Rep" — the recipient's position/level
   description: string; // e.g. "Level 1 override — 5.00% of net profit"
-  amount: number; // this invoice's share owed to this recipient
+  amount: number; // this invoice's share owed to this recipient — the manual
+  // override when set, else whatever computeInvolved() currently resolves to
+  manualAmountOverride?: number | null; // admin correction; once set, wins over the recomputed amount until cleared
   status: PayoutDocumentStatus;
   scheduledDate: string | null;
   rejectedReason: string | null;
@@ -1138,6 +1140,9 @@ type State = {
   markPayoutDocumentPaid: (id: string) => void;
   recordPayoutDocumentDelivery: (id: string) => void;
   regeneratePayoutDocument: (id: string, by: string) => void;
+  /** Admin-only manual correction of this one payout document's amount —
+   *  pass null to clear it and go back to the computed amount. */
+  setPayoutDocumentManualAmount: (id: string, amount: number | null) => void;
 
   // ---- Jobs ----
   jobs: Job[];
@@ -1764,11 +1769,16 @@ const storeCreator: StateCreator<State> = (set, get) => ({
           const idx = docs.findIndex((d) => d.invoiceId === invoiceId && d.agentId === row.agentId);
           const roleLabel = s.agents.find((a) => a.id === row.agentId)?.level ?? "";
           if (idx >= 0) {
+            const manual = docs[idx].manualAmountOverride;
             docs[idx] = {
               ...docs[idx],
               roleLabel,
               description: row.role,
-              amount: row.amount,
+              // A manual correction (set from the dialog) wins over the
+              // recomputed amount — otherwise this re-sync (which runs every
+              // time the dialog opens, to track split/override changes)
+              // would silently wipe out the admin's edit.
+              amount: manual != null ? manual : row.amount,
               updatedAt: new Date().toISOString(),
             };
           } else {
@@ -1824,6 +1834,13 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         payoutDocuments: s.payoutDocuments.map((d) =>
           d.id === id
             ? { ...d, pdfVersions: d.pdfVersions + 1, lastPdfAt: new Date().toISOString(), lastPdfBy: by, updatedAt: new Date().toISOString() }
+            : d
+        ),
+      })),
+      setPayoutDocumentManualAmount: (id, amount) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id
+            ? { ...d, manualAmountOverride: amount, amount: amount != null ? amount : d.amount, updatedAt: new Date().toISOString() }
             : d
         ),
       })),

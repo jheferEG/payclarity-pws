@@ -2371,8 +2371,30 @@ function PayoutDocumentsDialog({
                     {d.deliveredAt && (
                       <p className="text-xs text-emerald-600 mt-1">{isEs ? "Entregado" : "Delivered"} {new Date(d.deliveredAt).toLocaleString()}</p>
                     )}
-                    <p className="text-2xl font-bold mt-2">{fmt(d.amount)}</p>
-                    <p className="text-xs text-muted-foreground -mt-1">{isEs ? "pago final" : "final payable"}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      {d.status === "pending" ? (
+                        <NumField
+                          className="h-9 w-32 text-xl font-bold"
+                          step="0.01"
+                          value={d.amount}
+                          onChange={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                        />
+                      ) : (
+                        <p className="text-2xl font-bold">{fmt(d.amount)}</p>
+                      )}
+                      {d.manualAmountOverride != null && (
+                        <>
+                          <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
+                          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => {
+                            s.setPayoutDocumentManualAmount(d.id, null);
+                            if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                          }}>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{isEs ? "pago final" : "final payable"}</p>
 
                     {rejectingId === d.id && (
                       <div className="flex gap-2 mt-2">
