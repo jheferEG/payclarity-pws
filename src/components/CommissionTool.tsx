@@ -1944,7 +1944,7 @@ function InvoicesPanel() {
                         <td className="text-right font-mono">{fmtMoney(inv.salesAmount, s.company.currency)}</td>
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
                         <td className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
+                          <Button variant="ghost" size="sm" className={isAdmin ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40 font-semibold" : undefined} onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2331,7 +2331,20 @@ function PayoutDocumentsDialog({
                         <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-mono">{fmt(d.amount)}</span>
+                        <NumField
+                          className="h-8 w-28 font-mono"
+                          step="0.01"
+                          value={d.amount}
+                          onChange={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                        />
+                        {d.manualAmountOverride != null && (
+                          <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
+                            s.setPayoutDocumentManualAmount(d.id, null);
+                            if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                          }}>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                         <Button size="sm" onClick={() => s.approvePayoutDocument(d.id)}>{isEs ? "Aprobar" : "Approve"}</Button>
                         <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
                       </div>
