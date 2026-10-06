@@ -2253,13 +2253,14 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
 /** Shown only once "Editar" is clicked for a person — lists any named
  * discounts already on their payout document and lets the admin add more
  * (reason + amount), each subtracted from the document's amount. */
-function PayoutDeductionsPanel({ doc, isEs, fmt }: {
-  doc: PayoutDocument; isEs: boolean; fmt: (n: number) => string;
+function PayoutDeductionsPanel({ deductions, onAdd, onRemove, isEs, fmt }: {
+  deductions: { id: string; label: string; amount: number }[];
+  onAdd: (label: string, amount: number) => void;
+  onRemove: (id: string) => void;
+  isEs: boolean; fmt: (n: number) => string;
 }) {
-  const s = useStore();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ label: "", amount: 0 });
-  const deductions = doc.manualDeductions || [];
   return (
     <div className="mt-2">
       {deductions.length > 0 && (
@@ -2270,7 +2271,7 @@ function PayoutDeductionsPanel({ doc, isEs, fmt }: {
               <button
                 type="button"
                 className="text-muted-foreground hover:text-destructive"
-                onClick={() => s.removePayoutDocumentDeduction(doc.id, ded.id)}
+                onClick={() => onRemove(ded.id)}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -2290,7 +2291,7 @@ function PayoutDeductionsPanel({ doc, isEs, fmt }: {
           <Button size="sm" onClick={() => {
             const label = draft.label.trim();
             if (!label || !draft.amount) return;
-            s.addPayoutDocumentDeduction(doc.id, label, draft.amount);
+            onAdd(label, draft.amount);
             setDraft({ label: "", amount: 0 });
             setAdding(false);
           }}>
@@ -2326,8 +2327,6 @@ function PayoutDocumentsDialog({
   // read-only until "Editar" is clicked, which also reveals the per-person
   // "Agregar descuento" control.
   const [docEditingId, setDocEditingId] = useState<string | null>(null);
-  const netAmount = (d: PayoutDocument) =>
-    d.amount - (d.manualDeductions || []).reduce((sum, x) => sum + x.amount, 0);
 
   const inv = invoiceId ? s.invoices.find((i) => i.id === invoiceId) : null;
   const c = inv ? calcInvoice(inv, s.financeCompanies) : null;
@@ -2343,6 +2342,81 @@ function PayoutDocumentsDialog({
   }, [open, invoiceId]);
 
   const docs = inv ? s.payoutDocuments.filter((d) => d.invoiceId === inv.id) : [];
+
+  // A sponsor earning an override on this sale (role shows "Override L…")
+  // already has a dedicated per-recipient amount/deduction field on the
+  // Invoice itself — the exact one "Who's involved in this invoice" and
+  // every generated PDF read. Editing those people here writes straight to
+  // that same field instead of a second, payout-document-only number, so
+  // every view (and the PDF) always agree and a discount here actually
+  // reduces what the document — and the invoice — show as owed. Only the
+  // seller/split rows (no such Invoice-level field exists for them) still
+  // use a payout-document-only manual correction.
+  const rowFor = (d: PayoutDocument) => involvedRows.find((r) => r.agentId === d.agentId) || null;
+  const isOverrideDoc = (d: PayoutDocument) => (rowFor(d)?.level ?? null) != null;
+
+  const applyInvoicePatch = (patch: Partial<Invoice>) => {
+    if (!inv) return;
+    const updated = { ...inv, ...patch };
+    s.updateInvoice(inv.id, patch);
+    const updatedCalc = calcInvoice(updated, s.financeCompanies);
+    const updatedRows = computeInvolved(updated, updatedCalc, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+    // A payout-document-only correction left over on an override-tier
+    // recipient (from before this edit flow existed) would otherwise keep
+    // shadowing the Invoice field we just set — clear it first so the
+    // resync below, and "Mark paid" afterwards, both use the real number.
+    for (const row of updatedRows) {
+      if (row.level == null || !row.agentId) continue;
+      const doc = s.payoutDocuments.find((pd) => pd.invoiceId === inv.id && pd.agentId === row.agentId);
+      if (doc?.manualAmountOverride != null) s.setPayoutDocumentManualAmount(doc.id, null);
+    }
+    s.generatePayoutDocuments(inv.id, updatedRows);
+  };
+  const hasOverrideAmount = (d: PayoutDocument) => inv?.overrideAmountOverrides?.[d.agentId] != null;
+  const setGrossAmount = (d: PayoutDocument, n: number) => {
+    if (!inv) return;
+    applyInvoicePatch({ overrideAmountOverrides: { ...(inv.overrideAmountOverrides || {}), [d.agentId]: n } });
+  };
+  const clearGrossAmount = (d: PayoutDocument) => {
+    if (!inv) return;
+    const next = { ...(inv.overrideAmountOverrides || {}) };
+    delete next[d.agentId];
+    applyInvoicePatch({ overrideAmountOverrides: next });
+  };
+  const deductionsFor = (d: PayoutDocument) =>
+    isOverrideDoc(d) ? (inv?.overrideDeductions?.[d.agentId] ?? []) : (d.manualDeductions ?? []);
+  const addDeductionFor = (d: PayoutDocument, label: string, amount: number) => {
+    if (isOverrideDoc(d) && inv) {
+      const list = inv.overrideDeductions?.[d.agentId] ?? [];
+      applyInvoicePatch({
+        overrideDeductions: { ...(inv.overrideDeductions || {}), [d.agentId]: [...list, { id: crypto.randomUUID(), label, amount }] },
+      });
+    } else {
+      s.addPayoutDocumentDeduction(d.id, label, amount);
+    }
+  };
+  const removeDeductionFor = (d: PayoutDocument, dedId: string) => {
+    if (isOverrideDoc(d) && inv) {
+      const list = (inv.overrideDeductions?.[d.agentId] ?? []).filter((x) => x.id !== dedId);
+      const next = { ...(inv.overrideDeductions || {}) };
+      if (list.length) next[d.agentId] = list; else delete next[d.agentId];
+      applyInvoicePatch({ overrideDeductions: next });
+    } else {
+      s.removePayoutDocumentDeduction(d.id, dedId);
+    }
+  };
+  // The editable field always holds the gross (pre-discount) figure; the
+  // net/final payable (gross minus every discount) is shown separately,
+  // same split the "Who's involved" dialog already uses.
+  const grossAmountFor = (d: PayoutDocument) => {
+    const row = rowFor(d);
+    return isOverrideDoc(d) ? (row?.grossAmount ?? d.amount) : d.amount;
+  };
+  const netAmount = (d: PayoutDocument) => {
+    const row = rowFor(d);
+    if (isOverrideDoc(d)) return row?.amount ?? d.amount;
+    return d.amount - (d.manualDeductions || []).reduce((sum, x) => sum + x.amount, 0);
+  };
   const pending = docs.filter((d) => d.status === "pending");
   const fmt = (n: number) => fmtMoney(n, s.company.currency);
 
@@ -2443,17 +2517,20 @@ function PayoutDocumentsDialog({
                           {editingThis ? (
                             <PayoutAmountEditor
                               className="h-8 w-28 font-mono"
-                              value={d.amount}
+                              value={grossAmountFor(d)}
                               isEs={isEs}
-                              onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                              onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
                             />
                           ) : (
                             <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
                           )}
-                          {d.manualAmountOverride != null && (
+                          {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                             <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
-                              s.setPayoutDocumentManualAmount(d.id, null);
-                              if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                              if (isOverrideDoc(d)) clearGrossAmount(d);
+                              else {
+                                s.setPayoutDocumentManualAmount(d.id, null);
+                                if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                              }
                             }}>
                               <RotateCcw className="w-3.5 h-3.5" />
                             </Button>
@@ -2465,7 +2542,21 @@ function PayoutDocumentsDialog({
                           <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
                         </div>
                       </div>
-                      {editingThis && <PayoutDeductionsPanel doc={d} isEs={isEs} fmt={fmt} />}
+                      {editingThis && deductionsFor(d).length > 0 && (
+                        <div className="flex justify-between text-xs font-semibold mt-1">
+                          <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
+                          <span className="font-mono">{fmt(netAmount(d))}</span>
+                        </div>
+                      )}
+                      {editingThis && (
+                        <PayoutDeductionsPanel
+                          deductions={deductionsFor(d)}
+                          onAdd={(label, amount) => addDeductionFor(d, label, amount)}
+                          onRemove={(id) => removeDeductionFor(d, id)}
+                          isEs={isEs}
+                          fmt={fmt}
+                        />
+                      )}
                     </div>
                     );
                   })}
@@ -2507,19 +2598,22 @@ function PayoutDocumentsDialog({
                       {d.status === "pending" && docEditingId === d.id ? (
                         <PayoutAmountEditor
                           className="h-9 w-32 text-xl font-bold"
-                          value={d.amount}
+                          value={grossAmountFor(d)}
                           isEs={isEs}
-                          onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                          onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
                         />
                       ) : (
                         <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
                       )}
-                      {d.manualAmountOverride != null && (
+                      {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                         <>
                           <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
                           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => {
-                            s.setPayoutDocumentManualAmount(d.id, null);
-                            if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                            if (isOverrideDoc(d)) clearGrossAmount(d);
+                            else {
+                              s.setPayoutDocumentManualAmount(d.id, null);
+                              if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                            }
                           }}>
                             <RotateCcw className="w-3.5 h-3.5" />
                           </Button>
@@ -2536,7 +2630,21 @@ function PayoutDocumentsDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">{isEs ? "pago final" : "final payable"}</p>
-                    {docEditingId === d.id && <PayoutDeductionsPanel doc={d} isEs={isEs} fmt={fmt} />}
+                    {docEditingId === d.id && deductionsFor(d).length > 0 && (
+                      <div className="flex justify-between text-xs font-semibold mt-1">
+                        <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
+                        <span className="font-mono">{fmt(netAmount(d))}</span>
+                      </div>
+                    )}
+                    {docEditingId === d.id && (
+                      <PayoutDeductionsPanel
+                        deductions={deductionsFor(d)}
+                        onAdd={(label, amount) => addDeductionFor(d, label, amount)}
+                        onRemove={(id) => removeDeductionFor(d, id)}
+                        isEs={isEs}
+                        fmt={fmt}
+                      />
+                    )}
 
                     {rejectingId === d.id && (
                       <div className="flex gap-2 mt-2">
