@@ -18,7 +18,7 @@ import {
   LayoutDashboard, FileBarChart, FileSpreadsheet, Languages, Wand2, Settings2, Upload, Package,
   Split as SplitIcon, Activity, LogOut, ChevronDown, Users2, ShieldAlert, ArrowRight, ChevronLeft,
   Moon, Sun, Search, Image as ImageIcon, CheckCircle2, AlertTriangle, Clock, ReceiptText, ClipboardCheck, CalendarRange, DollarSign,
-  RotateCcw, Wrench,
+  RotateCcw, Wrench, X, MinusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -1462,6 +1462,10 @@ function InvoicesPanel() {
     setSelectedProductId("");
     toast.success(s.language === "es" ? `Editando ${inv.number} — mira el formulario arriba.` : `Editing ${inv.number} — see the form above.`);
     setJustStartedEdit(true);
+    // The sticky header sits on top of the page and covers whatever
+    // scrollIntoView aligns to the viewport's top edge, so the card's title
+    // ended up hidden behind it (looked like it scrolled to the middle).
+    // scroll-mt-28 on the target reserves that space.
     setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     setTimeout(() => setJustStartedEdit(false), 2000);
   };
@@ -1518,7 +1522,7 @@ function InvoicesPanel() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
       {(isAdmin || editing) && (
-      <div ref={editFormRef}>
+      <div ref={editFormRef} className="scroll-mt-28">
       <SectionCard
         className={cn(
           "transition-all duration-500",
@@ -1918,7 +1922,13 @@ function InvoicesPanel() {
                     const c = calcInvoice(inv, s.financeCompanies);
                     const ag = s.agents.find((a) => a.id === inv.agentId);
                     return (
-                      <tr key={inv.id} className="border-t border-border/60">
+                      <tr
+                        key={inv.id}
+                        className={cn(
+                          "border-t border-border/60",
+                          inv.id === editing && "bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-400"
+                        )}
+                      >
                         <td className="py-2 font-mono text-xs">
                           {inv.number}
                           {inv.split && inv.split.participants.length > 0 && (() => {
@@ -1944,7 +1954,14 @@ function InvoicesPanel() {
                         <td className="text-right font-mono">{fmtMoney(inv.salesAmount, s.company.currency)}</td>
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
                         <td className="text-right">
-                          <Button variant="ghost" size="sm" className={isAdmin ? "bg-amber-100 text-amber-700 hover:bg-amber-200 hover:text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-950/70 font-semibold" : undefined} onClick={() => editInvoice(inv.id)}>{isAdmin ? t("btn_edit") : t("btn_view")}</Button>
+                          <Button
+                            variant={isAdmin ? "destructive" : "ghost"}
+                            size={isAdmin ? "default" : "sm"}
+                            className={isAdmin ? "font-semibold" : undefined}
+                            onClick={() => editInvoice(inv.id)}
+                          >
+                            {isAdmin ? t("btn_edit") : t("btn_view")}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2233,6 +2250,65 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
   );
 }
 
+/** Shown only once "Editar" is clicked for a person — lists any named
+ * discounts already on their payout document and lets the admin add more
+ * (reason + amount), each subtracted from the document's amount. */
+function PayoutDeductionsPanel({ doc, isEs, fmt }: {
+  doc: PayoutDocument; isEs: boolean; fmt: (n: number) => string;
+}) {
+  const s = useStore();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ label: "", amount: 0 });
+  const deductions = doc.manualDeductions || [];
+  return (
+    <div className="mt-2">
+      {deductions.length > 0 && (
+        <div className="space-y-0.5 mb-1.5">
+          {deductions.map((ded) => (
+            <div key={ded.id} className="flex items-center justify-between gap-2 text-xs text-destructive">
+              <span>− {fmt(ded.amount)} · {ded.label}</span>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => s.removePayoutDocumentDeduction(doc.id, ded.id)}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {adding ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Input
+            className="h-8 text-xs w-36"
+            placeholder={isEs ? "Motivo" : "Reason"}
+            value={draft.label}
+            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+          />
+          <NumField className="h-8 w-24" step="0.01" value={draft.amount} onChange={(n) => setDraft({ ...draft, amount: n })} />
+          <Button size="sm" onClick={() => {
+            const label = draft.label.trim();
+            if (!label || !draft.amount) return;
+            s.addPayoutDocumentDeduction(doc.id, label, draft.amount);
+            setDraft({ label: "", amount: 0 });
+            setAdding(false);
+          }}>
+            {isEs ? "Agregar" : "Add"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setDraft({ label: "", amount: 0 }); }}>
+            {isEs ? "Cancelar" : "Cancel"}
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+          <MinusCircle className="w-3.5 h-3.5 mr-1" />{isEs ? "Agregar descuento" : "Add discount"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function PayoutDocumentsDialog({
   invoiceId, open, onClose,
 }: { invoiceId: string | null; open: boolean; onClose: () => void }) {
@@ -2245,6 +2321,13 @@ function PayoutDocumentsDialog({
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
     setPdfPreview(null);
   };
+
+  // The amount used to open straight into an editable field — now it's
+  // read-only until "Editar" is clicked, which also reveals the per-person
+  // "Agregar descuento" control.
+  const [docEditingId, setDocEditingId] = useState<string | null>(null);
+  const netAmount = (d: PayoutDocument) =>
+    d.amount - (d.manualDeductions || []).reduce((sum, x) => sum + x.amount, 0);
 
   const inv = invoiceId ? s.invoices.find((i) => i.id === invoiceId) : null;
   const c = inv ? calcInvoice(inv, s.financeCompanies) : null;
@@ -2297,7 +2380,7 @@ function PayoutDocumentsDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
@@ -2347,39 +2430,52 @@ function PayoutDocumentsDialog({
                     : "Payments release only after a manager approves each payout document."}
                 </p>
                 <div className="space-y-1.5">
-                  {pending.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="truncate">
-                        <span className="font-medium">{s.agents.find((a) => a.id === d.agentId)?.name ?? "—"}</span>
-                        <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
-                      </span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <PayoutAmountEditor
-                          className="h-8 w-28 font-mono"
-                          value={d.amount}
-                          isEs={isEs}
-                          onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
-                        />
-                        {d.manualAmountOverride != null && (
-                          <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
-                            s.setPayoutDocumentManualAmount(d.id, null);
-                            if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
-                          }}>
-                            <RotateCcw className="w-3.5 h-3.5" />
+                  {pending.map((d) => {
+                    const editingThis = docEditingId === d.id;
+                    return (
+                    <div key={d.id} className={cn("rounded-lg", editingThis && "bg-amber-500/10 -mx-1.5 px-1.5 py-1")}>
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="truncate">
+                          <span className="font-medium">{s.agents.find((a) => a.id === d.agentId)?.name ?? "—"}</span>
+                          <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {editingThis ? (
+                            <PayoutAmountEditor
+                              className="h-8 w-28 font-mono"
+                              value={d.amount}
+                              isEs={isEs}
+                              onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
+                            />
+                          ) : (
+                            <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
+                          )}
+                          {d.manualAmountOverride != null && (
+                            <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
+                              s.setPayoutDocumentManualAmount(d.id, null);
+                              if (inv && involvedRows.length > 0) s.generatePayoutDocuments(inv.id, involvedRows);
+                            }}>
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant={editingThis ? "secondary" : "outline"} onClick={() => setDocEditingId(editingThis ? null : d.id)}>
+                            {isEs ? "Editar" : "Edit"}
                           </Button>
-                        )}
-                        <Button size="sm" onClick={() => s.approvePayoutDocument(d.id)}>{isEs ? "Aprobar" : "Approve"}</Button>
-                        <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
+                          <Button size="sm" onClick={() => s.approvePayoutDocument(d.id)}>{isEs ? "Aprobar" : "Approve"}</Button>
+                          <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
+                        </div>
                       </div>
+                      {editingThis && <PayoutDeductionsPanel doc={d} isEs={isEs} fmt={fmt} />}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             )}
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {docs.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
+                <p className="text-sm text-muted-foreground text-center py-6 lg:col-span-2">
                   {isEs ? "Nadie está involucrado en este invoice todavía." : "No one is involved in this invoice yet."}
                 </p>
               ) : docs.map((d) => {
@@ -2407,8 +2503,8 @@ function PayoutDocumentsDialog({
                     {d.deliveredAt && (
                       <p className="text-xs text-emerald-600 mt-1">{isEs ? "Entregado" : "Delivered"} {new Date(d.deliveredAt).toLocaleString()}</p>
                     )}
-                    <div className="flex items-center gap-2 mt-2">
-                      {d.status === "pending" ? (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {d.status === "pending" && docEditingId === d.id ? (
                         <PayoutAmountEditor
                           className="h-9 w-32 text-xl font-bold"
                           value={d.amount}
@@ -2416,7 +2512,7 @@ function PayoutDocumentsDialog({
                           onSave={(n) => s.setPayoutDocumentManualAmount(d.id, n)}
                         />
                       ) : (
-                        <p className="text-2xl font-bold">{fmt(d.amount)}</p>
+                        <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
                       )}
                       {d.manualAmountOverride != null && (
                         <>
@@ -2429,8 +2525,18 @@ function PayoutDocumentsDialog({
                           </Button>
                         </>
                       )}
+                      {d.status === "pending" && (
+                        <Button
+                          size="sm"
+                          variant={docEditingId === d.id ? "secondary" : "outline"}
+                          onClick={() => setDocEditingId(docEditingId === d.id ? null : d.id)}
+                        >
+                          {isEs ? "Editar" : "Edit"}
+                        </Button>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">{isEs ? "pago final" : "final payable"}</p>
+                    {docEditingId === d.id && <PayoutDeductionsPanel doc={d} isEs={isEs} fmt={fmt} />}
 
                     {rejectingId === d.id && (
                       <div className="flex gap-2 mt-2">

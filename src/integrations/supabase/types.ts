@@ -236,6 +236,7 @@ export type Database = {
           description: string
           amount: number
           manual_amount_override: number | null
+          manual_deductions: Json
           status: "pending" | "approved" | "rejected" | "paid"
           scheduled_date: string | null
           rejected_reason: string | null
@@ -256,6 +257,7 @@ export type Database = {
           description?: string
           amount?: number
           manual_amount_override?: number | null
+          manual_deductions?: Json
           status?: "pending" | "approved" | "rejected" | "paid"
           scheduled_date?: string | null
           rejected_reason?: string | null
@@ -276,6 +278,7 @@ export type Database = {
           description?: string
           amount?: number
           manual_amount_override?: number | null
+          manual_deductions?: Json
           status?: "pending" | "approved" | "rejected" | "paid"
           scheduled_date?: string | null
           rejected_reason?: string | null

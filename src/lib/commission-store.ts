@@ -366,6 +366,7 @@ export type PayoutDocument = {
   amount: number; // this invoice's share owed to this recipient — the manual
   // override when set, else whatever computeInvolved() currently resolves to
   manualAmountOverride?: number | null; // admin correction; once set, wins over the recomputed amount until cleared
+  manualDeductions?: { id: string; label: string; amount: number }[]; // named discounts subtracted from `amount` to get the final payable
   status: PayoutDocumentStatus;
   scheduledDate: string | null;
   rejectedReason: string | null;
@@ -1143,6 +1144,9 @@ type State = {
   /** Admin-only manual correction of this one payout document's amount —
    *  pass null to clear it and go back to the computed amount. */
   setPayoutDocumentManualAmount: (id: string, amount: number | null) => void;
+  /** Adds a named discount against this payout document's amount. */
+  addPayoutDocumentDeduction: (id: string, label: string, amount: number) => void;
+  removePayoutDocumentDeduction: (id: string, deductionId: string) => void;
 
   // ---- Jobs ----
   jobs: Job[];
@@ -1841,6 +1845,20 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         payoutDocuments: s.payoutDocuments.map((d) =>
           d.id === id
             ? { ...d, manualAmountOverride: amount, amount: amount != null ? amount : d.amount, updatedAt: new Date().toISOString() }
+            : d
+        ),
+      })),
+      addPayoutDocumentDeduction: (id, label, amount) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id
+            ? { ...d, manualDeductions: [...(d.manualDeductions || []), { id: uid(), label, amount }], updatedAt: new Date().toISOString() }
+            : d
+        ),
+      })),
+      removePayoutDocumentDeduction: (id, deductionId) => set((s) => ({
+        payoutDocuments: s.payoutDocuments.map((d) =>
+          d.id === id
+            ? { ...d, manualDeductions: (d.manualDeductions || []).filter((x) => x.id !== deductionId), updatedAt: new Date().toISOString() }
             : d
         ),
       })),
