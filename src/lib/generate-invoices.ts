@@ -185,9 +185,29 @@ export type InvoiceInvolvedRow = {
   deductions?: { id: string; label: string; amount: number }[];
 };
 
-function roleWithDeductions(r: InvoiceInvolvedRow, cur: string): string {
-  if (!r.deductions || r.deductions.length === 0) return r.role;
-  return [r.role, ...r.deductions.map((d) => `− ${fmtMoney(d.amount, cur)} ${d.label}`)].join("\n");
+/** Builds the body rows for a "who gets paid" table. A person with no
+ *  discount is one row as always; a person with one or more discounts
+ *  becomes its own mini breakdown — initial amount, one line per discount
+ *  reason, then a bold Total — instead of cramming the reason into the
+ *  Role cell next to an already-discounted figure. */
+function involvedRowsToTableBody(rows: InvoiceInvolvedRow[], cur: string): any[] {
+  const body: any[] = [];
+  for (const r of rows) {
+    if (r.deductions && r.deductions.length > 0) {
+      body.push([r.name, r.role, fmtMoney(r.grossAmount ?? r.amount, cur)]);
+      for (const d of r.deductions) {
+        body.push(["", d.label, `- ${fmtMoney(d.amount, cur)}`]);
+      }
+      body.push([
+        "",
+        { content: "Total", styles: { fontStyle: "bold" } },
+        { content: fmtMoney(r.amount, cur), styles: { fontStyle: "bold" } },
+      ]);
+    } else {
+      body.push([r.name, r.role, fmtMoney(r.amount, cur)]);
+    }
+  }
+  return body;
 }
 
 const EXTRA_LABELS: Record<string, string> = {
@@ -268,7 +288,7 @@ export function buildSaleInvoicePDF(
       autoTable(doc, {
         startY: y,
         head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-        body: involved!.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
+        body: involvedRowsToTableBody(involved!, cur),
         headStyles: { fillColor: brand, textColor: 255 },
         styles: { fontSize },
         margin: { left: margin, right: margin },
@@ -451,7 +471,7 @@ export function buildSaleInvoicePDF(
     autoTable(doc, {
       startY: y4 + 14,
       head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-      body: involved!.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
+      body: involvedRowsToTableBody(involved!, cur),
       headStyles: { fillColor: brand, textColor: 255 },
       styles: { fontSize },
       margin: { left: margin, right: margin },
@@ -1236,7 +1256,7 @@ export function buildInvoiceMasterSummaryPDF(
   autoTable(doc, {
     startY: y,
     head: [["Name", "Role", `Amount (${cur})`]],
-    body: rows.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
+    body: involvedRowsToTableBody(rows, cur),
     foot: [["", "Total payout", fmtMoney(total, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
@@ -1321,7 +1341,7 @@ export function buildPeriodMasterSummaryPDF(
     autoTable(doc, {
       startY: y,
       head: [["Name", "Role", `Amount (${cur})`]],
-      body: sec.rows.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
+      body: involvedRowsToTableBody(sec.rows, cur),
       foot: [["", "Subtotal", fmtMoney(total, cur)]],
       headStyles: { fillColor: brand, textColor: 255 },
       footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
