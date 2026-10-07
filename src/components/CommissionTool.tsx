@@ -2388,6 +2388,10 @@ function PayoutDocumentsDialog({
   };
   const deductionsFor = (d: PayoutDocument) =>
     isOverrideDoc(d) ? (inv?.overrideDeductions?.[d.agentId] ?? []) : (d.manualDeductions ?? []);
+  // Hovering the "Descuento" badge shows exactly which reason(s) and how
+  // much, without needing to click "Editar" first.
+  const deductionTitle = (d: PayoutDocument) =>
+    deductionsFor(d).map((x) => `${x.label}: -${fmt(x.amount)}`).join(" · ");
   const addDeductionFor = (d: PayoutDocument, label: string, amount: number) => {
     if (isOverrideDoc(d) && inv) {
       const list = inv.overrideDeductions?.[d.agentId] ?? [];
@@ -2521,8 +2525,8 @@ function PayoutDocumentsDialog({
                           {deductionsFor(d).length > 0 && (
                             <Badge
                               variant="outline"
-                              className="text-amber-600 border-amber-400 bg-amber-500/10"
-                              title={isEs ? "Este pago tiene un descuento aplicado" : "This payout has a discount applied"}
+                              className="text-red-600 border-red-400 bg-red-500/10"
+                              title={deductionTitle(d)}
                             >
                               <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
                             </Badge>
@@ -2613,8 +2617,8 @@ function PayoutDocumentsDialog({
                       {deductionsFor(d).length > 0 && (
                         <Badge
                           variant="outline"
-                          className="text-amber-600 border-amber-400 bg-amber-500/10"
-                          title={isEs ? "Este pago tiene un descuento aplicado" : "This payout has a discount applied"}
+                          className="text-red-600 border-red-400 bg-red-500/10"
+                          title={deductionTitle(d)}
                         >
                           <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
                         </Badge>
