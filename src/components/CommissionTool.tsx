@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   Trash2, Plus, FileDown, Sparkles, Users, Receipt, Layers, Building2, Banknote, AlertCircle,
@@ -681,10 +682,12 @@ export default function CommissionTool() {
                   </div>
                 </div>
 
-                {/* Sub-tabs — icon + label, scroll on mobile */}
+                {/* Sub-tabs — icon + label, scroll on mobile; wrap (never
+                    scroll) from sm up so a group with many tabs (e.g.
+                    Billing & Technicians) always shows all of them at once */}
                 {currentGroup.tabs.length > 1 && (
-                  <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 [&::-webkit-scrollbar]:hidden">
-                    <TabsList className="flex h-auto w-max sm:w-auto justify-start gap-1 p-1">
+                  <div className="overflow-x-auto sm:overflow-visible -mx-3 sm:mx-0 px-3 sm:px-0 [&::-webkit-scrollbar]:hidden">
+                    <TabsList className="flex h-auto w-max sm:w-auto sm:flex-wrap justify-start gap-1 p-1">
                       {currentGroup.tabs.map((tt) => {
                         const Icon = tt.icon;
                         return (
@@ -2251,6 +2254,41 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
   );
 }
 
+/** The "Descuento" badge next to a payout amount — clicking it (not just
+ * hovering) pops open the full breakdown right there, with no need to open
+ * "Editar" first just to see why the amount was reduced. */
+function DiscountBadge({ deductions, isEs, fmt }: {
+  deductions: { id: string; label: string; amount: number; addedBy?: string }[];
+  isEs: boolean; fmt: (n: number) => string;
+}) {
+  if (deductions.length === 0) return null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button">
+          <Badge variant="outline" className="text-red-600 border-red-400 bg-red-500/10 cursor-pointer hover:bg-red-500/20">
+            <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
+          </Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start">
+        <p className="text-xs font-semibold mb-1.5">{isEs ? "Descuentos aplicados" : "Discounts applied"}</p>
+        <div className="space-y-1.5">
+          {deductions.map((ded) => (
+            <div key={ded.id} className="flex items-start justify-between gap-2 text-xs">
+              <span className="min-w-0">
+                <span className="block truncate">{ded.label}</span>
+                {ded.addedBy && <span className="text-muted-foreground">{isEs ? "agregado por" : "added by"} {ded.addedBy}</span>}
+              </span>
+              <span className="font-mono text-destructive shrink-0">- {fmt(ded.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Shown only once "Editar" is clicked for a person — lists any named
  * discounts already on their payout document and lets the admin add more
  * (reason + amount), each subtracted from the document's amount. */
@@ -2391,10 +2429,6 @@ function PayoutDocumentsDialog({
   };
   const deductionsFor = (d: PayoutDocument) =>
     isOverrideDoc(d) ? (inv?.overrideDeductions?.[d.agentId] ?? []) : (d.manualDeductions ?? []);
-  // Hovering the "Descuento" badge shows exactly which reason(s) and how
-  // much, without needing to click "Editar" first.
-  const deductionTitle = (d: PayoutDocument) =>
-    deductionsFor(d).map((x) => `${x.label}: -${fmt(x.amount)}`).join(" · ");
   const addDeductionFor = (d: PayoutDocument, label: string, amount: number) => {
     if (isOverrideDoc(d) && inv) {
       const list = inv.overrideDeductions?.[d.agentId] ?? [];
@@ -2528,15 +2562,7 @@ function PayoutDocumentsDialog({
                         </span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
-                          {deductionsFor(d).length > 0 && (
-                            <Badge
-                              variant="outline"
-                              className="text-red-600 border-red-400 bg-red-500/10"
-                              title={deductionTitle(d)}
-                            >
-                              <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
-                            </Badge>
-                          )}
+                          <DiscountBadge deductions={deductionsFor(d)} isEs={isEs} fmt={fmt} />
                           {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                             <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
                               if (isOverrideDoc(d)) clearGrossAmount(d);
@@ -2623,15 +2649,7 @@ function PayoutDocumentsDialog({
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
-                      {deductionsFor(d).length > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="text-red-600 border-red-400 bg-red-500/10"
-                          title={deductionTitle(d)}
-                        >
-                          <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
-                        </Badge>
-                      )}
+                      <DiscountBadge deductions={deductionsFor(d)} isEs={isEs} fmt={fmt} />
                       {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                         <>
                           <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
