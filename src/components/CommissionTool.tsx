@@ -2238,14 +2238,17 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
   return (
     <div className="flex items-center gap-1.5">
       <NumField className={className} step="0.01" value={draft} onChange={setDraft} />
-      {dirty && (
-        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => {
+      <Button
+        size="sm"
+        disabled={!dirty}
+        className={dirty ? "bg-green-600 hover:bg-green-700 text-white" : undefined}
+        onClick={() => {
           onSave(draft);
           toast.success(isEs ? "Monto guardado." : "Amount saved.");
-        }}>
-          {isEs ? "Guardar" : "Save"}
-        </Button>
-      )}
+        }}
+      >
+        {isEs ? "Guardar" : "Save"}
+      </Button>
     </div>
   );
 }
@@ -2514,16 +2517,7 @@ function PayoutDocumentsDialog({
                           <span className="text-muted-foreground"> · {d.number} · {inv.number} · {STATUS_LABEL[d.status]}</span>
                         </span>
                         <div className="flex items-center gap-2 shrink-0">
-                          {editingThis ? (
-                            <PayoutAmountEditor
-                              className="h-8 w-28 font-mono"
-                              value={grossAmountFor(d)}
-                              isEs={isEs}
-                              onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
-                            />
-                          ) : (
-                            <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
-                          )}
+                          <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
                           {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                             <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
                               if (isOverrideDoc(d)) clearGrossAmount(d);
@@ -2542,20 +2536,31 @@ function PayoutDocumentsDialog({
                           <Button size="sm" variant="outline" onClick={() => setRejectingId(d.id)}>{isEs ? "Rechazar" : "Reject"}</Button>
                         </div>
                       </div>
-                      {editingThis && deductionsFor(d).length > 0 && (
-                        <div className="flex justify-between text-xs font-semibold mt-1">
-                          <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
-                          <span className="font-mono">{fmt(netAmount(d))}</span>
-                        </div>
-                      )}
                       {editingThis && (
-                        <PayoutDeductionsPanel
-                          deductions={deductionsFor(d)}
-                          onAdd={(label, amount) => addDeductionFor(d, label, amount)}
-                          onRemove={(id) => removeDeductionFor(d, id)}
-                          isEs={isEs}
-                          fmt={fmt}
-                        />
+                        <div className="mt-1.5 pl-2 border-l-2 border-amber-400 space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">{isEs ? "Monto antes de descuento" : "Amount before discount"}</span>
+                            <PayoutAmountEditor
+                              className="h-8 w-28 font-mono"
+                              value={grossAmountFor(d)}
+                              isEs={isEs}
+                              onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
+                            />
+                          </div>
+                          {deductionsFor(d).length > 0 && (
+                            <div className="flex justify-between text-xs font-semibold">
+                              <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
+                              <span className="font-mono">{fmt(netAmount(d))}</span>
+                            </div>
+                          )}
+                          <PayoutDeductionsPanel
+                            deductions={deductionsFor(d)}
+                            onAdd={(label, amount) => addDeductionFor(d, label, amount)}
+                            onRemove={(id) => removeDeductionFor(d, id)}
+                            isEs={isEs}
+                            fmt={fmt}
+                          />
+                        </div>
                       )}
                     </div>
                     );
@@ -2595,16 +2600,7 @@ function PayoutDocumentsDialog({
                       <p className="text-xs text-emerald-600 mt-1">{isEs ? "Entregado" : "Delivered"} {new Date(d.deliveredAt).toLocaleString()}</p>
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {d.status === "pending" && docEditingId === d.id ? (
-                        <PayoutAmountEditor
-                          className="h-9 w-32 text-xl font-bold"
-                          value={grossAmountFor(d)}
-                          isEs={isEs}
-                          onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
-                        />
-                      ) : (
-                        <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
-                      )}
+                      <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
                       {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                         <>
                           <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
@@ -2630,20 +2626,31 @@ function PayoutDocumentsDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">{isEs ? "pago final" : "final payable"}</p>
-                    {docEditingId === d.id && deductionsFor(d).length > 0 && (
-                      <div className="flex justify-between text-xs font-semibold mt-1">
-                        <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
-                        <span className="font-mono">{fmt(netAmount(d))}</span>
-                      </div>
-                    )}
                     {docEditingId === d.id && (
-                      <PayoutDeductionsPanel
-                        deductions={deductionsFor(d)}
-                        onAdd={(label, amount) => addDeductionFor(d, label, amount)}
-                        onRemove={(id) => removeDeductionFor(d, id)}
-                        isEs={isEs}
-                        fmt={fmt}
-                      />
+                      <div className="mt-2 pl-2 border-l-2 border-amber-400 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">{isEs ? "Monto antes de descuento" : "Amount before discount"}</span>
+                          <PayoutAmountEditor
+                            className="h-9 w-32 text-sm font-bold"
+                            value={grossAmountFor(d)}
+                            isEs={isEs}
+                            onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
+                          />
+                        </div>
+                        {deductionsFor(d).length > 0 && (
+                          <div className="flex justify-between text-xs font-semibold">
+                            <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
+                            <span className="font-mono">{fmt(netAmount(d))}</span>
+                          </div>
+                        )}
+                        <PayoutDeductionsPanel
+                          deductions={deductionsFor(d)}
+                          onAdd={(label, amount) => addDeductionFor(d, label, amount)}
+                          onRemove={(id) => removeDeductionFor(d, id)}
+                          isEs={isEs}
+                          fmt={fmt}
+                        />
+                      </div>
                     )}
 
                     {rejectingId === d.id && (

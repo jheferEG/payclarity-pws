@@ -179,7 +179,16 @@ function drawFooter(doc: jsPDF, b: EffectiveBranding) {
 
 /* -------- Per-invoice (sale) PDF -------- */
 
-export type InvoiceInvolvedRow = { name: string; role: string; amount: number; agentId?: string | null };
+export type InvoiceInvolvedRow = {
+  name: string; role: string; amount: number; agentId?: string | null;
+  grossAmount?: number;
+  deductions?: { id: string; label: string; amount: number }[];
+};
+
+function roleWithDeductions(r: InvoiceInvolvedRow, cur: string): string {
+  if (!r.deductions || r.deductions.length === 0) return r.role;
+  return [r.role, ...r.deductions.map((d) => `− ${fmtMoney(d.amount, cur)} ${d.label}`)].join("\n");
+}
 
 const EXTRA_LABELS: Record<string, string> = {
   mileage: "Mileage",
@@ -259,7 +268,7 @@ export function buildSaleInvoicePDF(
       autoTable(doc, {
         startY: y,
         head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-        body: involved!.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+        body: involved!.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
         headStyles: { fillColor: brand, textColor: 255 },
         styles: { fontSize },
         margin: { left: margin, right: margin },
@@ -442,7 +451,7 @@ export function buildSaleInvoicePDF(
     autoTable(doc, {
       startY: y4 + 14,
       head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-      body: involved!.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+      body: involved!.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
       headStyles: { fillColor: brand, textColor: 255 },
       styles: { fontSize },
       margin: { left: margin, right: margin },
@@ -1168,8 +1177,11 @@ export function buildInvoicePayoutStatementPDF(
   const final = row.amount - reserve;
   const rows: any[] = [
     ["Customer", inv.customerName || "—"],
-    ["Your share of this sale", fmtMoney(row.amount, cur)],
+    ["Your share of this sale", fmtMoney(row.grossAmount ?? row.amount, cur)],
   ];
+  for (const ded of row.deductions || []) {
+    rows.push([ded.label, `- ${fmtMoney(ded.amount, cur)}`]);
+  }
   if (taxReservePercent)
     rows.push([`Suggested tax reserve (${(taxReservePercent * 100).toFixed(0)}%)`, `- ${fmtMoney(reserve, cur)}`]);
 
@@ -1224,7 +1236,7 @@ export function buildInvoiceMasterSummaryPDF(
   autoTable(doc, {
     startY: y,
     head: [["Name", "Role", `Amount (${cur})`]],
-    body: rows.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+    body: rows.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
     foot: [["", "Total payout", fmtMoney(total, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
@@ -1309,7 +1321,7 @@ export function buildPeriodMasterSummaryPDF(
     autoTable(doc, {
       startY: y,
       head: [["Name", "Role", `Amount (${cur})`]],
-      body: sec.rows.map((r) => [r.name, r.role, fmtMoney(r.amount, cur)]),
+      body: sec.rows.map((r) => [r.name, roleWithDeductions(r, cur), fmtMoney(r.amount, cur)]),
       foot: [["", "Subtotal", fmtMoney(total, cur)]],
       headStyles: { fillColor: brand, textColor: 255 },
       footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
