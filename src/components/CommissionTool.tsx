@@ -2579,6 +2579,9 @@ function PayoutDocumentsDialog({
                             isEs={isEs}
                             fmt={fmt}
                           />
+                          <Button size="sm" variant="secondary" onClick={() => setDocEditingId(null)}>
+                            {isEs ? "Listo" : "Done"}
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -2678,6 +2681,9 @@ function PayoutDocumentsDialog({
                           isEs={isEs}
                           fmt={fmt}
                         />
+                        <Button size="sm" variant="secondary" onClick={() => setDocEditingId(null)}>
+                          {isEs ? "Listo" : "Done"}
+                        </Button>
                       </div>
                     )}
 
