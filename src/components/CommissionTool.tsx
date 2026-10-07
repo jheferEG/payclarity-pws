@@ -2077,7 +2077,7 @@ function InvoicesPanel() {
                     ...draft,
                     overrideDeductions: {
                       ...(draft.overrideDeductions || {}),
-                      [row.agentId]: [...list, { id: crypto.randomUUID(), label, amount: deductionDraft.amount }],
+                      [row.agentId]: [...list, { id: crypto.randomUUID(), label, amount: deductionDraft.amount, addedBy: s.currentUserName, addedAt: new Date().toISOString() }],
                     },
                   });
                   setAddingDeductionFor(null);
@@ -2234,14 +2234,12 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
-  const dirty = draft !== value;
   return (
     <div className="flex items-center gap-1.5">
       <NumField className={className} step="0.01" value={draft} onChange={setDraft} />
       <Button
         size="sm"
-        disabled={!dirty}
-        className={dirty ? "bg-green-600 hover:bg-green-700 text-white" : undefined}
+        className="bg-green-600 hover:bg-green-700 text-white"
         onClick={() => {
           onSave(draft);
           toast.success(isEs ? "Monto guardado." : "Amount saved.");
@@ -2257,7 +2255,7 @@ function PayoutAmountEditor({ value, onSave, isEs, className }: {
  * discounts already on their payout document and lets the admin add more
  * (reason + amount), each subtracted from the document's amount. */
 function PayoutDeductionsPanel({ deductions, onAdd, onRemove, isEs, fmt }: {
-  deductions: { id: string; label: string; amount: number }[];
+  deductions: { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[];
   onAdd: (label: string, amount: number) => void;
   onRemove: (id: string) => void;
   isEs: boolean; fmt: (n: number) => string;
@@ -2270,7 +2268,12 @@ function PayoutDeductionsPanel({ deductions, onAdd, onRemove, isEs, fmt }: {
         <div className="space-y-0.5 mb-1.5">
           {deductions.map((ded) => (
             <div key={ded.id} className="flex items-center justify-between gap-2 text-xs text-destructive">
-              <span>− {fmt(ded.amount)} · {ded.label}</span>
+              <span>
+                − {fmt(ded.amount)} · {ded.label}
+                {ded.addedBy && (
+                  <span className="text-muted-foreground"> · {isEs ? "agregado por" : "added by"} {ded.addedBy}</span>
+                )}
+              </span>
               <button
                 type="button"
                 className="text-muted-foreground hover:text-destructive"
@@ -2396,7 +2399,10 @@ function PayoutDocumentsDialog({
     if (isOverrideDoc(d) && inv) {
       const list = inv.overrideDeductions?.[d.agentId] ?? [];
       applyInvoicePatch({
-        overrideDeductions: { ...(inv.overrideDeductions || {}), [d.agentId]: [...list, { id: crypto.randomUUID(), label, amount }] },
+        overrideDeductions: {
+          ...(inv.overrideDeductions || {}),
+          [d.agentId]: [...list, { id: crypto.randomUUID(), label, amount, addedBy: s.currentUserName, addedAt: new Date().toISOString() }],
+        },
       });
     } else {
       s.addPayoutDocumentDeduction(d.id, label, amount);

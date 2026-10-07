@@ -231,7 +231,7 @@ export function adaptInvoice(row: InvoiceRow): Invoice {
     commissionBase: (row.commission_base as Invoice["commissionBase"]) ?? undefined,
     commissionPercentOverride: row.commission_percent_override != null ? Number(row.commission_percent_override) : undefined,
     overrideAmountOverrides: (row.override_amount_overrides as unknown as Record<string, number> | null) ?? undefined,
-    overrideDeductions: (row.override_deductions as unknown as Record<string, { id: string; label: string; amount: number }[]> | null) ?? undefined,
+    overrideDeductions: (row.override_deductions as unknown as Record<string, { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[]> | null) ?? undefined,
     brandingSnapshot: (row.branding_snapshot as any) ?? undefined,
     split,
     pdfHistory: [],

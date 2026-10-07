@@ -141,7 +141,7 @@ export type Invoice = {
   // Subtracted from the gross override (computed default, or the manual
   // override above when set) everywhere that amount is used: the "Who's
   // involved" preview, generated PDFs, and calcPayouts.
-  overrideDeductions?: Record<string, { id: string; label: string; amount: number }[]>;
+  overrideDeductions?: Record<string, { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[]>;
   brandingSnapshot?: CompanyBranding & { companyName: string; address: string; email: string; phone: string; taxId: string; currency: string }; // captured at PDF generation
   split?: InvoiceSplit | null;
   pdfHistory?: InvoicePdfRecord[];
@@ -366,7 +366,7 @@ export type PayoutDocument = {
   amount: number; // this invoice's share owed to this recipient — the manual
   // override when set, else whatever computeInvolved() currently resolves to
   manualAmountOverride?: number | null; // admin correction; once set, wins over the recomputed amount until cleared
-  manualDeductions?: { id: string; label: string; amount: number }[]; // named discounts subtracted from `amount` to get the final payable
+  manualDeductions?: { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[]; // named discounts subtracted from `amount` to get the final payable
   status: PayoutDocumentStatus;
   scheduledDate: string | null;
   rejectedReason: string | null;
@@ -1851,7 +1851,14 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       addPayoutDocumentDeduction: (id, label, amount) => set((s) => ({
         payoutDocuments: s.payoutDocuments.map((d) =>
           d.id === id
-            ? { ...d, manualDeductions: [...(d.manualDeductions || []), { id: uid(), label, amount }], updatedAt: new Date().toISOString() }
+            ? {
+                ...d,
+                manualDeductions: [
+                  ...(d.manualDeductions || []),
+                  { id: uid(), label, amount, addedBy: s.currentUserName, addedAt: new Date().toISOString() },
+                ],
+                updatedAt: new Date().toISOString(),
+              }
             : d
         ),
       })),
