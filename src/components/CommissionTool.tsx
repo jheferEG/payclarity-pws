@@ -2518,6 +2518,15 @@ function PayoutDocumentsDialog({
                         </span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
+                          {deductionsFor(d).length > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="text-amber-600 border-amber-400 bg-amber-500/10"
+                              title={isEs ? "Este pago tiene un descuento aplicado" : "This payout has a discount applied"}
+                            >
+                              <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
+                            </Badge>
+                          )}
                           {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                             <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
                               if (isOverrideDoc(d)) clearGrossAmount(d);
@@ -2601,6 +2610,15 @@ function PayoutDocumentsDialog({
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
+                      {deductionsFor(d).length > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="text-amber-600 border-amber-400 bg-amber-500/10"
+                          title={isEs ? "Este pago tiene un descuento aplicado" : "This payout has a discount applied"}
+                        >
+                          <MinusCircle className="w-3 h-3 mr-1" />{isEs ? "Descuento" : "Discount"}
+                        </Badge>
+                      )}
                       {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                         <>
                           <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
