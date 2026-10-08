@@ -27,12 +27,15 @@ function LoginPage() {
   const T = useT();
   const [showPass, setShowPass] = useState(false);
   const [pendingUser, setPendingUser] = useState(false);
-  // /api/bitrix/install redirects here (stripping its own query params)
-  // when the Bitrix24 SSO exchange fails, so the person sees why instead
-  // of a bare password form with no explanation.
-  const [serverError, setServerError] = useState<string | null>(() =>
+  // /api/bitrix/install (and src/lib/bitrix-sso.ts) redirect here, stripping
+  // their own query params, when the Bitrix24 SSO exchange fails. Someone
+  // arriving this way never has a Transpare password to type — a bare email/
+  // password form would just confuse them — so this replaces the form
+  // entirely with the reason the automatic sign-in didn't work.
+  const [bitrixError, setBitrixError] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get("bx_error")
   );
+  const [serverError, setServerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!window.location.search.includes("bx_error")) return;
@@ -174,107 +177,123 @@ function LoginPage() {
             <p className="text-muted-foreground mt-1 text-sm">{T("login_subtitle")}</p>
           </div>
 
-          {/* alerts */}
-          {pendingUser && (
-            <div className="flex gap-3 p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-800">
-              <Clock className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-500" />
-              <div>
-                <p className="text-sm font-semibold">{T("login_pending_title")}</p>
-                <p className="text-sm mt-0.5 text-amber-700">{T("login_pending_msg")}</p>
+          {bitrixError ? (
+            <>
+              <div className="flex gap-3 p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-700">
+                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <p className="text-sm">{bitrixError}</p>
               </div>
-            </div>
-          )}
-
-          {serverError && !pendingUser && (
-            <div className="flex gap-3 p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-700">
-              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-              <p className="text-sm">{serverError}</p>
-            </div>
-          )}
-
-          {/* form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold text-foreground">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder={T("email_placeholder")}
-                autoComplete="email"
-                {...register("email")}
-                className={errors.email ? "border-destructive focus-visible:border-destructive" : ""}
-              />
-              {errors.email && (
-                <p className="text-xs text-destructive flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {errors.email.message}
-                </p>
+              <p className="text-sm text-muted-foreground">
+                {language === "es"
+                  ? "Esta sesión viene de Bitrix24. Pide a un administrador que revise tu acceso — no hace falta un usuario y contraseña de Transpare por separado."
+                  : "This session came from Bitrix24. Ask an administrator to check your access — no separate Transpare username/password is needed."}
+              </p>
+            </>
+          ) : (
+            <>
+              {/* alerts */}
+              {pendingUser && (
+                <div className="flex gap-3 p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-800">
+                  <Clock className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-semibold">{T("login_pending_title")}</p>
+                    <p className="text-sm mt-0.5 text-amber-700">{T("login_pending_msg")}</p>
+                  </div>
+                </div>
               )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold text-foreground">
-                {T("login_password")}
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPass ? "text" : "password"}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  {...register("password")}
-                  className={
-                    errors.password
-                      ? "border-destructive focus-visible:border-destructive pr-11"
-                      : "pr-11"
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-accent transition-colors"
-                  tabIndex={-1}
+              {serverError && !pendingUser && (
+                <div className="flex gap-3 p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-700">
+                  <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm">{serverError}</p>
+                </div>
+              )}
+
+              {/* form */}
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-semibold text-foreground">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder={T("email_placeholder")}
+                    autoComplete="email"
+                    {...register("email")}
+                    className={errors.email ? "border-destructive focus-visible:border-destructive" : ""}
+                  />
+                  {errors.email && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-semibold text-foreground">
+                    {T("login_password")}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPass ? "text" : "password"}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      {...register("password")}
+                      className={
+                        errors.password
+                          ? "border-destructive focus-visible:border-destructive pr-11"
+                          : "pr-11"
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-accent transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {errors.password.message}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full mt-2 bg-gradient-cta shadow-glow text-white hover:opacity-90"
+                  disabled={isSubmitting}
                 >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-xs text-destructive flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      {T("login_btn_loading")}
+                    </span>
+                  ) : (
+                    T("login_btn")
+                  )}
+                </Button>
+              </form>
 
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full mt-2 bg-gradient-cta shadow-glow text-white hover:opacity-90"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  {T("login_btn_loading")}
-                </span>
-              ) : (
-                T("login_btn")
-              )}
-            </Button>
-          </form>
-
-          <p className="text-center text-sm text-muted-foreground">
-            {T("login_no_account")}{" "}
-            <Link
-              to="/register"
-              search={{ superadmin_invite: undefined }}
-              className="text-accent font-semibold hover:opacity-80 transition-opacity"
-            >
-              {T("login_register_link")}
-            </Link>
-          </p>
+              <p className="text-center text-sm text-muted-foreground">
+                {T("login_no_account")}{" "}
+                <Link
+                  to="/register"
+                  search={{ superadmin_invite: undefined }}
+                  className="text-accent font-semibold hover:opacity-80 transition-opacity"
+                >
+                  {T("login_register_link")}
+                </Link>
+              </p>
+            </>
+          )}
 
           <p className="text-center text-xs text-muted-foreground/60">
             © 2026 Transpare. {T("copyright")}
