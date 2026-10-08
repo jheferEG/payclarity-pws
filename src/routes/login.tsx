@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,8 +26,18 @@ function LoginPage() {
   const { language, setLanguage } = useStore();
   const T = useT();
   const [showPass, setShowPass] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState(false);
+  // /api/bitrix/install redirects here (stripping its own query params)
+  // when the Bitrix24 SSO exchange fails, so the person sees why instead
+  // of a bare password form with no explanation.
+  const [serverError, setServerError] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("bx_error")
+  );
+
+  useEffect(() => {
+    if (!window.location.search.includes("bx_error")) return;
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   const {
     register,

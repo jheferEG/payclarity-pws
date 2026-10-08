@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
+import { completeBitrixSignIn } from "./lib/bitrix-sso";
 import "./styles.css";
 
 // After a new deploy, a tab left open still references JS chunk filenames
@@ -39,11 +40,16 @@ declare module "@tanstack/react-router" {
   }
 }
 
-const root = document.getElementById("root");
-if (!root) throw new Error("Root element not found");
+// Resolve any pending Bitrix24 SSO exchange before the router's auth guard
+// runs its first `getSession()` check — otherwise a Bitrix accountant would
+// briefly hit the guard with no session yet and get bounced to /login.
+completeBitrixSignIn().then(() => {
+  const root = document.getElementById("root");
+  if (!root) throw new Error("Root element not found");
 
-createRoot(root).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
-);
+  createRoot(root).render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  );
+});
