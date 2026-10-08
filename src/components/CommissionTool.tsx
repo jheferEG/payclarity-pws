@@ -2042,7 +2042,7 @@ function InvoicesPanel() {
       <PayoutDocumentsDialog invoiceId={payoutDocsId} open={!!payoutDocsId} onClose={() => setPayoutDocsId(null)} />
 
       <Dialog open={involvedOpen} onOpenChange={setInvolvedOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{s.language === "es" ? "Involucrados en este invoice" : "Who's involved in this invoice"}</DialogTitle>
             <DialogDescription>
@@ -2095,7 +2095,7 @@ function InvoicesPanel() {
                 };
                 return (
                 <div key={i} className="border border-border rounded-md p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{row.name}</p>
                       <p className="text-xs text-muted-foreground truncate">
@@ -2107,7 +2107,7 @@ function InvoicesPanel() {
                         )}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
                       {isAdmin && isOverrideRow ? (
                         <div className="flex items-center gap-1">
                           <PayoutAmountEditor
