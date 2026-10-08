@@ -10,6 +10,12 @@ import { customerInvoiceTotals } from "./commission-store";
  * whatever language the app is currently set to, same as the rest of the UI. */
 const L = (lang: Lang, en: string, es: string) => (lang === "es" ? es : en);
 
+const INVOICE_STATUS_ES: Record<string, string> = {
+  draft: "borrador", pending: "pendiente", paid: "pagado", on_hold: "en espera",
+};
+const invoiceStatusLabel = (status: string, lang: Lang) =>
+  (lang === "es" ? INVOICE_STATUS_ES[status] ?? status : status).toUpperCase();
+
 const hexToRgb = (hex: string): [number, number, number] => {
   const m = (hex || "#000000").replace("#", "");
   const v = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
@@ -252,7 +258,7 @@ export function buildSaleInvoicePDF(
   let y = drawHeader(doc, b, L(lang, "SALES INVOICE", "FACTURA DE VENTA"), [
     `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
     `${L(lang, "Date", "Fecha")}: ${inv.date}`,
-    `${L(lang, "Status", "Estado")}: ${inv.status.toUpperCase()}`,
+    `${L(lang, "Status", "Estado")}: ${invoiceStatusLabel(inv.status, lang)}`,
   ]);
 
   doc.setFont("helvetica", "bold");
