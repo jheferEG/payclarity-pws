@@ -1990,8 +1990,8 @@ function InvoicesPanel() {
                             // private payout document, never the full breakdown.
                             const myRow = rows.find((r) => r.agentId === myAgentId);
                             const doc = isAdmin || !myRow
-                              ? buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode)
-                              : buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent);
+                              ? buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode, s.language)
+                              : buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent, s.language);
                             setPdfPreview({ name: `${inv.number} — ${payeeLabel(ag)}`, url: doc.output("bloburl").toString() });
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
@@ -2000,9 +2000,9 @@ function InvoicesPanel() {
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                             const myRow = rows.find((r) => r.agentId === myAgentId);
                             if (isAdmin || !myRow) {
-                              buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode);
+                              buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode, s.language);
                             } else {
-                              buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent)
+                              buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent, s.language)
                                 .save(`${inv.number}_statement.pdf`);
                             }
                           }}>PDF</Button>
@@ -2014,7 +2014,7 @@ function InvoicesPanel() {
                           {inv.saleType === "cash" && (
                             <Button variant="ghost" size="sm" title={s.language === "es" ? "Invoice para el cliente (efectivo)" : "Customer invoice (cash)"}
                               onClick={() => {
-                                const doc = buildCashCustomerInvoicePDF(inv, s.company);
+                                const doc = buildCashCustomerInvoicePDF(inv, s.company, s.language);
                                 setPdfPreview({ name: `${inv.number} — ${s.language === "es" ? "Invoice cliente" : "Customer invoice"}`, url: doc.output("bloburl").toString() });
                               }}>
                               <Receipt className="w-4 h-4 mr-1" />
@@ -2130,16 +2130,16 @@ function InvoicesPanel() {
                       )}
                       <Button size="sm" variant="outline" onClick={() => {
                         const pdf = isAdmin
-                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
-                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode, s.language)
+                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent, s.language);
                         setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
                       }}>
                         <FileDown className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Ver PDF" : "View PDF"}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => {
                         const pdf = isAdmin
-                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode)
-                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent);
+                          ? buildSaleInvoicePDF(live, s.company, payeeLabel(s.agents.find((a) => a.id === draft.agentId)), null, [row], s.company.commissionEntryMode, s.language)
+                          : buildInvoicePayoutStatementPDF(row, live, s.company, draft.taxReservePercent, s.language);
                         pdf.save(`${row.name.replace(/\s+/g, "_")}_statement.pdf`);
                       }}>
                         {s.language === "es" ? "Descargar" : "Download"}
@@ -2484,7 +2484,7 @@ function PayoutDocumentsDialog({
     // person's own row in "Who gets paid on this sale" — admin sees the
     // whole deal's context, but each recipient's document stays private.
     const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
-    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
+    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode, s.language);
     setPdfPreview({ name: row.name, url: pdf.output("bloburl").toString() });
     s.regeneratePayoutDocument(doc.id, s.currentUserName);
   };
@@ -2494,7 +2494,7 @@ function PayoutDocumentsDialog({
     const row = involvedRows.find((r) => r.agentId === doc.agentId);
     if (!row) return;
     const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
-    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
+    const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode, s.language);
     pdf.save(`${inv.number}_${row.name.replace(/\s+/g, "_")}.pdf`);
   };
 
@@ -2520,7 +2520,7 @@ function PayoutDocumentsDialog({
                     // The client asked to keep this exact simple look (Name /
                     // Role / Amount table) — do not switch this back to the
                     // full invoice format.
-                    downloadInvoiceMasterSummary(involvedRows, c, s.company);
+                    downloadInvoiceMasterSummary(involvedRows, c, s.company, s.language);
                   }}>
                   <FileBarChart className="w-4 h-4 mr-1" />{isEs ? "Resumen maestro" : "Master summary"}
                 </Button>
@@ -2529,7 +2529,7 @@ function PayoutDocumentsDialog({
                     if (!inv || !c) return;
                     const sellerName = payeeLabel(s.agents.find((a) => a.id === inv.agentId));
                     for (const row of involvedRows) {
-                      const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode);
+                      const pdf = buildSaleInvoicePDF(c, s.company, sellerName, null, [row], s.company.commissionEntryMode, s.language);
                       pdf.save(`${inv.number}_${row.name.replace(/\s+/g, "_")}.pdf`);
                     }
                   }}>
@@ -3438,19 +3438,19 @@ function GeneratePanel() {
   const previewOne = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p) return;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode, language);
     setPdfPreview({ name: `commission_${p.agent.name}`, url: doc.output("bloburl").toString() });
   };
   const downloadOne = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p) return;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode, language);
     doc.save(`commission_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
   const downloadOverride = (id: string) => {
     const p = payouts.find((x) => x.agent.id === id);
     if (!p || !p.downline.length) return;
-    const doc = buildOverridePDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode);
+    const doc = buildOverridePDF(p, company, invoiceDate, periodLabel, company.commissionEntryMode, language);
     doc.save(`override_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
@@ -3480,7 +3480,7 @@ function GeneratePanel() {
     }
     const label = periodFrom || periodTo ? `${periodFrom || "…"} – ${periodTo || "…"}` : periodLabel;
     const filenameHint = periodFrom || periodTo ? `${periodFrom || "start"}_${periodTo || "end"}` : periodLabel.replace(/\s+/g, "_");
-    downloadPeriodMasterSummary(sections, company, label, filenameHint);
+    downloadPeriodMasterSummary(sections, company, label, filenameHint, language);
   };
 
   return (

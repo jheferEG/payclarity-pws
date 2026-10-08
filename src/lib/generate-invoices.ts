@@ -3,8 +3,12 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import type { AgentPayout, InvoiceCalc } from "./commission-calc";
 import { fmtMoney, payeeLabel } from "./commission-calc";
-import type { Company, Invoice, InvoiceTemplateId, CustomerInvoice } from "./commission-store";
+import type { Company, Invoice, InvoiceTemplateId, CustomerInvoice, Lang } from "./commission-store";
 import { customerInvoiceTotals } from "./commission-store";
+
+/** Every PDF label below goes through this — the generated document follows
+ * whatever language the app is currently set to, same as the rest of the UI. */
+const L = (lang: Lang, en: string, es: string) => (lang === "es" ? es : en);
 
 const hexToRgb = (hex: string): [number, number, number] => {
   const m = (hex || "#000000").replace("#", "");
@@ -190,7 +194,7 @@ export type InvoiceInvolvedRow = {
  *  becomes its own mini breakdown — initial amount, one line per discount
  *  reason, then a bold Total — instead of cramming the reason into the
  *  Role cell next to an already-discounted figure. */
-function involvedRowsToTableBody(rows: InvoiceInvolvedRow[], cur: string): any[] {
+function involvedRowsToTableBody(rows: InvoiceInvolvedRow[], cur: string, lang: Lang = "en"): any[] {
   const body: any[] = [];
   for (const r of rows) {
     if (r.deductions && r.deductions.length > 0) {
@@ -200,7 +204,7 @@ function involvedRowsToTableBody(rows: InvoiceInvolvedRow[], cur: string): any[]
       }
       body.push([
         "",
-        { content: "Total", styles: { fontStyle: "bold" } },
+        { content: L(lang, "Total", "Total"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(r.amount, cur), styles: { fontStyle: "bold" } },
       ]);
     } else {
@@ -217,6 +221,15 @@ const EXTRA_LABELS: Record<string, string> = {
   electrical: "Electrical work",
   other: "Other",
 };
+const EXTRA_LABELS_ES: Record<string, string> = {
+  mileage: "Millaje",
+  materials: "Materiales",
+  construction: "Construcción",
+  electrical: "Trabajo eléctrico",
+  other: "Otro",
+};
+const extraLabel = (category: string, lang: Lang) =>
+  (lang === "es" ? EXTRA_LABELS_ES : EXTRA_LABELS)[category] ?? category;
 
 export function buildSaleInvoicePDF(
   c: InvoiceCalc,
@@ -224,7 +237,8 @@ export function buildSaleInvoicePDF(
   agentName: string,
   payout?: AgentPayout | null,
   involved?: InvoiceInvolvedRow[],
-  commissionEntryMode: "fixed" | "percent" = "percent"
+  commissionEntryMode: "fixed" | "percent" = "percent",
+  lang: Lang = "en"
 ): jsPDF {
   const inv = c.invoice;
   const b = resolveBranding(company, inv);
@@ -235,22 +249,22 @@ export function buildSaleInvoicePDF(
   const tpl = b.invoiceTemplate;
   const brand = hexToRgb(b.brandColor);
 
-  let y = drawHeader(doc, b, "SALES INVOICE", [
-    `Invoice #: ${inv.number}`,
-    `Date: ${inv.date}`,
-    `Status: ${inv.status.toUpperCase()}`,
+  let y = drawHeader(doc, b, L(lang, "SALES INVOICE", "FACTURA DE VENTA"), [
+    `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
+    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
+    `${L(lang, "Status", "Estado")}: ${inv.status.toUpperCase()}`,
   ]);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("CUSTOMER", margin, y);
-  doc.text("SALESPERSON", pageW / 2, y);
+  doc.text(L(lang, "CUSTOMER", "CLIENTE"), margin, y);
+  doc.text(L(lang, "SALESPERSON", "VENDEDOR"), pageW / 2, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(inv.customerName || "—", margin, y + 16);
   if (inv.customerNotes) doc.text(inv.customerNotes, margin, y + 30);
   doc.text(agentName, pageW / 2, y + 16);
-  if (c.financeCo) doc.text(`Finance: ${c.financeCo.name}`, pageW / 2, y + 30);
+  if (c.financeCo) doc.text(`${L(lang, "Finance", "Financiera")}: ${c.financeCo.name}`, pageW / 2, y + 30);
 
   y += tpl === "compact" ? 44 : 60;
 
@@ -261,14 +275,14 @@ export function buildSaleInvoicePDF(
   if (inv.isGeneralInvoice) {
     autoTable(doc, {
       startY: y,
-      head: [["Job details", `Amount (${cur})`]],
+      head: [[L(lang, "Job details", "Detalles del trabajo"), `${L(lang, "Amount", "Monto")} (${cur})`]],
       body: [
-        ["Type", inv.jobType === "service" ? "Service" : "Installation"],
-        ["Fixed pay", fmtMoney(inv.fixedPay || 0, cur)],
-        ...(inv.extras || []).map((x) => [EXTRA_LABELS[x.category] ?? x.category, fmtMoney(x.amount, cur)]),
+        [L(lang, "Type", "Tipo"), inv.jobType === "service" ? L(lang, "Service", "Servicio") : L(lang, "Installation", "Instalación")],
+        [L(lang, "Fixed pay", "Pago fijo"), fmtMoney(inv.fixedPay || 0, cur)],
+        ...(inv.extras || []).map((x) => [extraLabel(x.category, lang), fmtMoney(x.amount, cur)]),
       ],
       foot: (inv.extras && inv.extras.length)
-        ? [["Total", fmtMoney((inv.fixedPay || 0) + inv.extras.reduce((s, x) => s + (x.amount || 0), 0), cur)]]
+        ? [[L(lang, "Total", "Total"), fmtMoney((inv.fixedPay || 0) + inv.extras.reduce((s, x) => s + (x.amount || 0), 0), cur)]]
         : undefined,
       footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
       headStyles:
@@ -287,8 +301,8 @@ export function buildSaleInvoicePDF(
     if (showInvolvedTableGI) {
       autoTable(doc, {
         startY: y,
-        head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-        body: involvedRowsToTableBody(involved!, cur),
+        head: [[L(lang, "Who gets paid on this sale", "Quién cobra en esta venta"), L(lang, "Role", "Rol"), `${L(lang, "Amount", "Monto")} (${cur})`]],
+        body: involvedRowsToTableBody(involved!, cur, lang),
         headStyles: { fillColor: brand, textColor: 255 },
         styles: { fontSize },
         margin: { left: margin, right: margin },
@@ -304,7 +318,9 @@ export function buildSaleInvoicePDF(
       doc.setFontSize(9);
       doc.setTextColor(90);
       doc.text(
-        `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+        L(lang,
+          `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+          `Recomendación: aparta ${(inv.taxReservePercent * 100).toFixed(0)}% para impuestos — son ${fmtMoney(reserveAmt, cur)}.`),
         margin,
         yNote + 16
       );
@@ -317,11 +333,11 @@ export function buildSaleInvoicePDF(
 
   autoTable(doc, {
     startY: y,
-    head: [["Concept", `Amount (${cur})`]],
+    head: [[L(lang, "Concept", "Concepto"), `${L(lang, "Amount", "Monto")} (${cur})`]],
     body: [
-      ["Sales Amount", fmtMoney(inv.salesAmount, cur)],
-      ["Product Cost", fmtMoney(inv.productCost, cur)],
-      [`Approval (${(inv.approvalPercent * 100).toFixed(2)}%)`, fmtMoney(c.approvalAmount, cur)],
+      [L(lang, "Sales Amount", "Monto de venta"), fmtMoney(inv.salesAmount, cur)],
+      [L(lang, "Product Cost", "Costo del producto"), fmtMoney(inv.productCost, cur)],
+      [`${L(lang, "Approval", "Aprobación")} (${(inv.approvalPercent * 100).toFixed(2)}%)`, fmtMoney(c.approvalAmount, cur)],
     ],
     headStyles:
       tpl === "minimal"
@@ -340,11 +356,11 @@ export function buildSaleInvoicePDF(
   // other commission deductions, instead of up by the sale amount.
   const chargeRows = [...inv.charges.map((x) => [x.label, fmtMoney(x.amount, cur)])];
   const effectiveDealerFee = inv.dealerFee != null ? inv.dealerFee : c.financeCo?.dealerFee ?? 0;
-  if (effectiveDealerFee) chargeRows.push(["Dealer fee", fmtMoney(effectiveDealerFee, cur)]);
-  if (c.financeCo?.adminFee) chargeRows.push(["Finance admin fee", fmtMoney(c.financeCo.adminFee, cur)]);
+  if (effectiveDealerFee) chargeRows.push([L(lang, "Dealer fee", "Tarifa del dealer"), fmtMoney(effectiveDealerFee, cur)]);
+  if (c.financeCo?.adminFee) chargeRows.push([L(lang, "Finance admin fee", "Tarifa admin de financiera"), fmtMoney(c.financeCo.adminFee, cur)]);
   if (c.financeCo?.defaultFee)
     chargeRows.push([
-      `Finance fee (${(c.financeCo.defaultFee * 100).toFixed(2)}%)`,
+      `${L(lang, "Finance fee", "Tarifa de financiera")} (${(c.financeCo.defaultFee * 100).toFixed(2)}%)`,
       fmtMoney(c.financeCo.defaultFee * inv.salesAmount, cur),
     ]);
   if (inv.saleType === "credit_card") {
@@ -358,9 +374,9 @@ export function buildSaleInvoicePDF(
   if (inv.credits.length && tpl !== "compact") {
     autoTable(doc, {
       startY: y,
-      head: [["Credits", `Amount (${cur})`]],
+      head: [[L(lang, "Credits", "Créditos"), `${L(lang, "Amount", "Monto")} (${cur})`]],
       body: inv.credits.map((x) => [x.label, fmtMoney(x.amount, cur)]),
-      foot: [["Total Credits", fmtMoney(c.totalCredits, cur)]],
+      foot: [[L(lang, "Total Credits", "Total créditos"), fmtMoney(c.totalCredits, cur)]],
       headStyles: { fillColor: [60, 120, 80], textColor: 255 },
       footStyles: { fillColor: [235, 245, 235], textColor: 20, fontStyle: "bold" },
       styles: { fontSize },
@@ -371,24 +387,24 @@ export function buildSaleInvoicePDF(
   }
 
   const summaryRows: any[] = [
-    ["Approval amount", fmtMoney(c.approvalAmount, cur)],
-    ["Discount", `- ${fmtMoney(inv.discount, cur)}`],
-    ["Total charges", `- ${fmtMoney(c.totalCharges, cur)}`],
-    ["Total credits", `+ ${fmtMoney(c.totalCredits, cur)}`],
+    [L(lang, "Approval amount", "Monto de aprobación"), fmtMoney(c.approvalAmount, cur)],
+    [L(lang, "Discount", "Descuento"), `- ${fmtMoney(inv.discount, cur)}`],
+    [L(lang, "Total charges", "Total cargos"), `- ${fmtMoney(c.totalCharges, cur)}`],
+    [L(lang, "Total credits", "Total créditos"), `+ ${fmtMoney(c.totalCredits, cur)}`],
     [
-      { content: "GRAND TOTAL", styles: { fontStyle: "bold" } },
+      { content: L(lang, "GRAND TOTAL", "TOTAL GENERAL"), styles: { fontStyle: "bold" } },
       { content: fmtMoney(c.grandTotal, cur), styles: { fontStyle: "bold" } },
     ],
-    ["Product cost", `- ${fmtMoney(inv.productCost, cur)}`],
+    [L(lang, "Product cost", "Costo del producto"), `- ${fmtMoney(inv.productCost, cur)}`],
     [
-      { content: "Profit", styles: { fontStyle: "bold" } },
+      { content: L(lang, "Profit", "Profit"), styles: { fontStyle: "bold" } },
       { content: fmtMoney(c.profit, cur), styles: { fontStyle: "bold" } },
     ],
   ];
   if (c.adminFeeAmount > 0) {
-    summaryRows.push(["Admin fee (1%)", `- ${fmtMoney(c.adminFeeAmount, cur)}`]);
+    summaryRows.push([L(lang, "Admin fee (1%)", "Tarifa admin (1%)"), `- ${fmtMoney(c.adminFeeAmount, cur)}`]);
     summaryRows.push([
-      { content: "Profit after admin fee", styles: { fontStyle: "bold" } },
+      { content: L(lang, "Profit after admin fee", "Profit después de tarifa admin"), styles: { fontStyle: "bold" } },
       { content: fmtMoney(c.profit - c.adminFeeAmount, cur), styles: { fontStyle: "bold" } },
     ]);
   }
@@ -408,9 +424,9 @@ export function buildSaleInvoicePDF(
   if (chargeRows.length && tpl !== "compact") {
     autoTable(doc, {
       startY: y,
-      head: [["Charges detail", `Amount (${cur})`]],
+      head: [[L(lang, "Charges detail", "Detalle de cargos"), `${L(lang, "Amount", "Monto")} (${cur})`]],
       body: chargeRows,
-      foot: [["Total Charges", fmtMoney(c.totalCharges, cur)]],
+      foot: [[L(lang, "Total Charges", "Total cargos"), fmtMoney(c.totalCharges, cur)]],
       headStyles: { fillColor: [80, 80, 80], textColor: 255 },
       footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: "bold" },
       styles: { fontSize },
@@ -426,7 +442,7 @@ export function buildSaleInvoicePDF(
     const valid = Math.abs(total - 1) < 0.0001;
     autoTable(doc, {
       startY: y3 + 6,
-      head: [["Participant", "Role", "Split %", "Share"]],
+      head: [[L(lang, "Participant", "Participante"), L(lang, "Role", "Rol"), L(lang, "Split %", "% Split"), L(lang, "Share", "Parte")]],
       body: inv.split.participants.map((p) => {
         const raw = inv.commissionPercentOverride != null
           ? Math.max(0, c.commissionableBase) * inv.commissionPercentOverride
@@ -437,13 +453,13 @@ export function buildSaleInvoicePDF(
         const share = pool * p.splitPercent;
         return [
           p.displayName || "—",
-          p.role === "custom" ? p.customRoleLabel || "Custom" : p.role,
+          p.role === "custom" ? p.customRoleLabel || L(lang, "Custom", "Personalizado") : p.role,
           `${(p.splitPercent * 100).toFixed(2)}%`,
           `$${share.toFixed(2)}`,
         ];
       }),
       foot: [[
-        valid ? "Split valid" : "Split INVALID",
+        valid ? L(lang, "Split valid", "Split válido") : L(lang, "Split INVALID", "Split INVÁLIDO"),
         "",
         `${(total * 100).toFixed(2)}%`,
         "",
@@ -470,8 +486,8 @@ export function buildSaleInvoicePDF(
     const y4 = (doc as any).lastAutoTable?.finalY ?? y;
     autoTable(doc, {
       startY: y4 + 14,
-      head: [["Who gets paid on this sale", "Role", `Amount (${cur})`]],
-      body: involvedRowsToTableBody(involved!, cur),
+      head: [[L(lang, "Who gets paid on this sale", "Quién cobra en esta venta"), L(lang, "Role", "Rol"), `${L(lang, "Amount", "Monto")} (${cur})`]],
+      body: involvedRowsToTableBody(involved!, cur, lang),
       headStyles: { fillColor: brand, textColor: 255 },
       styles: { fontSize },
       margin: { left: margin, right: margin },
@@ -489,7 +505,9 @@ export function buildSaleInvoicePDF(
     doc.setFontSize(9);
     doc.setTextColor(90);
     doc.text(
-      `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+      L(lang,
+        `Recommendation: set aside ${(inv.taxReservePercent * 100).toFixed(0)}% for taxes — that's ${fmtMoney(reserveAmt, cur)}.`,
+        `Recomendación: aparta ${(inv.taxReservePercent * 100).toFixed(0)}% para impuestos — son ${fmtMoney(reserveAmt, cur)}.`),
       margin,
       y5 + 16
     );
@@ -506,7 +524,7 @@ export function buildSaleInvoicePDF(
  * they've paid so far (abonos), and what's left. Matches the paper
  * receipt format the company already hands customers who pay cash in
  * installments. */
-export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsPDF {
+export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company, lang: Lang = "en"): jsPDF {
   const b = resolveBranding(company, inv);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -537,14 +555,14 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
   doc.text(b.address, margin, logoBottom + 28);
   if (b.taxId) doc.text(`EIN # ${b.taxId}`, margin, logoBottom + 39);
   doc.text(b.email, margin, logoBottom + 50);
-  doc.text(`Phone: ${b.phone}`, margin, logoBottom + 61);
+  doc.text(`${L(lang, "Phone", "Teléfono")}: ${b.phone}`, margin, logoBottom + 61);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(20);
-  doc.text(`NO. ${inv.number}`, pageW - margin, margin + 12, { align: "right" });
+  doc.text(`${L(lang, "NO.", "NO.")} ${inv.number}`, pageW - margin, margin + 12, { align: "right" });
   doc.setFontSize(22);
-  doc.text("INVOICE", pageW - margin, margin + 34, { align: "right" });
+  doc.text(L(lang, "INVOICE", "FACTURA"), pageW - margin, margin + 34, { align: "right" });
 
   let y = logoBottom + 90;
 
@@ -552,13 +570,13 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(20);
-  doc.text("Date:", margin, y);
+  doc.text(`${L(lang, "Date", "Fecha")}:`, margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(inv.date, margin + 36, y);
   y += 22;
 
   doc.setFont("helvetica", "bold");
-  doc.text("Billed to:", margin, y);
+  doc.text(`${L(lang, "Billed to", "Facturar a")}:`, margin, y);
   y += 16;
   doc.setFont("helvetica", "normal");
   doc.text(inv.customerName || "—", margin, y);
@@ -568,19 +586,19 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
     y += 14;
   }
   if (inv.customerPhone) {
-    doc.text(`Phone: ${inv.customerPhone}`, margin, y);
+    doc.text(`${L(lang, "Phone", "Teléfono")}: ${inv.customerPhone}`, margin, y);
     y += 14;
   }
   y += 12;
 
   // ── Item table: main item + any extra charges as additional lines ──
   const itemRows: (string | number)[][] = [
-    [inv.invoiceItemLabel || "Product/Service", "1", fmtMoney(inv.salesAmount, cur), fmtMoney(inv.salesAmount, cur)],
+    [inv.invoiceItemLabel || L(lang, "Product/Service", "Producto/Servicio"), "1", fmtMoney(inv.salesAmount, cur), fmtMoney(inv.salesAmount, cur)],
     ...inv.charges.map((c) => [c.label || "—", "1", fmtMoney(c.amount, cur), fmtMoney(c.amount, cur)]),
   ];
   autoTable(doc, {
     startY: y,
-    head: [["Item", "Quantity", "Price", "Amount"]],
+    head: [[L(lang, "Item", "Artículo"), L(lang, "Quantity", "Cantidad"), L(lang, "Price", "Precio"), L(lang, "Amount", "Monto")]],
     body: itemRows,
     headStyles: { fillColor: [235, 235, 235], textColor: 20 },
     styles: { fontSize: 10 },
@@ -596,9 +614,9 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
   autoTable(doc, {
     startY: y,
     body: [
-      [{ content: "TOTAL", styles: { fontStyle: "bold" } }, { content: fmtMoney(total, cur), styles: { fontStyle: "bold" } }],
-      ["PAID", fmtMoney(paid, cur)],
-      [{ content: "BALANCE", styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }],
+      [{ content: L(lang, "TOTAL", "TOTAL"), styles: { fontStyle: "bold" } }, { content: fmtMoney(total, cur), styles: { fontStyle: "bold" } }],
+      [L(lang, "PAID", "PAGADO"), fmtMoney(paid, cur)],
+      [{ content: L(lang, "BALANCE", "SALDO"), styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }],
     ],
     theme: "plain",
     margin: { left: pageW / 2, right: margin },
@@ -613,7 +631,7 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(20);
-    doc.text("Payment method:", margin, y);
+    doc.text(`${L(lang, "Payment method", "Método de pago")}:`, margin, y);
     y += 16;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -646,7 +664,12 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company): jsP
  * master invoice's commission fields; everything here is read from the
  * CustomerInvoice document plus display-only branding off the master
  * Invoice/Company. */
-export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, company: Company): jsPDF {
+const CUSTOMER_INVOICE_STATUS_ES: Record<string, string> = {
+  draft: "borrador", sent: "enviado", viewed: "visto", partially_paid: "parcialmente pagado",
+  paid: "pagado", overdue: "vencido", cancelled: "cancelado", refunded: "reembolsado",
+};
+
+export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, company: Company, lang: Lang = "en"): jsPDF {
   const b = resolveBranding(company, inv);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -676,19 +699,20 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
   doc.text(b.address, margin, logoBottom + 28);
   if (b.taxId) doc.text(`EIN # ${b.taxId}`, margin, logoBottom + 39);
   doc.text(b.email, margin, logoBottom + 50);
-  doc.text(`Phone: ${b.phone}`, margin, logoBottom + 61);
+  doc.text(`${L(lang, "Phone", "Teléfono")}: ${b.phone}`, margin, logoBottom + 61);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(20);
-  doc.text(`NO. ${ci.number}`, pageW - margin, margin + 12, { align: "right" });
+  doc.text(`${L(lang, "NO.", "NO.")} ${ci.number}`, pageW - margin, margin + 12, { align: "right" });
   doc.setFontSize(22);
-  doc.text("INVOICE", pageW - margin, margin + 34, { align: "right" });
+  doc.text(L(lang, "INVOICE", "FACTURA"), pageW - margin, margin + 34, { align: "right" });
   if (ci.status !== "draft" && ci.status !== "sent" && ci.status !== "viewed") {
     doc.setFontSize(10);
     const statusColor: [number, number, number] = ci.status === "paid" ? [16, 122, 87] : [190, 60, 40];
     doc.setTextColor(...statusColor);
-    doc.text(ci.status.replace("_", " ").toUpperCase(), pageW - margin, margin + 48, { align: "right" });
+    const statusLabel = lang === "es" ? (CUSTOMER_INVOICE_STATUS_ES[ci.status] ?? ci.status) : ci.status.replace("_", " ");
+    doc.text(statusLabel.toUpperCase(), pageW - margin, margin + 48, { align: "right" });
     doc.setTextColor(20);
   }
 
@@ -696,20 +720,20 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("Invoice date:", margin, y);
+  doc.text(`${L(lang, "Invoice date", "Fecha de factura")}:`, margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(ci.invoiceDate, margin + 68, y);
   if (ci.dueDate) {
     doc.setFont("helvetica", "bold");
-    doc.text("Due date:", pageW / 2, y);
+    doc.text(`${L(lang, "Due date", "Fecha de vencimiento")}:`, pageW / 2, y);
     doc.setFont("helvetica", "normal");
     doc.text(ci.dueDate, pageW / 2 + 56, y);
   }
   y += 24;
 
   doc.setFont("helvetica", "bold");
-  doc.text("Billed to:", margin, y);
-  if (ci.serviceAddress && ci.serviceAddress !== ci.billingAddress) doc.text("Service address:", pageW / 2, y);
+  doc.text(`${L(lang, "Billed to", "Facturar a")}:`, margin, y);
+  if (ci.serviceAddress && ci.serviceAddress !== ci.billingAddress) doc.text(`${L(lang, "Service address", "Dirección de servicio")}:`, pageW / 2, y);
   y += 16;
   doc.setFont("helvetica", "normal");
   doc.text(ci.customerName || "—", margin, y);
@@ -725,7 +749,7 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
 
   autoTable(doc, {
     startY: y,
-    head: [["Item", "Quantity", "Unit Price", "Amount"]],
+    head: [[L(lang, "Item", "Artículo"), L(lang, "Quantity", "Cantidad"), L(lang, "Unit Price", "Precio unitario"), L(lang, "Amount", "Monto")]],
     body: ci.lineItems.map((li) => [li.label, String(li.quantity), fmtMoney(li.unitPrice, cur), fmtMoney(li.quantity * li.unitPrice, cur)]),
     headStyles: { fillColor: [235, 235, 235], textColor: 20 },
     styles: { fontSize: 10 },
@@ -734,14 +758,14 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
   });
   y = (doc as any).lastAutoTable.finalY + 16;
 
-  const summaryRows: any[] = [["Subtotal", fmtMoney(lineTotal, cur)]];
-  if (ci.discount) summaryRows.push(["Discount", `- ${fmtMoney(ci.discount, cur)}`]);
-  if (ci.taxPercent) summaryRows.push([`Tax (${(ci.taxPercent * 100).toFixed(2)}%)`, fmtMoney(lineTotal * ci.taxPercent, cur)]);
-  if (ci.deposit) summaryRows.push(["Deposit", `- ${fmtMoney(ci.deposit, cur)}`]);
-  if (ci.financingApplied) summaryRows.push(["Financing applied", `- ${fmtMoney(ci.financingApplied, cur)}`]);
-  summaryRows.push([{ content: "TOTAL", styles: { fontStyle: "bold" } }, { content: fmtMoney(total, cur), styles: { fontStyle: "bold" } }]);
-  summaryRows.push(["PAID", fmtMoney(paid, cur)]);
-  summaryRows.push([{ content: "BALANCE DUE", styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }]);
+  const summaryRows: any[] = [[L(lang, "Subtotal", "Subtotal"), fmtMoney(lineTotal, cur)]];
+  if (ci.discount) summaryRows.push([L(lang, "Discount", "Descuento"), `- ${fmtMoney(ci.discount, cur)}`]);
+  if (ci.taxPercent) summaryRows.push([`${L(lang, "Tax", "Impuesto")} (${(ci.taxPercent * 100).toFixed(2)}%)`, fmtMoney(lineTotal * ci.taxPercent, cur)]);
+  if (ci.deposit) summaryRows.push([L(lang, "Deposit", "Depósito"), `- ${fmtMoney(ci.deposit, cur)}`]);
+  if (ci.financingApplied) summaryRows.push([L(lang, "Financing applied", "Financiamiento aplicado"), `- ${fmtMoney(ci.financingApplied, cur)}`]);
+  summaryRows.push([{ content: L(lang, "TOTAL", "TOTAL"), styles: { fontStyle: "bold" } }, { content: fmtMoney(total, cur), styles: { fontStyle: "bold" } }]);
+  summaryRows.push([L(lang, "PAID", "PAGADO"), fmtMoney(paid, cur)]);
+  summaryRows.push([{ content: L(lang, "BALANCE DUE", "SALDO PENDIENTE"), styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }]);
 
   autoTable(doc, {
     startY: y,
@@ -757,7 +781,7 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(20);
-    doc.text("Payment terms:", margin, y);
+    doc.text(`${L(lang, "Payment terms", "Términos de pago")}:`, margin, y);
     doc.setFont("helvetica", "normal");
     const lines = doc.splitTextToSize(ci.paymentTerms, pageW - margin * 2 - 90);
     doc.text(lines, margin + 90, y);
@@ -768,7 +792,7 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(20);
-    doc.text("Payment history:", margin, y);
+    doc.text(`${L(lang, "Payment history", "Historial de pagos")}:`, margin, y);
     y += 16;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -782,7 +806,7 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
   if (ci.warrantyInfo) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Warranty:", margin, y);
+    doc.text(`${L(lang, "Warranty", "Garantía")}:`, margin, y);
     doc.setFont("helvetica", "normal");
     const lines = doc.splitTextToSize(ci.warrantyInfo, pageW - margin * 2 - 60);
     doc.text(lines, margin + 60, y);
@@ -807,7 +831,7 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
 }
 
 /** "Generate Receipt" — a short pay-to-date summary, not the full invoice. */
-export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice, company: Company): jsPDF {
+export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice, company: Company, lang: Lang = "en"): jsPDF {
   const b = resolveBranding(company, inv);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -828,23 +852,23 @@ export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice, compa
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(20);
-  doc.text("PAYMENT RECEIPT", pageW - margin, margin + 20, { align: "right" });
+  doc.text(L(lang, "PAYMENT RECEIPT", "RECIBO DE PAGO"), pageW - margin, margin + 20, { align: "right" });
   doc.setFontSize(10);
-  doc.text(`Invoice ${ci.number}`, pageW - margin, margin + 36, { align: "right" });
+  doc.text(`${L(lang, "Invoice", "Factura")} ${ci.number}`, pageW - margin, margin + 36, { align: "right" });
 
   let y = margin + 70;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Customer: ${ci.customerName || "—"}`, margin, y);
+  doc.text(`${L(lang, "Customer", "Cliente")}: ${ci.customerName || "—"}`, margin, y);
   y += 24;
 
   const { total, paid, balance } = customerInvoiceTotals(ci);
 
   autoTable(doc, {
     startY: y,
-    head: [["Date", "Method", "Reference", `Amount (${cur})`]],
+    head: [[L(lang, "Date", "Fecha"), L(lang, "Method", "Método"), L(lang, "Reference", "Referencia"), `${L(lang, "Amount", "Monto")} (${cur})`]],
     body: ci.payments.map((p) => [p.date, p.method, p.reference || "—", fmtMoney(p.amount, cur)]),
-    foot: [["", "", "Total paid", fmtMoney(paid, cur)]],
+    foot: [["", "", L(lang, "Total paid", "Total pagado"), fmtMoney(paid, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
     styles: { fontSize: 10 },
@@ -856,9 +880,9 @@ export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice, compa
   autoTable(doc, {
     startY: y,
     body: [
-      ["Invoice total", fmtMoney(total, cur)],
-      ["Paid to date", fmtMoney(paid, cur)],
-      [{ content: "Remaining balance", styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }],
+      [L(lang, "Invoice total", "Total de factura"), fmtMoney(total, cur)],
+      [L(lang, "Paid to date", "Pagado a la fecha"), fmtMoney(paid, cur)],
+      [{ content: L(lang, "Remaining balance", "Saldo restante"), styles: { fontStyle: "bold" } }, { content: fmtMoney(balance, cur), styles: { fontStyle: "bold" } }],
     ],
     theme: "plain",
     margin: { left: pageW / 2, right: margin },
@@ -876,7 +900,8 @@ export function buildAgentCommissionPDF(
   company: Company,
   invoiceDate: string,
   period: string,
-  commissionEntryMode: "fixed" | "percent" = "percent"
+  commissionEntryMode: "fixed" | "percent" = "percent",
+  lang: Lang = "en"
 ): jsPDF {
   const isFixed = commissionEntryMode === "fixed";
   const b = resolveBranding(company);
@@ -886,14 +911,14 @@ export function buildAgentCommissionPDF(
   const cur = b.currency;
   const brand = hexToRgb(b.brandColor);
 
-  let y = drawHeader(doc, b, "COMMISSION INVOICE", [
-    `Date: ${invoiceDate}`,
-    `Period: ${period}`,
+  let y = drawHeader(doc, b, L(lang, "COMMISSION INVOICE", "FACTURA DE COMISIÓN"), [
+    `${L(lang, "Date", "Fecha")}: ${invoiceDate}`,
+    `${L(lang, "Period", "Periodo")}: ${period}`,
   ]);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("PAY TO", margin, y);
+  doc.text(L(lang, "PAY TO", "PAGAR A"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(payeeLabel(p.agent), margin, y + 16);
@@ -904,7 +929,7 @@ export function buildAgentCommissionPDF(
   if (p.invoices.length) {
     autoTable(doc, {
       startY: y,
-      head: [["Invoice", "Date", "Customer", `Profit (${cur})`]],
+      head: [[L(lang, "Invoice", "Factura"), L(lang, "Date", "Fecha"), L(lang, "Customer", "Cliente"), `Profit (${cur})`]],
       body: p.invoices.map((c) => [
         c.invoice.number,
         c.invoice.date,
@@ -922,13 +947,13 @@ export function buildAgentCommissionPDF(
   autoTable(doc, {
     startY: y,
     head: isFixed
-      ? [["Personal commission", "Amount"]]
-      : [["Personal commission", "Profit", "Rate", "Amount"]],
+      ? [[L(lang, "Personal commission", "Comisión personal"), L(lang, "Amount", "Monto")]]
+      : [[L(lang, "Personal commission", "Comisión personal"), "Profit", L(lang, "Rate", "Tarifa"), L(lang, "Amount", "Monto")]],
     body: isFixed
-      ? [["Sale minus product cost minus fee", fmtMoney(p.personalCommission, cur)]]
+      ? [[L(lang, "Sale minus product cost minus fee", "Venta menos costo del producto menos tarifa"), fmtMoney(p.personalCommission, cur)]]
       : [
           [
-            "Sum of own profits",
+            L(lang, "Sum of own profits", "Suma de profits propios"),
             fmtMoney(p.personalProfit, cur),
             `${(p.personalRate * 100).toFixed(2)}%`,
             fmtMoney(p.personalCommission, cur),
@@ -947,8 +972,8 @@ export function buildAgentCommissionPDF(
     autoTable(doc, {
       startY: y,
       head: isFixed
-        ? [["Downline override", "Level", "Override"]]
-        : [["Downline override", "Level", "Profit", "Rate", "Override"]],
+        ? [[L(lang, "Downline override", "Override de downline"), L(lang, "Level", "Nivel"), L(lang, "Override", "Override")]]
+        : [[L(lang, "Downline override", "Override de downline"), L(lang, "Level", "Nivel"), "Profit", L(lang, "Rate", "Tarifa"), L(lang, "Override", "Override")]],
       body: p.downline.map((d) =>
         isFixed
           ? [d.agent.name, `L${d.level}`, fmtMoney(d.override, cur)]
@@ -961,8 +986,8 @@ export function buildAgentCommissionPDF(
             ]
       ),
       foot: isFixed
-        ? [["Override total", "", fmtMoney(p.overrideTotal, cur)]]
-        : [["Override total", "", "", "", fmtMoney(p.overrideTotal, cur)]],
+        ? [[L(lang, "Override total", "Total override"), "", fmtMoney(p.overrideTotal, cur)]]
+        : [[L(lang, "Override total", "Total override"), "", "", "", fmtMoney(p.overrideTotal, cur)]],
       headStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255 },
       footStyles: { fillColor: [235, 240, 250], textColor: 20, fontStyle: "bold" },
       styles: { fontSize: 9 },
@@ -977,24 +1002,24 @@ export function buildAgentCommissionPDF(
   autoTable(doc, {
     startY: y,
     body: [
-      ["Personal commission", fmtMoney(p.personalCommission, cur)],
-      ["Override commission", fmtMoney(p.overrideTotal, cur)],
+      [L(lang, "Personal commission", "Comisión personal"), fmtMoney(p.personalCommission, cur)],
+      [L(lang, "Override commission", "Comisión override"), fmtMoney(p.overrideTotal, cur)],
       [
-        { content: "Gross payout", styles: { fontStyle: "bold" } },
+        { content: L(lang, "Gross payout", "Pago bruto"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(p.grossPayout, cur), styles: { fontStyle: "bold" } },
       ],
-      ["Advance applied", `- ${fmtMoney(p.advanceApplied, cur)}`],
-      ["Special deductions", `- ${fmtMoney(p.specialDeductions, cur)}`],
+      [L(lang, "Advance applied", "Avance aplicado"), `- ${fmtMoney(p.advanceApplied, cur)}`],
+      [L(lang, "Special deductions", "Deducciones especiales"), `- ${fmtMoney(p.specialDeductions, cur)}`],
       [
-        { content: "Net payable", styles: { fontStyle: "bold" } },
+        { content: L(lang, "Net payable", "Neto a pagar"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(p.netPayable, cur), styles: { fontStyle: "bold" } },
       ],
-      ["Suggested tax reserve", `- ${fmtMoney(p.taxReserveSuggested, cur)}`],
+      [L(lang, "Suggested tax reserve", "Reserva de impuestos sugerida"), `- ${fmtMoney(p.taxReserveSuggested, cur)}`],
       [
-        { content: "FINAL PAYABLE", styles: { fontStyle: "bold" } },
+        { content: L(lang, "FINAL PAYABLE", "PAGO FINAL"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(p.finalPayable, cur), styles: { fontStyle: "bold" } },
       ],
-      ["Pending balance", fmtMoney(p.pendingBalance, cur)],
+      [L(lang, "Pending balance", "Saldo pendiente"), fmtMoney(p.pendingBalance, cur)],
     ],
     theme: "plain",
     margin: { left: pageW / 2, right: margin },
@@ -1013,7 +1038,8 @@ export function buildOverridePDF(
   company: Company,
   invoiceDate: string,
   period: string,
-  commissionEntryMode: "fixed" | "percent" = "percent"
+  commissionEntryMode: "fixed" | "percent" = "percent",
+  lang: Lang = "en"
 ): jsPDF {
   const isFixed = commissionEntryMode === "fixed";
   const b = resolveBranding(company);
@@ -1024,15 +1050,15 @@ export function buildOverridePDF(
   const brand = hexToRgb(b.brandColor);
   const accent = hexToRgb(b.brandColorSecondary);
 
-  let y = drawHeader(doc, b, "OVERRIDE COMMISSION INVOICE", [
-    `Date: ${invoiceDate}`,
-    `Period: ${period}`,
+  let y = drawHeader(doc, b, L(lang, "OVERRIDE COMMISSION INVOICE", "FACTURA DE COMISIÓN OVERRIDE"), [
+    `${L(lang, "Date", "Fecha")}: ${invoiceDate}`,
+    `${L(lang, "Period", "Periodo")}: ${period}`,
   ]);
 
   // Sponsor info block
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("OVERRIDE EARNED BY", margin, y);
+  doc.text(L(lang, "OVERRIDE EARNED BY", "OVERRIDE GANADO POR"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(payeeLabel(p.agent), margin, y + 16);
@@ -1044,22 +1070,22 @@ export function buildOverridePDF(
   autoTable(doc, {
     startY: y,
     head: isFixed
-      ? [["Downline Rep", "Level", `Override (${cur})`]]
-      : [["Downline Rep", "Level", `Profit (${cur})`, "Override Rate", `Override (${cur})`]],
+      ? [[L(lang, "Downline Rep", "Rep downline"), L(lang, "Level", "Nivel"), `${L(lang, "Override", "Override")} (${cur})`]]
+      : [[L(lang, "Downline Rep", "Rep downline"), L(lang, "Level", "Nivel"), `Profit (${cur})`, L(lang, "Override Rate", "Tarifa override"), `${L(lang, "Override", "Override")} (${cur})`]],
     body: p.downline.map((d) =>
       isFixed
-        ? [d.agent.name, `Level ${d.level}`, fmtMoney(d.override, cur)]
+        ? [d.agent.name, `${L(lang, "Level", "Nivel")} ${d.level}`, fmtMoney(d.override, cur)]
         : [
             d.agent.name,
-            `Level ${d.level}`,
+            `${L(lang, "Level", "Nivel")} ${d.level}`,
             fmtMoney(d.profit, cur),
             `${(d.rate * 100).toFixed(2)}%`,
             fmtMoney(d.override, cur),
           ]
     ),
     foot: isFixed
-      ? [["", "Total Override", fmtMoney(p.overrideTotal, cur)]]
-      : [["", "", "", "Total Override", fmtMoney(p.overrideTotal, cur)]],
+      ? [["", L(lang, "Total Override", "Total Override"), fmtMoney(p.overrideTotal, cur)]]
+      : [["", "", "", L(lang, "Total Override", "Total Override"), fmtMoney(p.overrideTotal, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: hexToRgb(b.brandColorSecondary), textColor: 255, fontStyle: "bold" },
     styles: { fontSize: 9 },
@@ -1078,9 +1104,9 @@ export function buildOverridePDF(
   autoTable(doc, {
     startY: y,
     body: [
-      ["Override commission", fmtMoney(p.overrideTotal, cur)],
+      [L(lang, "Override commission", "Comisión override"), fmtMoney(p.overrideTotal, cur)],
       [
-        { content: "TOTAL PAYABLE", styles: { fontStyle: "bold" } },
+        { content: L(lang, "TOTAL PAYABLE", "TOTAL A PAGAR"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(p.overrideTotal, cur), styles: { fontStyle: "bold" } },
       ],
     ],
@@ -1095,7 +1121,9 @@ export function buildOverridePDF(
   doc.setFontSize(8);
   doc.setTextColor(140);
   doc.text(
-    "This document reflects override commissions only. Personal commissions are issued separately.",
+    L(lang,
+      "This document reflects override commissions only. Personal commissions are issued separately.",
+      "Este documento refleja solo comisiones override. Las comisiones personales se emiten por separado."),
     margin,
     y,
     { maxWidth: pageW - margin * 2 }
@@ -1110,11 +1138,12 @@ export function downloadAllCommissionPDFs(
   company: Company,
   invoiceDate: string,
   period: string,
-  commissionEntryMode: "fixed" | "percent" = "percent"
+  commissionEntryMode: "fixed" | "percent" = "percent",
+  lang: Lang = "en"
 ) {
   for (const p of payouts) {
     if (p.grossPayout <= 0) continue;
-    const doc = buildAgentCommissionPDF(p, company, invoiceDate, period, commissionEntryMode);
+    const doc = buildAgentCommissionPDF(p, company, invoiceDate, period, commissionEntryMode, lang);
     doc.save(`commission_${p.agent.name.replace(/\s+/g, "_")}.pdf`);
   }
 }
@@ -1154,9 +1183,10 @@ export function buildSaleAndDownload(
   agentName: string,
   payout?: AgentPayout | null,
   involved?: InvoiceInvolvedRow[],
-  commissionEntryMode: "fixed" | "percent" = "percent"
+  commissionEntryMode: "fixed" | "percent" = "percent",
+  lang: Lang = "en"
 ) {
-  const doc = buildSaleInvoicePDF(c, company, agentName, payout, involved, commissionEntryMode);
+  const doc = buildSaleInvoicePDF(c, company, agentName, payout, involved, commissionEntryMode, lang);
   doc.save(`${c.invoice.number}_${(c.invoice.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
 }
 
@@ -1169,7 +1199,8 @@ export function buildInvoicePayoutStatementPDF(
   row: InvoiceInvolvedRow,
   c: InvoiceCalc,
   company: Company,
-  taxReservePercent?: number
+  taxReservePercent?: number,
+  lang: Lang = "en"
 ): jsPDF {
   const inv = c.invoice;
   const b = resolveBranding(company, inv);
@@ -1178,14 +1209,14 @@ export function buildInvoicePayoutStatementPDF(
   const cur = b.currency;
   const brand = hexToRgb(b.brandColor);
 
-  let y = drawHeader(doc, b, "PAYOUT STATEMENT", [
-    `Invoice #: ${inv.number}`,
-    `Date: ${inv.date}`,
+  let y = drawHeader(doc, b, L(lang, "PAYOUT STATEMENT", "ESTADO DE PAGO"), [
+    `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
+    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
   ]);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("PAY TO", margin, y);
+  doc.text(L(lang, "PAY TO", "PAGAR A"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(row.name, margin, y + 16);
@@ -1196,21 +1227,21 @@ export function buildInvoicePayoutStatementPDF(
   const reserve = Math.max(0, row.amount) * (taxReservePercent || 0);
   const final = row.amount - reserve;
   const rows: any[] = [
-    ["Customer", inv.customerName || "—"],
-    ["Your share of this sale", fmtMoney(row.grossAmount ?? row.amount, cur)],
+    [L(lang, "Customer", "Cliente"), inv.customerName || "—"],
+    [L(lang, "Your share of this sale", "Tu parte de esta venta"), fmtMoney(row.grossAmount ?? row.amount, cur)],
   ];
   for (const ded of row.deductions || []) {
     rows.push([ded.label, `- ${fmtMoney(ded.amount, cur)}`]);
   }
   if (taxReservePercent)
-    rows.push([`Suggested tax reserve (${(taxReservePercent * 100).toFixed(0)}%)`, `- ${fmtMoney(reserve, cur)}`]);
+    rows.push([`${L(lang, "Suggested tax reserve", "Reserva de impuestos sugerida")} (${(taxReservePercent * 100).toFixed(0)}%)`, `- ${fmtMoney(reserve, cur)}`]);
 
   autoTable(doc, {
     startY: y,
     body: rows,
     foot: [
       [
-        { content: "Final amount", styles: { fontStyle: "bold" } },
+        { content: L(lang, "Final amount", "Monto final"), styles: { fontStyle: "bold" } },
         { content: fmtMoney(final, cur), styles: { fontStyle: "bold" } },
       ],
     ],
@@ -1231,7 +1262,8 @@ export function buildInvoicePayoutStatementPDF(
 export function buildInvoiceMasterSummaryPDF(
   rows: InvoiceInvolvedRow[],
   c: InvoiceCalc,
-  company: Company
+  company: Company,
+  lang: Lang = "en"
 ): jsPDF {
   const inv = c.invoice;
   const b = resolveBranding(company, inv);
@@ -1240,24 +1272,24 @@ export function buildInvoiceMasterSummaryPDF(
   const cur = b.currency;
   const brand = hexToRgb(b.brandColor);
 
-  drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", [
-    `Invoice #: ${inv.number}`,
-    `Date: ${inv.date}`,
+  drawHeader(doc, b, L(lang, "MASTER TRANSACTION SUMMARY", "RESUMEN MAESTRO DE TRANSACCIÓN"), [
+    `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
+    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
   ]);
 
   let y = 110;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Customer: ${inv.customerName || "—"}`, margin, y);
-  doc.text(`Sales amount: ${fmtMoney(inv.salesAmount, cur)}`, margin, y + 16);
+  doc.text(`${L(lang, "Customer", "Cliente")}: ${inv.customerName || "—"}`, margin, y);
+  doc.text(`${L(lang, "Sales amount", "Monto de venta")}: ${fmtMoney(inv.salesAmount, cur)}`, margin, y + 16);
 
   y += 46;
   const total = rows.reduce((s, r) => s + r.amount, 0);
   autoTable(doc, {
     startY: y,
-    head: [["Name", "Role", `Amount (${cur})`]],
-    body: involvedRowsToTableBody(rows, cur),
-    foot: [["", "Total payout", fmtMoney(total, cur)]],
+    head: [[L(lang, "Name", "Nombre"), L(lang, "Role", "Rol"), `${L(lang, "Amount", "Monto")} (${cur})`]],
+    body: involvedRowsToTableBody(rows, cur, lang),
+    foot: [["", L(lang, "Total payout", "Total pagado"), fmtMoney(total, cur)]],
     headStyles: { fillColor: brand, textColor: 255 },
     footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
     styles: { fontSize: 10 },
@@ -1274,10 +1306,11 @@ export function downloadAllInvoiceStatements(
   rows: InvoiceInvolvedRow[],
   c: InvoiceCalc,
   company: Company,
-  taxReservePercent?: number
+  taxReservePercent?: number,
+  lang: Lang = "en"
 ) {
   for (const row of rows) {
-    const doc = buildInvoicePayoutStatementPDF(row, c, company, taxReservePercent);
+    const doc = buildInvoicePayoutStatementPDF(row, c, company, taxReservePercent, lang);
     doc.save(`${c.invoice.number}_${row.name.replace(/\s+/g, "_")}_statement.pdf`);
   }
 }
@@ -1285,9 +1318,10 @@ export function downloadAllInvoiceStatements(
 export function downloadInvoiceMasterSummary(
   rows: InvoiceInvolvedRow[],
   c: InvoiceCalc,
-  company: Company
+  company: Company,
+  lang: Lang = "en"
 ) {
-  const doc = buildInvoiceMasterSummaryPDF(rows, c, company);
+  const doc = buildInvoiceMasterSummaryPDF(rows, c, company, lang);
   doc.save(`${c.invoice.number}_master_summary.pdf`);
 }
 
@@ -1307,7 +1341,8 @@ export type InvoiceSummarySection = {
 export function buildPeriodMasterSummaryPDF(
   sections: InvoiceSummarySection[],
   company: Company,
-  periodLabel: string
+  periodLabel: string,
+  lang: Lang = "en"
 ): jsPDF {
   const b = resolveBranding(company);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -1315,9 +1350,10 @@ export function buildPeriodMasterSummaryPDF(
   const cur = b.currency;
   const brand = hexToRgb(b.brandColor);
   const pageH = doc.internal.pageSize.getHeight();
-  const headerLines = [`Period: ${periodLabel}`, `${sections.length} invoice(s)`];
+  const title = L(lang, "MASTER TRANSACTION SUMMARY", "RESUMEN MAESTRO DE TRANSACCIÓN");
+  const headerLines = [`${L(lang, "Period", "Periodo")}: ${periodLabel}`, `${sections.length} ${L(lang, "invoice(s)", "factura(s)")}`];
 
-  drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+  drawHeader(doc, b, title, headerLines);
   let y = 110;
   let grandTotal = 0;
 
@@ -1325,24 +1361,24 @@ export function buildPeriodMasterSummaryPDF(
     if (y > pageH - 170) {
       drawFooter(doc, b);
       doc.addPage();
-      drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+      drawHeader(doc, b, title, headerLines);
       y = 110;
     }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text(`Invoice #: ${sec.invoiceNumber}   ·   Date: ${sec.date}`, margin, y);
+    doc.text(`${L(lang, "Invoice #", "Factura #")}: ${sec.invoiceNumber}   ·   ${L(lang, "Date", "Fecha")}: ${sec.date}`, margin, y);
     doc.setFont("helvetica", "normal");
-    doc.text(`Customer: ${sec.customerName || "—"}   ·   Sales amount: ${fmtMoney(sec.salesAmount, cur)}`, margin, y + 14);
+    doc.text(`${L(lang, "Customer", "Cliente")}: ${sec.customerName || "—"}   ·   ${L(lang, "Sales amount", "Monto de venta")}: ${fmtMoney(sec.salesAmount, cur)}`, margin, y + 14);
     y += 24;
 
     const total = sec.rows.reduce((s, r) => s + r.amount, 0);
     grandTotal += total;
     autoTable(doc, {
       startY: y,
-      head: [["Name", "Role", `Amount (${cur})`]],
-      body: involvedRowsToTableBody(sec.rows, cur),
-      foot: [["", "Subtotal", fmtMoney(total, cur)]],
+      head: [[L(lang, "Name", "Nombre"), L(lang, "Role", "Rol"), `${L(lang, "Amount", "Monto")} (${cur})`]],
+      body: involvedRowsToTableBody(sec.rows, cur, lang),
+      foot: [["", L(lang, "Subtotal", "Subtotal"), fmtMoney(total, cur)]],
       headStyles: { fillColor: brand, textColor: 255 },
       footStyles: { fillColor: [235, 245, 255], textColor: 20, fontStyle: "bold" },
       styles: { fontSize: 9 },
@@ -1355,12 +1391,12 @@ export function buildPeriodMasterSummaryPDF(
   if (y > pageH - 90) {
     drawFooter(doc, b);
     doc.addPage();
-    drawHeader(doc, b, "MASTER TRANSACTION SUMMARY", headerLines);
+    drawHeader(doc, b, title, headerLines);
     y = 110;
   }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text(`Grand total payout: ${fmtMoney(grandTotal, cur)}`, margin, y);
+  doc.text(`${L(lang, "Grand total payout", "Total general pagado")}: ${fmtMoney(grandTotal, cur)}`, margin, y);
 
   drawFooter(doc, b);
   return doc;
@@ -1370,9 +1406,10 @@ export function downloadPeriodMasterSummary(
   sections: InvoiceSummarySection[],
   company: Company,
   periodLabel: string,
-  filenameHint: string
+  filenameHint: string,
+  lang: Lang = "en"
 ) {
-  const doc = buildPeriodMasterSummaryPDF(sections, company, periodLabel);
+  const doc = buildPeriodMasterSummaryPDF(sections, company, periodLabel, lang);
   doc.save(`${filenameHint}_master_summary.pdf`);
 }
 

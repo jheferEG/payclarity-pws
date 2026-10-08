@@ -294,7 +294,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
   };
 
   const downloadCommissionPDF = () => {
-    const doc = buildAgentCommissionPDF(p, s.company, s.invoiceDate, s.periodLabel, s.company.commissionEntryMode);
+    const doc = buildAgentCommissionPDF(p, s.company, s.invoiceDate, s.periodLabel, s.company.commissionEntryMode, s.language);
     doc.save(`commission_${wallet.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
@@ -358,9 +358,9 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                           // only ever gets their own private payout statement.
                           const myRow = rows.find((r) => r.agentId === wallet.agent.id);
                           if (s.role !== "rep" || !myRow) {
-                            buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, rows, s.company.commissionEntryMode);
+                            buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, rows, s.company.commissionEntryMode, s.language);
                           } else {
-                            buildInvoicePayoutStatementPDF(myRow, c, s.company, c.invoice.taxReservePercent)
+                            buildInvoicePayoutStatementPDF(myRow, c, s.company, c.invoice.taxReservePercent, s.language)
                               .save(`${c.invoice.number}_statement.pdf`);
                           }
                         }}
@@ -1468,7 +1468,7 @@ function ApprovalsQueuePanel() {
                             onClick={() => {
                               const c = calcInvoice(inv, s.financeCompanies);
                               const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                              const doc = buildSaleInvoicePDF(c, s.company, payeeLabel(ag), null, rows, s.company.commissionEntryMode);
+                              const doc = buildSaleInvoicePDF(c, s.company, payeeLabel(ag), null, rows, s.company.commissionEntryMode, s.language);
                               doc.save(`${inv.number}_recalculated.pdf`);
                               toast.success(t("disp_pdf_regen"));
                             }}
