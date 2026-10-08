@@ -2110,11 +2110,11 @@ function InvoicesPanel() {
                     <div className="flex items-center gap-2 shrink-0">
                       {isAdmin && isOverrideRow ? (
                         <div className="flex items-center gap-1">
-                          <NumField
+                          <PayoutAmountEditor
                             className="h-8 w-24 font-mono text-right"
-                            step="0.01"
                             value={row.grossAmount ?? row.amount}
-                            onChange={setOverride}
+                            isEs={s.language === "es"}
+                            onSave={setOverride}
                             title={s.language === "es"
                               ? `Por defecto: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`
                               : `Default: ${fmtMoney(row.defaultAmount ?? row.amount, s.company.currency)}`}
@@ -2232,14 +2232,14 @@ function InvoicesPanel() {
 
 /** Buffers the typed amount locally and only commits it (toast + store
  * write) once "Guardar" is clicked — typing alone never silently saves. */
-function PayoutAmountEditor({ value, onSave, isEs, className }: {
-  value: number; onSave: (n: number) => void; isEs: boolean; className?: string;
+function PayoutAmountEditor({ value, onSave, isEs, className, title }: {
+  value: number; onSave: (n: number) => void; isEs: boolean; className?: string; title?: string;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
     <div className="flex items-center gap-1.5">
-      <NumField className={className} step="0.01" value={draft} onChange={setDraft} />
+      <NumField className={className} step="0.01" value={draft} onChange={setDraft} title={title} />
       <Button
         size="sm"
         className="bg-green-600 hover:bg-green-700 text-white"
