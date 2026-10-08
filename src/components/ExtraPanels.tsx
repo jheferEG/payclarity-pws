@@ -24,7 +24,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2, Wallet, FileDown, Sparkles, Paperclip, X, TrendingDown, TrendingUp, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStore, type Invoice, type Agent } from "@/lib/commission-store";
+import { useStore, type Invoice, type Agent, type Payment } from "@/lib/commission-store";
 import {
   calcInvoice,
   calcPayouts,
@@ -150,6 +150,42 @@ function AICoachCard({ agent }: { agent: Agent }) {
   );
 }
 
+/** A payment whose agent was deleted after the fact — invisible in the
+ * per-agent wallet above (there's no agent left to pick), but still a real
+ * row in `payments[]` still counted in dashboard totals until removed. */
+function OrphanedPaymentsCard({ payments }: { payments: Payment[] }) {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const cur = s.company.currency;
+  return (
+    <Card className="p-4 border-amber-400/50 bg-amber-500/5">
+      <p className="text-sm font-semibold">
+        {isEs ? "Pagos sin vendedor asignado" : "Payments with no assigned rep"}
+      </p>
+      <p className="text-xs text-muted-foreground mb-2">
+        {isEs
+          ? "El vendedor de estos pagos ya no existe en Equipo, así que no aparecen en ninguna cartera. Bórralos aquí si ya no corresponden."
+          : "The rep these payments belonged to no longer exists in Team, so they don't show up in any wallet. Delete them here if they no longer apply."}
+      </p>
+      <div className="space-y-1.5">
+        {payments.map((py) => (
+          <div key={py.id} className="flex items-center justify-between gap-2 text-sm bg-background/60 rounded-md px-2 py-1.5">
+            <span className="truncate text-muted-foreground">
+              {py.date} · {py.method} · {py.reference || "—"} · {py.notes || "—"}
+            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-mono font-semibold">{fmtMoney(py.amount, cur)}</span>
+              <Button variant="ghost" size="icon" onClick={() => s.removePayment(py.id)}>
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ========== WALLET PANEL ========== */
 export function WalletPanel() {
   const t = useT();
@@ -176,17 +212,28 @@ export function WalletPanel() {
 
   const current = visibleWallets.find((w) => w.agent.id === selected) || visibleWallets[0];
 
+  // A payment whose agent was since deleted from the team has no wallet to
+  // show it in — it would otherwise sit invisible forever, still counted
+  // in dashboard totals, with no way to clean it up.
+  const orphanedPayments = isAdmin
+    ? s.payments.filter((p) => !s.agents.some((a) => a.id === p.agentId))
+    : [];
+
   if (!visibleWallets.length) {
     return (
-      <Section title={isAdmin ? t("wallet_title") : t("wallet_my_title")} desc={t("wallet_desc")}>
-        <Empty msg={isAdmin ? t("wallet_empty_admin") : t("wallet_empty_rep")} />
-      </Section>
+      <div className="space-y-6">
+        <Section title={isAdmin ? t("wallet_title") : t("wallet_my_title")} desc={t("wallet_desc")}>
+          <Empty msg={isAdmin ? t("wallet_empty_admin") : t("wallet_empty_rep")} />
+        </Section>
+        {orphanedPayments.length > 0 && <OrphanedPaymentsCard payments={orphanedPayments} />}
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
       {current && <AICoachCard agent={current.agent} />}
+      {orphanedPayments.length > 0 && <OrphanedPaymentsCard payments={orphanedPayments} />}
       <Section
         title={isAdmin ? t("wallet_title") : t("wallet_my_title")}
         desc={t("wallet_desc")}
