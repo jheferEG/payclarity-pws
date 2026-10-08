@@ -91,7 +91,9 @@ export function DashboardPanel({ profileAvatars = {} }: { profileAvatars?: Recor
     const commissions = payouts.reduce((a, p) => a + p.personalCommission, 0);
     const overridesTotal = payouts.reduce((a, p) => a + p.overrideTotal, 0);
     const tax = payouts.reduce((a, p) => a + p.taxReserveSuggested, 0);
-    const paid = s.payments.reduce((a, p) => a + p.amount, 0);
+    // A scheduled payment is a promise, not money sent yet (same rule the
+    // wallet ledger already uses) — only a disbursed payment counts as paid.
+    const paid = s.payments.filter((p) => p.status !== "scheduled").reduce((a, p) => a + p.amount, 0);
     const pending = Math.max(0, commissions + overridesTotal - paid);
     const openReq = s.disputes.filter((d) => d.status === "submitted" || d.status === "needs_info" || d.status === "under_review").length;
     return { sales, profit, commissions, overridesTotal, tax, paid, pending, openReq, payouts };
