@@ -37,23 +37,32 @@ export default function handler(req: any, res: any) {
           body: JSON.stringify({ domain: auth.domain, authId: auth.access_token }),
         })
           .then(function (r) {
-            return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+            return r.text().then(function (text) {
+              var body;
+              try {
+                body = JSON.parse(text);
+              } catch (e) {
+                throw new Error("HTTP " + r.status + ", respuesta no-JSON: " + text.slice(0, 300));
+              }
+              return { ok: r.ok, status: r.status, body: body };
+            });
           })
           .then(function (result) {
             if (!result.ok) {
-              fail(result.body && result.body.error ? result.body.error : "No tienes acceso desde Bitrix24.");
+              var msg = result.body && result.body.error ? result.body.error : "No tienes acceso desde Bitrix24.";
+              fail(msg + " (HTTP " + result.status + ")");
               return;
             }
             window.location.href =
               "/?bx_email=" + encodeURIComponent(result.body.email) +
               "&bx_otp=" + encodeURIComponent(result.body.otp);
           })
-          .catch(function () {
-            fail("Error de conexión con Transpare.");
+          .catch(function (err) {
+            fail("Error de conexión: " + (err && err.message ? err.message : String(err)));
           });
       });
     } catch (e) {
-      fail("No se pudo cargar el SDK de Bitrix24.");
+      fail("No se pudo cargar el SDK de Bitrix24: " + (e && e.message ? e.message : String(e)));
     }
   </script>
 </body>
