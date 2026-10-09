@@ -28,6 +28,7 @@ export function UserManagementPanel() {
     rep: t("um_rep"),
     accountant: t("um_accountant"),
     technician: t("um_technician"),
+    analyst: t("um_analyst"),
   };
 
   async function loadData() {
@@ -224,6 +225,7 @@ function PendingUserRow({
               <SelectItem value="rep">{t("um_rep")}</SelectItem>
               <SelectItem value="accountant">{t("um_accountant")}</SelectItem>
               <SelectItem value="technician">{t("um_technician")}</SelectItem>
+              <SelectItem value="analyst">{t("um_analyst")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -268,6 +270,7 @@ function ReactivateRow({
               <SelectItem value="rep">{t("um_rep")}</SelectItem>
               <SelectItem value="accountant">{t("um_accountant")}</SelectItem>
               <SelectItem value="technician">{t("um_technician")}</SelectItem>
+              <SelectItem value="analyst">{t("um_analyst")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -300,6 +303,7 @@ function ActiveUserRow({
     rep: t("um_rep"),
     accountant: t("um_accountant"),
     technician: t("um_technician"),
+    analyst: t("um_analyst"),
   };
   const isMe = user.id === myId;
   const roleIcon = user.role === "admin"
@@ -336,6 +340,7 @@ function ActiveUserRow({
                   <SelectItem value="rep">{t("um_rep")}</SelectItem>
                   <SelectItem value="accountant">{t("um_accountant")}</SelectItem>
                   <SelectItem value="technician">{t("um_technician")}</SelectItem>
+                  <SelectItem value="analyst">{t("um_analyst")}</SelectItem>
                 </SelectContent>
               </Select>
               <Button

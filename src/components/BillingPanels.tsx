@@ -815,7 +815,7 @@ export function WorkStatementsPanel() {
   const isEs = s.language === "es";
   const LABEL = isEs ? WS_LABEL_ES : WS_LABEL_EN;
   const techLabel = technicianTerm(s.company, isEs);
-  const isAdmin = s.role !== "rep" && s.role !== "technician";
+  const isAdmin = s.role !== "rep" && s.role !== "technician" && s.role !== "analyst";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
 
   const [jobId, setJobId] = useState("");

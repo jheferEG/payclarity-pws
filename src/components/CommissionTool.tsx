@@ -52,6 +52,7 @@ import {
   WeeklyStatementsPanel, CompanyPayablesPanel, PayrollPanel, TaxFilingPanel,
 } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
+import { AnalystInvoicesPanel } from "@/components/AnalystPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
 import { SplitsPanel, SplitEditorDialog, totalSplitPercent, isSplitValid, roleLabel } from "@/components/SplitsPanel";
@@ -133,6 +134,20 @@ function makeTechnicianGroups(t: (key: any) => string): NavGroup[] {
   return [
     { id: "billing", label: t("nav_billing"), tabs: [
       { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
+    ]},
+  ];
+}
+
+/** An analyst's own restricted portal: only their own invoices (view +
+ * PDF + file a reclamo) and the status of requests they've already filed —
+ * no Wallet, no editing, no company-wide figures. */
+function makeAnalystGroups(t: (key: any) => string): NavGroup[] {
+  return [
+    { id: "invoices", label: t("nav_invoices"), tabs: [
+      { id: "my-invoices", label: t("tab_my_invoices"), icon: Receipt },
+    ]},
+    { id: "payouts", label: t("nav_payouts"), tabs: [
+      { id: "disputes", label: t("tab_my_requests"), icon: MessageSquare },
     ]},
   ];
 }
@@ -290,6 +305,7 @@ export default function CommissionTool() {
   const navGroups = makeNavGroups(t);
   const repGroups = makeRepGroups(t);
   const technicianGroups = makeTechnicianGroups(t);
+  const analystGroups = makeAnalystGroups(t);
   const { profile, signOut, companiesList, switchCompany, updateAvatar } = useAuth();
   const { dataLoaded } = useSupabaseSync();
 
@@ -306,11 +322,11 @@ export default function CommissionTool() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.role]);
 
-  // For reps and technicians: auto-set activeAgentId to their own agent
-  // record after data loads — both roles are scoped to "my own row" via
-  // this same linkage (agents.profile_id -> auth.uid()).
+  // For reps, technicians and analysts: auto-set activeAgentId to their own
+  // agent record after data loads — all three roles are scoped to "my own
+  // row" via this same linkage (agents.profile_id -> auth.uid()).
   useEffect(() => {
-    if (!dataLoaded || (profile?.role !== "rep" && profile?.role !== "technician")) return;
+    if (!dataLoaded || (profile?.role !== "rep" && profile?.role !== "technician" && profile?.role !== "analyst")) return;
     supabase.rpc("my_agent_id").then(({ data: agentId }) => {
       if (agentId) s.setActiveAgentId(agentId);
     });
@@ -320,6 +336,7 @@ export default function CommissionTool() {
   const isAdmin = s.role === "admin";
   const isRep = s.role === "rep";
   const isTechnician = s.role === "technician";
+  const isAnalyst = s.role === "analyst";
   const canManage = isAdmin; // accountant: view-only on management
   const [wizardOpen, setWizardOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -386,7 +403,7 @@ export default function CommissionTool() {
     if (companiesList.length > 1 && !pickerMode) setPickerMode(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companiesList.length]);
-  const showPicker = pickerMode && companiesList.length > 1 && !isRep && !isTechnician;
+  const showPicker = pickerMode && companiesList.length > 1 && !isRep && !isTechnician && !isAnalyst;
 
   // Load pending user count and subscribe to realtime changes (admins only)
   useEffect(() => {
@@ -409,8 +426,8 @@ export default function CommissionTool() {
     return () => { channel.unsubscribe(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
-  const [tab, setTab] = useState<string>(isRep ? "wallet" : "dashboard");
-  const [group, setGroup] = useState<string>(isRep ? "team" : "dashboard");
+  const [tab, setTab] = useState<string>(isRep ? "wallet" : isTechnician ? "work-statements" : isAnalyst ? "my-invoices" : "dashboard");
+  const [group, setGroup] = useState<string>(isRep ? "team" : isTechnician ? "billing" : isAnalyst ? "invoices" : "dashboard");
   useEffect(() => {
     if (s.deepLink?.tab) {
       setTab(s.deepLink.tab);
@@ -442,7 +459,7 @@ export default function CommissionTool() {
   // login email); never fall back to "the first agent" — that would show
   // someone else's data to a rep whose account isn't linked yet.
   const effectiveAgentId =
-    isRep || isTechnician
+    isRep || isTechnician || isAnalyst
       ? s.activeAgentId && s.agents.some((a) => a.id === s.activeAgentId)
         ? s.activeAgentId
         : null
@@ -466,7 +483,7 @@ export default function CommissionTool() {
           </div>
 
           {/* Desktop stats */}
-          {!isRep && !isTechnician && (
+          {!isRep && !isTechnician && !isAnalyst && (
             <div className="hidden lg:flex items-center gap-3 mx-4">
               <Stat label={t("stat_salespeople")} value={s.agents.length} />
               <Stat label={t("stat_sales_total")} value={fmtMoney(totalSales, s.company.currency)} />
@@ -487,7 +504,7 @@ export default function CommissionTool() {
             </button>
 
             {/* Multi-company picker shortcut */}
-            {companiesList.length > 1 && !isRep && !isTechnician && !showPicker && (
+            {companiesList.length > 1 && !isRep && !isTechnician && !isAnalyst && !showPicker && (
               <button
                 onClick={() => setPickerMode(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all text-xs font-bold text-accent"
@@ -535,8 +552,8 @@ export default function CommissionTool() {
 
             <NotificationsBell />
 
-            {/* Reps/technicians only ever see their own linked agent — no switching. */}
-            {(isRep || isTechnician) && effectiveAgentId && (
+            {/* Reps/technicians/analysts only ever see their own linked agent — no switching. */}
+            {(isRep || isTechnician || isAnalyst) && effectiveAgentId && (
               <span className="h-9 px-3 inline-flex items-center rounded-lg border border-border/60 bg-background/80 text-sm font-medium truncate max-w-[160px]">
                 {s.agents.find((a) => a.id === effectiveAgentId)?.name ?? ""}
               </span>
@@ -642,7 +659,7 @@ export default function CommissionTool() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {showPicker ? (
           <MultiCompanyDashboard onEnter={() => setPickerMode(false)} />
-        ) : (isRep || isTechnician) && !effectiveAgentId ? (
+        ) : (isRep || isTechnician || isAnalyst) && !effectiveAgentId ? (
           <Card className="p-8 text-center">
             <UserRound className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
             <h2 className="text-lg font-semibold mb-1">{t("no_rep_title")}</h2>
@@ -651,7 +668,7 @@ export default function CommissionTool() {
         ) : (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           {(() => {
-            const groups = isRep ? repGroups : isTechnician ? technicianGroups : navGroups;
+            const groups = isRep ? repGroups : isTechnician ? technicianGroups : isAnalyst ? analystGroups : navGroups;
             const currentGroup = groups.find((g) => g.id === group) ?? groups[0];
             const openRequests = s.disputes.filter(
               (d) => d.status === "submitted" || d.status === "needs_info"
@@ -672,7 +689,7 @@ export default function CommissionTool() {
                         }`}
                       >
                         {g.label}
-                        {g.id === "payouts" && !isRep && openRequests > 0 && (
+                        {g.id === "payouts" && !isRep && !isAnalyst && openRequests > 0 && (
                           <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-white/30 text-white text-[10px] font-bold">
                             {openRequests}
                           </span>
@@ -694,7 +711,7 @@ export default function CommissionTool() {
                           <TabsTrigger key={tt.id} value={tt.id} className="whitespace-nowrap text-xs sm:text-sm px-2.5 sm:px-3 py-1.5">
                             <Icon className="w-3.5 h-3.5 shrink-0" />
                             <span className="hidden xs:inline sm:inline ml-1.5">{tt.label}</span>
-                            {tt.id === "disputes" && !isRep && openRequests > 0 && (
+                            {tt.id === "disputes" && !isRep && !isAnalyst && openRequests > 0 && (
                               <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
                                 {openRequests}
                               </span>
@@ -709,7 +726,7 @@ export default function CommissionTool() {
             );
           })()}
 
-          {!isRep && !isTechnician && (
+          {!isRep && !isTechnician && !isAnalyst && (
             <TabsContent value="dashboard">
               <DashboardQuickActions onNav={(t, g) => { setGroup(g); setTab(t); }} onWizard={() => setWizardOpen(true)} />
               <div className="h-6" />
@@ -717,12 +734,13 @@ export default function CommissionTool() {
             </TabsContent>
           )}
           <TabsContent value="invoices"><InvoicesPanel /></TabsContent>
+          <TabsContent value="my-invoices"><AnalystInvoicesPanel /></TabsContent>
           <TabsContent value="wallet"><WalletPanel /></TabsContent>
           <TabsContent value="simulator"><SimulatorPanel /></TabsContent>
           <TabsContent value="calendar"><CalendarPanel /></TabsContent>
           <TabsContent value="disputes"><DisputesPanel /></TabsContent>
           <TabsContent value="work-statements"><WorkStatementsPanel /></TabsContent>
-          {!isRep && !isTechnician && <>
+          {!isRep && !isTechnician && !isAnalyst && <>
             <TabsContent value="reports"><ReportsPanel /></TabsContent>
             <TabsContent value="yearend"><YearEnd1099Panel /></TabsContent>
           </>}

@@ -268,7 +268,7 @@ export default function SuperadminPanel() {
   async function handleApproveUser(userId: string, role: string) {
     const { error } = await supabase
       .from("profiles")
-      .update({ status: "active", role: role as "admin" | "rep" | "accountant" | "technician" })
+      .update({ status: "active", role: role as "admin" | "rep" | "accountant" | "technician" | "analyst" })
       .eq("id", userId);
     if (error) { toast.error("Error: " + error.message); return; }
     toast.success("Usuario aprobado");
@@ -666,7 +666,7 @@ export default function SuperadminPanel() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
-                                  {["admin", "rep", "accountant", "technician"].map((r) => (
+                                  {["admin", "rep", "accountant", "technician", "analyst"].map((r) => (
                                     <DropdownMenuItem key={r} onClick={() => handleApproveUser(u.id, r)}>
                                       Como {r}
                                     </DropdownMenuItem>
@@ -940,7 +940,7 @@ export default function SuperadminPanel() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
-                                {["admin", "rep", "accountant", "technician"].map((r) => (
+                                {["admin", "rep", "accountant", "technician", "analyst"].map((r) => (
                                   <DropdownMenuItem key={r} onClick={() => handleApproveUser(u.id, r)}>
                                     Como {r}
                                   </DropdownMenuItem>

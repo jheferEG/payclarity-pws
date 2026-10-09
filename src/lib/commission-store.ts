@@ -1016,7 +1016,7 @@ export type IndustryTemplate = {
   taxReservePercent: number;
 };
 
-export type Role = "admin" | "rep" | "accountant" | "technician";
+export type Role = "admin" | "rep" | "accountant" | "technician" | "analyst";
 export type Lang = "es" | "en";
 
 export type NotificationKind =

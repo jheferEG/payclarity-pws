@@ -190,7 +190,7 @@ function OrphanedPaymentsCard({ payments }: { payments: Payment[] }) {
 export function WalletPanel() {
   const t = useT();
   const s = useStore();
-  const isAdmin = s.role !== "rep" && s.role !== "technician";
+  const isAdmin = s.role !== "rep" && s.role !== "technician" && s.role !== "analyst";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const wallets = useMemo(
     () =>
@@ -1855,7 +1855,7 @@ export function CalendarPanel() {
   const s = useStore();
   const isEs = s.language === "es";
   void isEs;
-  const isAdmin = s.role !== "rep" && s.role !== "technician";
+  const isAdmin = s.role !== "rep" && s.role !== "technician" && s.role !== "analyst";
   const myAgentId = !isAdmin ? s.activeAgentId : null;
   const cur = s.company.currency;
   const payouts = useMemo(
