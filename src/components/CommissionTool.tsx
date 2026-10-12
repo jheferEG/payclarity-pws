@@ -337,6 +337,7 @@ export default function CommissionTool() {
   const isRep = s.role === "rep";
   const isTechnician = s.role === "technician";
   const isAnalyst = s.role === "analyst";
+  const isAccountant = s.role === "accountant";
   const canManage = isAdmin; // accountant: view-only on management
   const [wizardOpen, setWizardOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -426,8 +427,10 @@ export default function CommissionTool() {
     return () => { channel.unsubscribe(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
-  const [tab, setTab] = useState<string>(isRep ? "wallet" : isTechnician ? "work-statements" : isAnalyst ? "my-invoices" : "dashboard");
-  const [group, setGroup] = useState<string>(isRep ? "team" : isTechnician ? "billing" : isAnalyst ? "invoices" : "dashboard");
+  // Accountants land directly on the approvals queue — approving payouts/
+  // corrections is their actual job, not browsing the sales dashboard first.
+  const [tab, setTab] = useState<string>(isRep ? "wallet" : isTechnician ? "work-statements" : isAnalyst ? "my-invoices" : isAccountant ? "disputes" : "dashboard");
+  const [group, setGroup] = useState<string>(isRep ? "team" : isTechnician ? "billing" : isAnalyst ? "invoices" : isAccountant ? "payouts" : "dashboard");
   useEffect(() => {
     if (s.deepLink?.tab) {
       setTab(s.deepLink.tab);

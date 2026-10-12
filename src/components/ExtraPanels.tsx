@@ -1495,7 +1495,10 @@ function ApprovalsQueuePanel() {
 
 export function DisputesPanel() {
   const s = useStore();
-  return s.role === "admin" ? <ApprovalsQueuePanel /> : <RepRequestsPanel />;
+  // An accountant isn't linked to an agent, so "my requests" would always be
+  // empty for them — they need the real company-wide approvals queue, same
+  // as admin, since approving payouts/corrections is their actual job.
+  return s.role === "admin" || s.role === "accountant" ? <ApprovalsQueuePanel /> : <RepRequestsPanel />;
 }
 
 /* ========== SIMULATOR ========== */
