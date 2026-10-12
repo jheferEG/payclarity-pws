@@ -770,7 +770,7 @@ export default function CommissionTool() {
 
           {!isRep && !isTechnician && !isAnalyst && (
             <TabsContent value="dashboard">
-              <DashboardQuickActions onNav={(t, g) => { setGroup(g); setTab(t); }} onWizard={() => setWizardOpen(true)} />
+              <DashboardQuickActions onNav={(t, g) => { setGroup(g); setTab(t); }} />
               <div className="h-6" />
               <DashboardPanel profileAvatars={profileAvatars} />
             </TabsContent>
@@ -837,10 +837,8 @@ function Stat({ label, value, accent }: { label: string; value: any; accent?: bo
 
 function DashboardQuickActions({
   onNav,
-  onWizard,
 }: {
   onNav: (tab: string, group: string) => void;
-  onWizard: () => void;
 }) {
   const s = useStore();
   const t = useT();
@@ -890,9 +888,6 @@ function DashboardQuickActions({
             {t("qa_load_demo")}
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={onWizard}>
-          <Wand2 className="w-4 h-4 mr-2" />Setup wizard
-        </Button>
       </div>
     </Card>
   );
