@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import type { AgentPayout, InvoiceCalc } from "./commission-calc";
-import { fmtMoney, payeeLabel } from "./commission-calc";
+import { fmtMoney, fmtDateUS, payeeLabel } from "./commission-calc";
 import type { Company, Invoice, InvoiceTemplateId, CustomerInvoice, Lang } from "./commission-store";
 import { customerInvoiceTotals } from "./commission-store";
 
@@ -257,7 +257,7 @@ export function buildSaleInvoicePDF(
 
   let y = drawHeader(doc, b, L(lang, "SALES INVOICE", "FACTURA DE VENTA"), [
     `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
-    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
+    `${L(lang, "Date", "Fecha")}: ${fmtDateUS(inv.date)}`,
     `${L(lang, "Status", "Estado")}: ${invoiceStatusLabel(inv.status, lang)}`,
   ]);
 
@@ -578,7 +578,7 @@ export function buildCashCustomerInvoicePDF(inv: Invoice, company: Company, lang
   doc.setTextColor(20);
   doc.text(`${L(lang, "Date", "Fecha")}:`, margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(inv.date, margin + 36, y);
+  doc.text(fmtDateUS(inv.date), margin + 36, y);
   y += 22;
 
   doc.setFont("helvetica", "bold");
@@ -728,12 +728,12 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
   doc.setFontSize(10);
   doc.text(`${L(lang, "Invoice date", "Fecha de factura")}:`, margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(ci.invoiceDate, margin + 68, y);
+  doc.text(fmtDateUS(ci.invoiceDate), margin + 68, y);
   if (ci.dueDate) {
     doc.setFont("helvetica", "bold");
     doc.text(`${L(lang, "Due date", "Fecha de vencimiento")}:`, pageW / 2, y);
     doc.setFont("helvetica", "normal");
-    doc.text(ci.dueDate, pageW / 2 + 56, y);
+    doc.text(fmtDateUS(ci.dueDate), pageW / 2 + 56, y);
   }
   y += 24;
 
@@ -1217,7 +1217,7 @@ export function buildInvoicePayoutStatementPDF(
 
   let y = drawHeader(doc, b, L(lang, "PAYOUT STATEMENT", "ESTADO DE PAGO"), [
     `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
-    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
+    `${L(lang, "Date", "Fecha")}: ${fmtDateUS(inv.date)}`,
   ]);
 
   doc.setFont("helvetica", "bold");
@@ -1280,7 +1280,7 @@ export function buildInvoiceMasterSummaryPDF(
 
   drawHeader(doc, b, L(lang, "MASTER TRANSACTION SUMMARY", "RESUMEN MAESTRO DE TRANSACCIÓN"), [
     `${L(lang, "Invoice #", "Factura #")}: ${inv.number}`,
-    `${L(lang, "Date", "Fecha")}: ${inv.date}`,
+    `${L(lang, "Date", "Fecha")}: ${fmtDateUS(inv.date)}`,
   ]);
 
   let y = 110;
@@ -1373,7 +1373,7 @@ export function buildPeriodMasterSummaryPDF(
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text(`${L(lang, "Invoice #", "Factura #")}: ${sec.invoiceNumber}   ·   ${L(lang, "Date", "Fecha")}: ${sec.date}`, margin, y);
+    doc.text(`${L(lang, "Invoice #", "Factura #")}: ${sec.invoiceNumber}   ·   ${L(lang, "Date", "Fecha")}: ${fmtDateUS(sec.date)}`, margin, y);
     doc.setFont("helvetica", "normal");
     doc.text(`${L(lang, "Customer", "Cliente")}: ${sec.customerName || "—"}   ·   ${L(lang, "Sales amount", "Monto de venta")}: ${fmtMoney(sec.salesAmount, cur)}`, margin, y + 14);
     y += 24;

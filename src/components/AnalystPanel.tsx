@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, FileDown, MessageSquare } from "lucide-react";
 import { useStore, type Invoice } from "@/lib/commission-store";
-import { calcInvoice, calcPayouts, fmtMoney } from "@/lib/commission-calc";
+import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
 import { buildInvoicePayoutStatementPDF } from "@/lib/generate-invoices";
 import { DisputeDialog } from "@/components/ExtraPanels";
@@ -181,7 +181,7 @@ export function AnalystInvoicesPanel() {
                     return (
                       <tr key={inv.id} className="border-t border-border/60">
                         <td className="py-2 font-mono text-xs">{inv.number}</td>
-                        <td className="font-mono text-xs">{inv.date}</td>
+                        <td className="font-mono text-xs">{fmtDateUS(inv.date)}</td>
                         <td className="font-medium">{inv.customerName || "—"}</td>
                         <td><Badge variant="outline" className="text-xs uppercase">{inv.status}</Badge></td>
                         <td>

@@ -29,6 +29,7 @@ import {
   calcInvoice,
   calcPayouts,
   fmtMoney,
+  fmtDateUS,
   payeeLabel,
 } from "@/lib/commission-calc";
 import {
@@ -298,6 +299,22 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
     doc.save(`commission_${wallet.agent.name.replace(/\s+/g, "_")}.pdf`);
   };
 
+  // Invoices this agent is merely involved in — an override sponsor or a
+  // split participant on someone else's sale — never showed up in their own
+  // history before, even though it's still money owed to them. Each only
+  // ever shows their own share, never the whole deal.
+  const involvedElsewhere = useMemo(() => {
+    const rows: { invoice: Invoice; role: string; amount: number }[] = [];
+    for (const inv of s.invoices) {
+      if (inv.agentId === wallet.agent.id) continue;
+      const c = calcInvoice(inv, s.financeCompanies);
+      const involved = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+      const myRow = involved.find((r) => r.agentId === wallet.agent.id);
+      if (myRow && myRow.amount > 0) rows.push({ invoice: inv, role: myRow.role, amount: myRow.amount });
+    }
+    return rows;
+  }, [s.invoices, s.financeCompanies, s.agents, s.overrides, s.language, s.company.commissionEntryMode, wallet.agent.id]);
+
   return (
     <div className="grid gap-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -321,7 +338,7 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
               <FileDown className="w-4 h-4 mr-2" />{t("wallet_commission_pdf")}
             </Button>
           </div>
-          {p.invoices.length === 0 ? (
+          {p.invoices.length === 0 && involvedElsewhere.length === 0 ? (
             <Empty msg={t("empty_no_invoices")} />
           ) : (
           <div className="overflow-x-auto">
@@ -331,21 +348,33 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                   <th className="py-1">{t("th_number_col")}</th>
                   <th>{t("th_date")}</th>
                   <th>{t("th_customer")}</th>
+                  <th>{s.language === "es" ? "Rol" : "Role"}</th>
                   <th className="text-right">{t("th_profit_col")}</th>
                   <th className="text-right">{t("th_status")}</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {p.invoices.map((c) => (
-                  <tr key={c.invoice.id} className="border-t border-border/60">
-                    <td className="py-1 font-mono text-xs">{c.invoice.number}</td>
-                    <td className="font-mono text-xs">{c.invoice.date}</td>
-                    <td>{c.invoice.customerName || "—"}</td>
-                    <td className="text-right font-mono">{fmtMoney(c.profit, cur)}</td>
+                {[
+                  ...p.invoices.map((c) => ({
+                    invoice: c.invoice,
+                    role: s.language === "es" ? "Vendedor" : "Seller",
+                    amount: c.profit,
+                  })),
+                  ...involvedElsewhere,
+                ]
+                  .slice()
+                  .sort((a, b) => b.invoice.date.localeCompare(a.invoice.date))
+                  .map(({ invoice, role, amount }) => (
+                  <tr key={invoice.id} className="border-t border-border/60">
+                    <td className="py-1 font-mono text-xs">{invoice.number}</td>
+                    <td className="font-mono text-xs">{fmtDateUS(invoice.date)}</td>
+                    <td>{invoice.customerName || "—"}</td>
+                    <td className="text-xs text-muted-foreground">{role}</td>
+                    <td className="text-right font-mono">{fmtMoney(amount, cur)}</td>
                     <td className="text-right">
-                      <Badge variant={c.invoice.paid ? "default" : "outline"}>
-                        {c.invoice.paid ? "paid" : c.invoice.status}
+                      <Badge variant={invoice.paid ? "default" : "outline"}>
+                        {invoice.paid ? "paid" : invoice.status}
                       </Badge>
                     </td>
                     <td className="text-right">
@@ -353,15 +382,16 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                         size="sm"
                         variant="ghost"
                         onClick={() => {
-                          const rows = computeInvolved(c.invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+                          const c = calcInvoice(invoice, s.financeCompanies);
+                          const rows = computeInvolved(invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                           // Admin sees the whole deal; a rep viewing their own wallet
                           // only ever gets their own private payout statement.
                           const myRow = rows.find((r) => r.agentId === wallet.agent.id);
                           if (s.role !== "rep" || !myRow) {
                             buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, rows, s.company.commissionEntryMode, s.language);
                           } else {
-                            buildInvoicePayoutStatementPDF(myRow, c, s.company, c.invoice.taxReservePercent, s.language)
-                              .save(`${c.invoice.number}_statement.pdf`);
+                            buildInvoicePayoutStatementPDF(myRow, c, s.company, invoice.taxReservePercent, s.language)
+                              .save(`${invoice.number}_statement.pdf`);
                           }
                         }}
                       >
@@ -1507,6 +1537,10 @@ export function SimulatorPanel() {
   const s = useStore();
   const isEs = s.language === "es";
   const cur = s.company.currency;
+  // Reps can run the simulator (it's just math, nothing saved), but can't
+  // use it as a backdoor to create a real invoice — matches them having no
+  // "New invoice" form anywhere else either.
+  const canCreateInvoice = s.role !== "rep" && s.role !== "technician";
   const [form, setForm] = useState({
     salesAmount: 10000,
     productCost: 4000,
@@ -1577,13 +1611,15 @@ export function SimulatorPanel() {
         title={t("sim_panel_title")}
         desc={t("sim_panel_desc")}
         action={
-          <Button
-            size="sm"
-            className="bg-gradient-primary text-white hover:opacity-90 gap-1.5"
-            onClick={() => setSaveDialog(true)}
-          >
-            <Plus className="w-4 h-4" /> {t("sim_save_as_invoice")}
-          </Button>
+          canCreateInvoice ? (
+            <Button
+              size="sm"
+              className="bg-gradient-primary text-white hover:opacity-90 gap-1.5"
+              onClick={() => setSaveDialog(true)}
+            >
+              <Plus className="w-4 h-4" /> {t("sim_save_as_invoice")}
+            </Button>
+          ) : null
         }
       >
         <div className="grid lg:grid-cols-2 gap-6">

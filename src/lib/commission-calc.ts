@@ -13,6 +13,16 @@ export const fmtMoney = (n: number, currency = "USD") =>
     minimumFractionDigits: 2,
   }).format(n || 0);
 
+/** Dates are stored as plain "YYYY-MM-DD" (ISO, sortable) — this is only
+ *  for display, converting to the American MM/DD/YYYY reading everywhere
+ *  a date shows up as plain text (an <input type="date"> already renders
+ *  per the browser's own locale, so it never needs this). */
+export const fmtDateUS = (iso: string | null | undefined): string => {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : iso;
+};
+
 /** Some reps (subcontractors, LLCs — e.g. plumbers) get paid under their
  *  business name, not their own. Wherever an invoice/PDF names the payee,
  *  use this instead of agent.name directly. */

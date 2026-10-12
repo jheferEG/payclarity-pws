@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition } from "@/lib/commission-store";
 import {
-  calcInvoice, calcPayouts, fmtMoney, validateOverrides, validateTiers, payeeLabel,
+  calcInvoice, calcPayouts, fmtMoney, fmtDateUS, validateOverrides, validateTiers, payeeLabel,
 } from "@/lib/commission-calc";
 import {
   buildSaleAndDownload, buildSaleInvoicePDF, buildAgentCommissionPDF,
@@ -110,18 +110,56 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
   ];
 }
 
+/** A rep's own restricted portal: no separate Invoices or Billing tab —
+ * they never create or browse the full invoice list, only their own
+ * history inside Wallet (which also lists invoices they're merely involved
+ * in via an override or split, showing only their own share). */
 function makeRepGroups(t: (key: any) => string): NavGroup[] {
   return [
     { id: "team", label: t("nav_wallet"), tabs: [{ id: "wallet", label: t("tab_my_wallet"), icon: Wallet }] },
-    { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_my_invoices"), icon: Receipt }] },
-    { id: "billing", label: t("nav_billing"), tabs: [
-      { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
-    ]},
     { id: "payouts", label: t("nav_payouts"), tabs: [
       { id: "calendar", label: t("tab_my_payouts"), icon: CalendarDays },
       { id: "disputes", label: t("tab_my_requests"), icon: MessageSquare },
     ]},
     { id: "reports", label: t("nav_tools"), tabs: [{ id: "simulator", label: t("tab_simulator"), icon: Calculator }] },
+  ];
+}
+
+/** An accountant's own nav: Pagos (approvals) comes right after Invoices —
+ * that's the actual job — with Equipo and Compensación left out entirely,
+ * since those are sales-team management concerns, not accounting ones. */
+function makeAccountantGroups(t: (key: any) => string): NavGroup[] {
+  return [
+    { id: "dashboard", label: t("nav_dashboard"), tabs: [{ id: "dashboard", label: t("tab_dashboard"), icon: LayoutDashboard }] },
+    { id: "invoices", label: t("nav_invoices"), tabs: [{ id: "invoices", label: t("tab_invoices"), icon: Receipt }] },
+    { id: "payouts", label: t("nav_payouts"), tabs: [
+      { id: "calendar", label: t("tab_calendar"), icon: CalendarDays },
+      { id: "disputes", label: t("tab_approvals"), icon: MessageSquare },
+      { id: "generate", label: t("tab_generate"), icon: FileDown },
+      { id: "adjustments", label: t("tab_adjustments"), icon: Settings2 },
+    ]},
+    { id: "billing", label: t("nav_billing"), tabs: [
+      { id: "customer-invoices", label: t("tab_customer_invoices"), icon: ReceiptText },
+      { id: "jobs", label: t("tab_jobs"), icon: Wrench },
+      { id: "work-statements", label: t("tab_work_statements"), icon: ClipboardCheck },
+      { id: "weekly-statements", label: t("tab_weekly_statements"), icon: CalendarRange },
+      { id: "company-payables", label: t("tab_company_payables"), icon: Building2 },
+      { id: "payroll", label: t("tab_payroll"), icon: DollarSign },
+      { id: "tax-filing", label: t("tab_tax_filing"), icon: FileSpreadsheet },
+      { id: "rate-plans", label: t("tab_rate_plans"), icon: Shield },
+      { id: "technicians", label: t("tab_technicians"), icon: Users2 },
+    ]},
+    { id: "reports", label: t("nav_reports"), tabs: [
+      { id: "reports", label: t("tab_reports"), icon: FileBarChart },
+      { id: "yearend", label: t("tab_year_end"), icon: FileSpreadsheet },
+      { id: "simulator", label: t("tab_simulator"), icon: Calculator },
+    ]},
+    { id: "settings", label: t("nav_settings"), tabs: [
+      { id: "company", label: t("tab_company"), icon: Building2 },
+      { id: "templates", label: t("tab_templates"), icon: BookTemplate },
+      { id: "import", label: t("tab_import"), icon: Upload },
+      { id: "users", label: t("tab_users"), icon: Users2 },
+    ]},
   ];
 }
 
@@ -306,6 +344,7 @@ export default function CommissionTool() {
   const repGroups = makeRepGroups(t);
   const technicianGroups = makeTechnicianGroups(t);
   const analystGroups = makeAnalystGroups(t);
+  const accountantGroups = makeAccountantGroups(t);
   const { profile, signOut, companiesList, switchCompany, updateAvatar } = useAuth();
   const { dataLoaded } = useSupabaseSync();
 
@@ -671,7 +710,7 @@ export default function CommissionTool() {
         ) : (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           {(() => {
-            const groups = isRep ? repGroups : isTechnician ? technicianGroups : isAnalyst ? analystGroups : navGroups;
+            const groups = isRep ? repGroups : isTechnician ? technicianGroups : isAnalyst ? analystGroups : isAccountant ? accountantGroups : navGroups;
             const currentGroup = groups.find((g) => g.id === group) ?? groups[0];
             const openRequests = s.disputes.filter(
               (d) => d.status === "submitted" || d.status === "needs_info"
@@ -1454,6 +1493,7 @@ function InvoicesPanel() {
   const [addingDeductionFor, setAddingDeductionFor] = useState<string | null>(null);
   const [deductionDraft, setDeductionDraft] = useState({ label: "", amount: 0 });
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | Invoice["status"]>("all");
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
   const closePdfPreview = () => {
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
@@ -1927,9 +1967,29 @@ function InvoicesPanel() {
       )}
 
       <div className="lg:col-span-2">
-        <SectionCard title={t(isAdmin ? "sect_all_invoices" : "sect_my_invoices_lbl")} desc={t(isAdmin ? "sect_all_invoices_desc" : "sect_my_invoices_desc")}>
+        <SectionCard
+          title={t(isAdmin ? "sect_all_invoices" : "sect_my_invoices_lbl")}
+          desc={t(isAdmin ? "sect_all_invoices_desc" : "sect_my_invoices_desc")}
+          action={
+            <div className="flex flex-wrap gap-1.5">
+              {(["all", "draft", "pending", "on_hold", "paid"] as const).map((st) => (
+                <Button
+                  key={st}
+                  size="sm"
+                  variant={statusFilter === st ? "secondary" : "ghost"}
+                  onClick={() => setStatusFilter(st)}
+                >
+                  {st === "all" ? (s.language === "es" ? "Todos" : "All") : t(`status_${st}` as any)}
+                </Button>
+              ))}
+            </div>
+          }
+        >
           {(() => {
-            const visible = (isAdmin ? s.invoices : s.invoices.filter((i) => i.agentId === myAgentId)).slice().sort((a, b) => b.date.localeCompare(a.date));
+            const visible = (isAdmin ? s.invoices : s.invoices.filter((i) => i.agentId === myAgentId))
+              .filter((i) => statusFilter === "all" || i.status === statusFilter)
+              .slice()
+              .sort((a, b) => b.date.localeCompare(a.date));
             if (visible.length === 0) return <Empty msg={t("empty_no_invoices")} />;
             return (
             <div className="overflow-x-auto">
@@ -1971,7 +2031,7 @@ function InvoicesPanel() {
                             );
                           })()}
                         </td>
-                        <td className="font-mono text-xs">{inv.date}</td>
+                        <td className="font-mono text-xs">{fmtDateUS(inv.date)}</td>
                         <td className="font-medium">{inv.customerName}</td>
                         <td>{ag?.name || "—"}</td>
                         <td><span className="text-xs uppercase tracking-wider px-2 py-1 rounded bg-muted">{inv.status}</span></td>
