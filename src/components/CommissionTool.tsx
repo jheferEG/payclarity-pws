@@ -1493,6 +1493,8 @@ function InvoicesPanel() {
   // Which override row (by agentId) currently has its "add deduction" mini-form open.
   const [addingDeductionFor, setAddingDeductionFor] = useState<string | null>(null);
   const [deductionDraft, setDeductionDraft] = useState({ label: "", amount: 0 });
+  const [addingCreditFor, setAddingCreditFor] = useState<string | null>(null);
+  const [creditDraft, setCreditDraft] = useState({ label: "", amount: 0 });
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | Invoice["status"]>("all");
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
@@ -2193,6 +2195,29 @@ function InvoicesPanel() {
                   if (list.length) next[row.agentId] = list; else delete next[row.agentId];
                   setDraft({ ...draft, overrideDeductions: next });
                 };
+                const credits = row.credits ?? [];
+                const addCredit = () => {
+                  if (!row.agentId) return;
+                  const label = creditDraft.label.trim();
+                  if (!label || !creditDraft.amount) return;
+                  const list = draft.overrideCredits?.[row.agentId] ?? [];
+                  setDraft({
+                    ...draft,
+                    overrideCredits: {
+                      ...(draft.overrideCredits || {}),
+                      [row.agentId]: [...list, { id: crypto.randomUUID(), label, amount: creditDraft.amount, addedBy: s.currentUserName, addedAt: new Date().toISOString() }],
+                    },
+                  });
+                  setAddingCreditFor(null);
+                  setCreditDraft({ label: "", amount: 0 });
+                };
+                const removeCredit = (id: string) => {
+                  if (!row.agentId) return;
+                  const list = (draft.overrideCredits?.[row.agentId] ?? []).filter((cr) => cr.id !== id);
+                  const next = { ...(draft.overrideCredits || {}) };
+                  if (list.length) next[row.agentId] = list; else delete next[row.agentId];
+                  setDraft({ ...draft, overrideCredits: next });
+                };
                 return (
                 <div key={i} className="border border-border rounded-md p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -2249,7 +2274,7 @@ function InvoicesPanel() {
 
                   {isAdmin && isOverrideRow && (
                     <div className="pt-2 border-t border-border/60">
-                      {deductions.length > 0 && (
+                      {(deductions.length > 0 || credits.length > 0) && (
                         <div className="space-y-1 mb-2">
                           {deductions.map((d) => (
                             <div key={d.id} className="flex items-center justify-between text-xs bg-destructive/5 rounded px-2 py-1">
@@ -2262,12 +2287,24 @@ function InvoicesPanel() {
                               </div>
                             </div>
                           ))}
+                          {credits.map((cr) => (
+                            <div key={cr.id} className="flex items-center justify-between text-xs bg-emerald-500/5 rounded px-2 py-1">
+                              <span className="truncate">{cr.label}</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-mono text-emerald-600">+{fmtMoney(cr.amount, s.company.currency)}</span>
+                                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeCredit(cr.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                           <div className="flex justify-between text-xs font-semibold px-2">
                             <span>{s.language === "es" ? "Neto a pagar" : "Net payable"}</span>
                             <span className="font-mono">{fmtMoney(row.amount, s.company.currency)}</span>
                           </div>
                         </div>
                       )}
+                      <div className="flex flex-wrap items-center gap-2">
                       {addingDeductionFor === row.agentId ? (
                         <div className="flex items-center gap-2">
                           <Input
@@ -2293,6 +2330,32 @@ function InvoicesPanel() {
                           <Plus className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Descuento" : "Deduction"}
                         </Button>
                       )}
+                      {addingCreditFor === row.agentId ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            className="h-8 flex-1"
+                            placeholder={s.language === "es" ? "Nombre del crédito" : "Credit name"}
+                            value={creditDraft.label}
+                            onChange={(e) => setCreditDraft({ ...creditDraft, label: e.target.value })}
+                            autoFocus
+                          />
+                          <NumField
+                            className="h-8 w-24"
+                            step="0.01"
+                            value={creditDraft.amount}
+                            onChange={(n) => setCreditDraft({ ...creditDraft, amount: n })}
+                          />
+                          <Button size="sm" onClick={addCredit}>{s.language === "es" ? "Agregar" : "Add"}</Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setAddingCreditFor(null); setCreditDraft({ label: "", amount: 0 }); }}>
+                            {s.language === "es" ? "Cancelar" : "Cancel"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700" onClick={() => { setAddingCreditFor(row.agentId); setCreditDraft({ label: "", amount: 0 }); }}>
+                          <Plus className="w-3.5 h-3.5 mr-1" />{s.language === "es" ? "Crédito" : "Credit"}
+                        </Button>
+                      )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2389,20 +2452,62 @@ function DiscountBadge({ deductions, isEs, fmt }: {
   );
 }
 
+function CreditBadge({ credits, isEs, fmt }: {
+  credits: { id: string; label: string; amount: number; addedBy?: string }[];
+  isEs: boolean; fmt: (n: number) => string;
+}) {
+  if (credits.length === 0) return null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button">
+          <Badge variant="outline" className="text-emerald-600 border-emerald-400 bg-emerald-500/10 cursor-pointer hover:bg-emerald-500/20">
+            <Plus className="w-3 h-3 mr-1" />{isEs ? "Crédito" : "Credit"}
+          </Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start">
+        <p className="text-xs font-semibold mb-1.5">{isEs ? "Créditos aplicados" : "Credits applied"}</p>
+        <div className="space-y-1.5">
+          {credits.map((cr) => (
+            <div key={cr.id} className="flex items-start justify-between gap-2 text-xs">
+              <span className="min-w-0">
+                <span className="block truncate">{cr.label}</span>
+                {cr.addedBy && <span className="text-muted-foreground">{isEs ? "agregado por" : "added by"} {cr.addedBy}</span>}
+              </span>
+              <span className="font-mono text-emerald-600 shrink-0">+ {fmt(cr.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Shown only once "Editar" is clicked for a person — lists any named
  * discounts already on their payout document and lets the admin add more
  * (reason + amount), each subtracted from the document's amount. */
-function PayoutDeductionsPanel({ deductions, onAdd, onRemove, isEs, fmt }: {
-  deductions: { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[];
+type PayoutAdjustment = { id: string; label: string; amount: number; addedBy?: string; addedAt?: string };
+
+function PayoutDeductionsPanel({ deductions, onAdd, onRemove, credits, onAddCredit, onRemoveCredit, isEs, fmt }: {
+  deductions: PayoutAdjustment[];
   onAdd: (label: string, amount: number) => void;
   onRemove: (id: string) => void;
+  // Credits are only offered where the money can legitimately move the
+  // other way (override recipients) — omit these props where it can't.
+  credits?: PayoutAdjustment[];
+  onAddCredit?: (label: string, amount: number) => void;
+  onRemoveCredit?: (id: string) => void;
   isEs: boolean; fmt: (n: number) => string;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ label: "", amount: 0 });
+  const [addingCredit, setAddingCredit] = useState(false);
+  const [creditDraft, setCreditDraft] = useState({ label: "", amount: 0 });
+  const showCredits = !!onAddCredit;
   return (
     <div className="mt-2">
-      {deductions.length > 0 && (
+      {(deductions.length > 0 || (credits && credits.length > 0)) && (
         <div className="space-y-0.5 mb-1.5">
           {deductions.map((ded) => (
             <div key={ded.id} className="flex items-center justify-between gap-2 text-xs text-destructive">
@@ -2421,35 +2526,83 @@ function PayoutDeductionsPanel({ deductions, onAdd, onRemove, isEs, fmt }: {
               </button>
             </div>
           ))}
+          {(credits || []).map((cr) => (
+            <div key={cr.id} className="flex items-center justify-between gap-2 text-xs text-emerald-600">
+              <span>
+                + {fmt(cr.amount)} · {cr.label}
+                {cr.addedBy && (
+                  <span className="text-muted-foreground"> · {isEs ? "agregado por" : "added by"} {cr.addedBy}</span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-emerald-600"
+                onClick={() => onRemoveCredit?.(cr.id)}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
-      {adding ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Input
-            className="h-8 text-xs w-36"
-            placeholder={isEs ? "Motivo" : "Reason"}
-            value={draft.label}
-            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          />
-          <NumField className="h-8 w-24" step="0.01" value={draft.amount} onChange={(n) => setDraft({ ...draft, amount: n })} />
-          <Button size="sm" onClick={() => {
-            const label = draft.label.trim();
-            if (!label || !draft.amount) return;
-            onAdd(label, draft.amount);
-            setDraft({ label: "", amount: 0 });
-            setAdding(false);
-          }}>
-            {isEs ? "Agregar" : "Add"}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {adding ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Input
+              className="h-8 text-xs w-36"
+              placeholder={isEs ? "Motivo" : "Reason"}
+              value={draft.label}
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            />
+            <NumField className="h-8 w-24" step="0.01" value={draft.amount} onChange={(n) => setDraft({ ...draft, amount: n })} />
+            <Button size="sm" onClick={() => {
+              const label = draft.label.trim();
+              if (!label || !draft.amount) return;
+              onAdd(label, draft.amount);
+              setDraft({ label: "", amount: 0 });
+              setAdding(false);
+            }}>
+              {isEs ? "Agregar" : "Add"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setDraft({ label: "", amount: 0 }); }}>
+              {isEs ? "Cancelar" : "Cancel"}
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+            <MinusCircle className="w-3.5 h-3.5 mr-1" />{isEs ? "Agregar descuento" : "Add discount"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setDraft({ label: "", amount: 0 }); }}>
-            {isEs ? "Cancelar" : "Cancel"}
-          </Button>
-        </div>
-      ) : (
-        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-          <MinusCircle className="w-3.5 h-3.5 mr-1" />{isEs ? "Agregar descuento" : "Add discount"}
-        </Button>
-      )}
+        )}
+        {showCredits && (
+          addingCredit ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Input
+                className="h-8 text-xs w-36"
+                placeholder={isEs ? "Motivo" : "Reason"}
+                value={creditDraft.label}
+                onChange={(e) => setCreditDraft({ ...creditDraft, label: e.target.value })}
+              />
+              <NumField className="h-8 w-24" step="0.01" value={creditDraft.amount} onChange={(n) => setCreditDraft({ ...creditDraft, amount: n })} />
+              <Button size="sm" onClick={() => {
+                const label = creditDraft.label.trim();
+                if (!label || !creditDraft.amount) return;
+                onAddCredit?.(label, creditDraft.amount);
+                setCreditDraft({ label: "", amount: 0 });
+                setAddingCredit(false);
+              }}>
+                {isEs ? "Agregar" : "Add"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setAddingCredit(false); setCreditDraft({ label: "", amount: 0 }); }}>
+                {isEs ? "Cancelar" : "Cancel"}
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 border-emerald-300" onClick={() => setAddingCredit(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" />{isEs ? "Agregar crédito" : "Add credit"}
+            </Button>
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -2551,6 +2704,28 @@ function PayoutDocumentsDialog({
     } else {
       s.removePayoutDocumentDeduction(d.id, dedId);
     }
+  };
+  // Credits only apply to override-tier recipients — the same scope as
+  // overrideAmountOverrides/overrideDeductions — since the whole concept
+  // (moving money between a sponsor and whoever else on the deal) only
+  // makes sense for the override chain, not the seller/split rows.
+  const creditsFor = (d: PayoutDocument) => (isOverrideDoc(d) ? inv?.overrideCredits?.[d.agentId] ?? [] : []);
+  const addCreditFor = (d: PayoutDocument, label: string, amount: number) => {
+    if (!isOverrideDoc(d) || !inv) return;
+    const list = inv.overrideCredits?.[d.agentId] ?? [];
+    applyInvoicePatch({
+      overrideCredits: {
+        ...(inv.overrideCredits || {}),
+        [d.agentId]: [...list, { id: crypto.randomUUID(), label, amount, addedBy: s.currentUserName, addedAt: new Date().toISOString() }],
+      },
+    });
+  };
+  const removeCreditFor = (d: PayoutDocument, credId: string) => {
+    if (!isOverrideDoc(d) || !inv) return;
+    const list = (inv.overrideCredits?.[d.agentId] ?? []).filter((x) => x.id !== credId);
+    const next = { ...(inv.overrideCredits || {}) };
+    if (list.length) next[d.agentId] = list; else delete next[d.agentId];
+    applyInvoicePatch({ overrideCredits: next });
   };
   // The editable field always holds the gross (pre-discount) figure; the
   // net/final payable (gross minus every discount) is shown separately,
@@ -2663,6 +2838,7 @@ function PayoutDocumentsDialog({
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono font-semibold">{fmt(netAmount(d))}</span>
                           <DiscountBadge deductions={deductionsFor(d)} isEs={isEs} fmt={fmt} />
+                          <CreditBadge credits={creditsFor(d)} isEs={isEs} fmt={fmt} />
                           {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                             <Button size="sm" variant="ghost" className="h-7 px-1.5" title={isEs ? "Volver al monto calculado" : "Reset to computed amount"} onClick={() => {
                               if (isOverrideDoc(d)) clearGrossAmount(d);
@@ -2692,7 +2868,7 @@ function PayoutDocumentsDialog({
                               onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
                             />
                           </div>
-                          {deductionsFor(d).length > 0 && (
+                          {(deductionsFor(d).length > 0 || creditsFor(d).length > 0) && (
                             <div className="flex justify-between text-xs font-semibold">
                               <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
                               <span className="font-mono">{fmt(netAmount(d))}</span>
@@ -2702,6 +2878,9 @@ function PayoutDocumentsDialog({
                             deductions={deductionsFor(d)}
                             onAdd={(label, amount) => addDeductionFor(d, label, amount)}
                             onRemove={(id) => removeDeductionFor(d, id)}
+                            credits={isOverrideDoc(d) ? creditsFor(d) : undefined}
+                            onAddCredit={isOverrideDoc(d) ? (label, amount) => addCreditFor(d, label, amount) : undefined}
+                            onRemoveCredit={isOverrideDoc(d) ? (id) => removeCreditFor(d, id) : undefined}
                             isEs={isEs}
                             fmt={fmt}
                           />
@@ -2750,6 +2929,7 @@ function PayoutDocumentsDialog({
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <p className="text-2xl font-bold">{fmt(netAmount(d))}</p>
                       <DiscountBadge deductions={deductionsFor(d)} isEs={isEs} fmt={fmt} />
+                      <CreditBadge credits={creditsFor(d)} isEs={isEs} fmt={fmt} />
                       {(isOverrideDoc(d) ? hasOverrideAmount(d) : d.manualAmountOverride != null) && (
                         <>
                           <span className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold">{isEs ? "manual" : "manual"}</span>
@@ -2786,7 +2966,7 @@ function PayoutDocumentsDialog({
                             onSave={(n) => (isOverrideDoc(d) ? setGrossAmount(d, n) : s.setPayoutDocumentManualAmount(d.id, n))}
                           />
                         </div>
-                        {deductionsFor(d).length > 0 && (
+                        {(deductionsFor(d).length > 0 || creditsFor(d).length > 0) && (
                           <div className="flex justify-between text-xs font-semibold">
                             <span>{isEs ? "Neto a pagar" : "Net payable"}</span>
                             <span className="font-mono">{fmt(netAmount(d))}</span>
@@ -2796,6 +2976,9 @@ function PayoutDocumentsDialog({
                           deductions={deductionsFor(d)}
                           onAdd={(label, amount) => addDeductionFor(d, label, amount)}
                           onRemove={(id) => removeDeductionFor(d, id)}
+                          credits={isOverrideDoc(d) ? creditsFor(d) : undefined}
+                          onAddCredit={isOverrideDoc(d) ? (label, amount) => addCreditFor(d, label, amount) : undefined}
+                          onRemoveCredit={isOverrideDoc(d) ? (id) => removeCreditFor(d, id) : undefined}
                           isEs={isEs}
                           fmt={fmt}
                         />

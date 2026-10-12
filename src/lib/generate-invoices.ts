@@ -193,20 +193,27 @@ export type InvoiceInvolvedRow = {
   name: string; role: string; amount: number; agentId?: string | null;
   grossAmount?: number;
   deductions?: { id: string; label: string; amount: number }[];
+  credits?: { id: string; label: string; amount: number }[];
 };
 
 /** Builds the body rows for a "who gets paid" table. A person with no
- *  discount is one row as always; a person with one or more discounts
- *  becomes its own mini breakdown — initial amount, one line per discount
- *  reason, then a bold Total — instead of cramming the reason into the
- *  Role cell next to an already-discounted figure. */
+ *  discount or credit is one row as always; a person with one or more of
+ *  either becomes its own mini breakdown — initial amount, one line per
+ *  discount reason (in red) and per credit reason (in green), then a bold
+ *  Total — instead of cramming the reason into the Role cell next to an
+ *  already-adjusted figure. */
 function involvedRowsToTableBody(rows: InvoiceInvolvedRow[], cur: string, lang: Lang = "en"): any[] {
   const body: any[] = [];
   for (const r of rows) {
-    if (r.deductions && r.deductions.length > 0) {
+    const hasDeductions = r.deductions && r.deductions.length > 0;
+    const hasCredits = r.credits && r.credits.length > 0;
+    if (hasDeductions || hasCredits) {
       body.push([r.name, r.role, fmtMoney(r.grossAmount ?? r.amount, cur)]);
-      for (const d of r.deductions) {
-        body.push(["", d.label, `- ${fmtMoney(d.amount, cur)}`]);
+      for (const d of r.deductions || []) {
+        body.push(["", { content: d.label, styles: { textColor: [190, 40, 40] } }, { content: `- ${fmtMoney(d.amount, cur)}`, styles: { textColor: [190, 40, 40] } }]);
+      }
+      for (const cr of r.credits || []) {
+        body.push(["", { content: cr.label, styles: { textColor: [20, 120, 70] } }, { content: `+ ${fmtMoney(cr.amount, cur)}`, styles: { textColor: [20, 120, 70] } }]);
       }
       body.push([
         "",
@@ -1238,6 +1245,9 @@ export function buildInvoicePayoutStatementPDF(
   ];
   for (const ded of row.deductions || []) {
     rows.push([ded.label, `- ${fmtMoney(ded.amount, cur)}`]);
+  }
+  for (const cr of row.credits || []) {
+    rows.push([cr.label, `+ ${fmtMoney(cr.amount, cur)}`]);
   }
   if (taxReservePercent)
     rows.push([`${L(lang, "Suggested tax reserve", "Reserva de impuestos sugerida")} (${(taxReservePercent * 100).toFixed(0)}%)`, `- ${fmtMoney(reserve, cur)}`]);

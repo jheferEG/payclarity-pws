@@ -670,6 +670,7 @@ export function computeCoachInsight(
 export type InvolvedRow = {
   name: string; role: string; amount: number; agentId: string | null; level?: number;
   defaultAmount?: number; grossAmount?: number; deductions?: { id: string; label: string; amount: number }[];
+  credits?: { id: string; label: string; amount: number }[];
 };
 
 /** Everyone this invoice pays: the seller's sponsor chain (who earn an
@@ -728,15 +729,18 @@ export function computeInvolved(
     const grossAmount = manual != null ? manual : defaultAmount;
     const deductions = inv.overrideDeductions?.[u.agent.id] ?? [];
     const deductionTotal = deductions.reduce((s, d) => s + (d.amount || 0), 0);
+    const credits = inv.overrideCredits?.[u.agent.id] ?? [];
+    const creditTotal = credits.reduce((s, cr) => s + (cr.amount || 0), 0);
     return {
       name: payeeLabel(u.agent),
       role: `Override L${u.level}${cascadeByAgent ? "" : ` (${((overrideMap.get(u.level) || 0) * 100).toFixed(2)}%)`}`,
-      amount: Math.max(0, grossAmount - deductionTotal),
+      amount: Math.max(0, grossAmount - deductionTotal + creditTotal),
       agentId: u.agent.id,
       level: u.level,
       defaultAmount,
       grossAmount,
       deductions,
+      credits,
     };
   });
 

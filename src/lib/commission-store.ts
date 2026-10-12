@@ -142,6 +142,12 @@ export type Invoice = {
   // override above when set) everywhere that amount is used: the "Who's
   // involved" preview, generated PDFs, and calcPayouts.
   overrideDeductions?: Record<string, { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[]>;
+  // The other direction: money ADDED to a sponsor's override on THIS sale —
+  // e.g. an admin moves an advance the sponsor personally fronted a seller
+  // back onto the sponsor's own payout, or credits a referral fee. Same
+  // shape and the same places as overrideDeductions above, just added
+  // instead of subtracted.
+  overrideCredits?: Record<string, { id: string; label: string; amount: number; addedBy?: string; addedAt?: string }[]>;
   brandingSnapshot?: CompanyBranding & { companyName: string; address: string; email: string; phone: string; taxId: string; currency: string }; // captured at PDF generation
   split?: InvoiceSplit | null;
   pdfHistory?: InvoicePdfRecord[];

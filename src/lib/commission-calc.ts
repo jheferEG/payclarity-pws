@@ -249,7 +249,8 @@ export function calcPayouts(
         const manual = c.invoice.overrideAmountOverrides?.[row.agentId];
         const gross = manual != null ? manual : row.amount;
         const deducted = (c.invoice.overrideDeductions?.[row.agentId] ?? []).reduce((s, d) => s + (d.amount || 0), 0);
-        const amount = Math.max(0, gross - deducted);
+        const credited = (c.invoice.overrideCredits?.[row.agentId] ?? []).reduce((s, cr) => s + (cr.amount || 0), 0);
+        const amount = Math.max(0, gross - deducted + credited);
         cascadeOverrideByAgent.set(row.agentId, (cascadeOverrideByAgent.get(row.agentId) || 0) + amount);
         if (!cascadeDetailByAgent.has(row.agentId)) cascadeDetailByAgent.set(row.agentId, new Map());
         const bySeller = cascadeDetailByAgent.get(row.agentId)!;
@@ -322,7 +323,8 @@ export function calcPayouts(
             const manual = c.invoice.overrideAmountOverrides?.[a.id];
             const gross = manual != null ? manual : invProfit * rate;
             const deducted = (c.invoice.overrideDeductions?.[a.id] ?? []).reduce((s, d) => s + (d.amount || 0), 0);
-            override += Math.max(0, gross - deducted);
+            const credited = (c.invoice.overrideCredits?.[a.id] ?? []).reduce((s, cr) => s + (cr.amount || 0), 0);
+            override += Math.max(0, gross - deducted + credited);
           }
           return { agent, level, profit, rate, override };
         });
