@@ -2061,13 +2061,17 @@ function InvoicesPanel() {
                             if (!inv.brandingSnapshot) s.updateInvoice(inv.id, { brandingSnapshot: makeBrandingSnapshot(s.company) });
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                            // Admin sees the whole deal (everyone's cut) — this is the
-                            // "see everything" view. A rep only ever gets their own
-                            // private payout document, never the full breakdown.
+                            // Only a true admin sees the whole deal (everyone's cut) —
+                            // a rep viewing a row they're part of gets their own private
+                            // payout document instead, and anyone else (accountant) gets
+                            // the base sale invoice with no "who gets paid" breakdown at
+                            // all, since they aren't a party to it either way.
                             const myRow = rows.find((r) => r.agentId === myAgentId);
-                            const doc = isAdmin || !myRow
+                            const doc = s.role === "admin"
                               ? buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode, s.language)
-                              : buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent, s.language);
+                              : myRow
+                                ? buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent, s.language)
+                                : buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, [], s.company.commissionEntryMode, s.language);
                             setPdfPreview({ name: `${inv.number} — ${payeeLabel(ag)}`, url: doc.output("bloburl").toString() });
                           }}>{t("btn_preview")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => {
@@ -2075,11 +2079,14 @@ function InvoicesPanel() {
                             const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
                             const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
                             const myRow = rows.find((r) => r.agentId === myAgentId);
-                            if (isAdmin || !myRow) {
+                            if (s.role === "admin") {
                               buildSaleAndDownload(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode, s.language);
-                            } else {
+                            } else if (myRow) {
                               buildInvoicePayoutStatementPDF(myRow, c, s.company, inv.taxReservePercent, s.language)
                                 .save(`${inv.number}_statement.pdf`);
+                            } else {
+                              buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, [], s.company.commissionEntryMode, s.language)
+                                .save(`${inv.number}_${(inv.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
                             }
                           }}>PDF</Button>
                           {isAdmin && (
