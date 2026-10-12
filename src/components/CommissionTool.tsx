@@ -1447,6 +1447,12 @@ function InvoicesPanel() {
   const setEditing = s.setInvoiceDraftEditingId;
   const draft = s.invoiceDraft ?? (myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
   const setDraft = s.setInvoiceDraft;
+  // A true admin always has the create form expanded — that's their main
+  // job here. Anyone else who can still create (accountant) only sees it
+  // after explicitly asking for it with "Crear nuevo invoice"; otherwise
+  // it's just a button, not a standing form on the page.
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const formVisible = s.role === "admin" || editing != null || showCreateForm;
   useEffect(() => {
     if (s.invoiceDraft == null) setDraft(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1566,6 +1572,7 @@ function InvoicesPanel() {
     setEditing(null);
     setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
     setSelectedProductId("");
+    setShowCreateForm(false);
   };
 
   const updateLine = (key: "charges" | "credits", i: number, field: "label" | "amount", v: string) => {
@@ -1580,7 +1587,17 @@ function InvoicesPanel() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-      {(isAdmin || editing) && (
+      {isAdmin && !formVisible && (
+        <Card className="p-4 flex items-center justify-between gap-3 lg:col-span-2">
+          <p className="text-sm text-muted-foreground">
+            {s.language === "es" ? "¿Necesitas registrar una venta nueva?" : "Need to log a new sale?"}
+          </p>
+          <Button onClick={() => setShowCreateForm(true)}>
+            <Plus className="w-4 h-4 mr-2" />{t("btn_create_invoice")}
+          </Button>
+        </Card>
+      )}
+      {formVisible && (
       <div ref={editFormRef} className="scroll-mt-28">
       <SectionCard
         className={cn(
@@ -1875,8 +1892,8 @@ function InvoicesPanel() {
 
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
-          {editing && (
-            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); }}>{t("btn_cancel")}</Button>
+          {(editing || showCreateForm) && (
+            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); setShowCreateForm(false); }}>{t("btn_cancel")}</Button>
           )}
           {isAdmin && draft.agentId && (
             <Button variant="outline" onClick={() => setInvolvedOpen(true)}>
@@ -1889,7 +1906,7 @@ function InvoicesPanel() {
       </div>
       )}
 
-      {(isAdmin || editing) && (
+      {formVisible && (
       <SectionCard title={t("preview_title")} desc={t("sect_invoice_preview_desc")}>
         {draft.isGeneralInvoice ? (
           <Row k={s.language === "es" ? "Pago fijo + extras" : "Fixed pay + extras"} v={fmtMoney(live.profit, s.company.currency)} accent bold />
