@@ -257,9 +257,14 @@ export function ReportsPanel() {
     downloadCSV("overrides.csv", rows);
   };
 
+  const [paymentsFrom, setPaymentsFrom] = useState("");
+  const [paymentsTo, setPaymentsTo] = useState("");
   const exportPayments = () => {
     const rows: (string | number)[][] = [["Date", "Salesperson", "Amount", "Method", "Reference", "Notes"]];
-    for (const p of s.payments) {
+    const filtered = s.payments.filter(
+      (p) => (!paymentsFrom || p.date >= paymentsFrom) && (!paymentsTo || p.date <= paymentsTo)
+    );
+    for (const p of filtered) {
       const ag = s.agents.find((a) => a.id === p.agentId);
       rows.push([p.date, ag?.name ?? "", p.amount.toFixed(2), p.method, p.reference, p.notes]);
     }
@@ -291,6 +296,9 @@ export function ReportsPanel() {
     </div>
   );
 
+  const isEs = s.language === "es";
+  const hasPaymentsFilter = !!(paymentsFrom || paymentsTo);
+
   return (
     <Card className="p-6 shadow-card">
       <h2 className="text-lg font-semibold">{t("reports_title")}</h2>
@@ -299,7 +307,34 @@ export function ReportsPanel() {
         <Item label={t("reports_commissions_by_rep")} onClick={exportCommissions} />
         <Item label={t("reports_invoices")} onClick={exportInvoices} />
         <Item label={t("reports_overrides")} onClick={exportOverrides} />
-        <Item label={t("reports_payments")} onClick={exportPayments} />
+        <div className="p-4 rounded-lg border border-border/60 bg-muted/20 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">{t("reports_payments")}</span>
+            <Button size="sm" variant="outline" onClick={exportPayments}>
+              <FileDown className="w-4 h-4 mr-2" />{t("download_csv")}
+            </Button>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label className="text-[10px] text-muted-foreground">{isEs ? "Desde" : "From"}</Label>
+              <Input type="date" className="h-8 text-xs" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <Label className="text-[10px] text-muted-foreground">{isEs ? "Hasta" : "To"}</Label>
+              <Input type="date" className="h-8 text-xs" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} />
+            </div>
+            {hasPaymentsFilter && (
+              <Button size="sm" variant="ghost" className="h-8" onClick={() => { setPaymentsFrom(""); setPaymentsTo(""); }}>
+                {isEs ? "Limpiar" : "Clear"}
+              </Button>
+            )}
+          </div>
+          {hasPaymentsFilter && (
+            <p className="text-[10px] text-muted-foreground">
+              {isEs ? "El CSV incluirá solo pagos en ese rango de fechas." : "The CSV will only include payments in that date range."}
+            </p>
+          )}
+        </div>
         <Item label={t("reports_ledger")} onClick={exportLedger} />
         <Item label={t("reports_taxes")} onClick={exportTaxes} />
       </div>
