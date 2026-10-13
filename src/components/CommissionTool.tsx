@@ -2003,7 +2003,15 @@ function InvoicesPanel() {
             const visible = (isAdmin ? s.invoices : s.invoices.filter((i) => i.agentId === myAgentId))
               .filter((i) => statusFilter === "all" || i.status === statusFilter)
               .slice()
-              .sort((a, b) => b.date.localeCompare(a.date));
+              .sort((a, b) => {
+                // Paid invoices are settled — sink them to the bottom so
+                // whatever still needs attention (pending, on hold, draft)
+                // stays up top, newest first within each group.
+                const aPaid = a.status === "paid" ? 1 : 0;
+                const bPaid = b.status === "paid" ? 1 : 0;
+                if (aPaid !== bPaid) return aPaid - bPaid;
+                return b.date.localeCompare(a.date);
+              });
             if (visible.length === 0) return <Empty msg={t("empty_no_invoices")} />;
             return (
             <div className="overflow-x-auto">
@@ -2048,7 +2056,17 @@ function InvoicesPanel() {
                         <td className="font-mono text-xs">{fmtDateUS(inv.date)}</td>
                         <td className="font-medium">{inv.customerName}</td>
                         <td>{ag?.name || "—"}</td>
-                        <td><span className="text-xs uppercase tracking-wider px-2 py-1 rounded bg-muted">{inv.status}</span></td>
+                        <td>
+                          <span className={cn(
+                            "text-xs uppercase tracking-wider px-2 py-1 rounded font-semibold",
+                            inv.status === "paid" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
+                            inv.status === "pending" && "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+                            inv.status === "on_hold" && "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
+                            inv.status === "draft" && "bg-muted text-muted-foreground"
+                          )}>
+                            {inv.status}
+                          </span>
+                        </td>
                         <td className="text-right font-mono">{fmtMoney(inv.salesAmount, s.company.currency)}</td>
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
                         <td className="text-right">
