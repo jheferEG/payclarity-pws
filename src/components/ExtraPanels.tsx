@@ -1909,16 +1909,26 @@ export function CalendarPanel() {
     ? payouts
     : payouts.filter((p) => p.agent.id === myAgentId);
 
+  // Narrows which invoice-date groups show below — "Próxima fecha de pago"
+  // just above is a separate, single configured value (when the next
+  // payout goes out), not a filter.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const hasRange = !!(rangeFrom || rangeTo);
+  const rangedInvoices = visibleInvoices.filter(
+    (i) => (!rangeFrom || i.date >= rangeFrom) && (!rangeTo || i.date <= rangeTo)
+  );
+
   // group invoices by their date
   const byDate = new Map<string, Invoice[]>();
-  for (const inv of visibleInvoices) {
+  for (const inv of rangedInvoices) {
     if (!byDate.has(inv.date)) byDate.set(inv.date, []);
     byDate.get(inv.date)!.push(inv);
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = visibleInvoices.filter((i) => i.date >= today && !i.paid);
-  const past = visibleInvoices.filter((i) => i.date < today || i.paid);
+  const upcoming = rangedInvoices.filter((i) => i.date >= today && !i.paid);
+  const past = rangedInvoices.filter((i) => i.date < today || i.paid);
 
   const totalPending = upcoming.reduce((acc, i) => {
     const c = calcInvoice(i, s.financeCompanies);
@@ -1937,7 +1947,7 @@ export function CalendarPanel() {
       title={isAdmin ? t("cal_title") : t("cal_my_title")}
       desc={isAdmin ? t("cal_desc") : t("cal_my_desc")}
       action={
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 flex-wrap">
           <div>
             <Label className="text-xs">{t("cal_next_payout")}</Label>
             <Input
@@ -1947,6 +1957,19 @@ export function CalendarPanel() {
               disabled={!isAdmin}
             />
           </div>
+          <div>
+            <Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
+            <Input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
+            <Input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} />
+          </div>
+          {hasRange && (
+            <Button variant="ghost" size="sm" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>
+              {isEs ? "Limpiar" : "Clear"}
+            </Button>
+          )}
         </div>
       }
     >
