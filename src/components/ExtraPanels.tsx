@@ -1911,12 +1911,23 @@ export function CalendarPanel() {
 
   // Narrows which invoice-date groups show below — "Próxima fecha de pago"
   // just above is a separate, single configured value (when the next
-  // payout goes out), not a filter.
+  // payout goes out), not a filter. Single-date and range are two distinct
+  // modes (not two filters stacked together) — switching clears whichever
+  // one isn't active, so an old single date can't silently keep narrowing
+  // things once a range is picked, or vice versa.
+  const [dateFilterMode, setDateFilterMode] = useState<"single" | "range">("range");
+  const [singleDate, setSingleDate] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
-  const hasRange = !!(rangeFrom || rangeTo);
-  const rangedInvoices = visibleInvoices.filter(
-    (i) => (!rangeFrom || i.date >= rangeFrom) && (!rangeTo || i.date <= rangeTo)
+  const hasRange = dateFilterMode === "single" ? !!singleDate : !!(rangeFrom || rangeTo);
+  const switchDateMode = (mode: "single" | "range") => {
+    setDateFilterMode(mode);
+    if (mode === "single") { setRangeFrom(""); setRangeTo(""); } else { setSingleDate(""); }
+  };
+  const rangedInvoices = visibleInvoices.filter((i) =>
+    dateFilterMode === "single"
+      ? !singleDate || i.date === singleDate
+      : (!rangeFrom || i.date >= rangeFrom) && (!rangeTo || i.date <= rangeTo)
   );
 
   // group invoices by their date
@@ -1957,16 +1968,41 @@ export function CalendarPanel() {
               disabled={!isAdmin}
             />
           </div>
-          <div>
-            <Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
-            <Input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} />
+          <div className="flex items-center rounded-lg border border-border/60 p-0.5 h-9">
+            <button
+              type="button"
+              onClick={() => switchDateMode("single")}
+              className={`px-2.5 h-full text-xs rounded-md transition-colors ${dateFilterMode === "single" ? "bg-accent text-white" : "text-muted-foreground"}`}
+            >
+              {isEs ? "Fecha única" : "Single date"}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchDateMode("range")}
+              className={`px-2.5 h-full text-xs rounded-md transition-colors ${dateFilterMode === "range" ? "bg-accent text-white" : "text-muted-foreground"}`}
+            >
+              {isEs ? "Rango" : "Range"}
+            </button>
           </div>
-          <div>
-            <Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
-            <Input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} />
-          </div>
+          {dateFilterMode === "single" ? (
+            <div>
+              <Label className="text-xs">{isEs ? "Fecha" : "Date"}</Label>
+              <Input type="date" value={singleDate} onChange={(e) => setSingleDate(e.target.value)} />
+            </div>
+          ) : (
+            <>
+              <div>
+                <Label className="text-xs">{isEs ? "Desde" : "From"}</Label>
+                <Input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">{isEs ? "Hasta" : "To"}</Label>
+                <Input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} />
+              </div>
+            </>
+          )}
           {hasRange && (
-            <Button variant="ghost" size="sm" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setSingleDate(""); setRangeFrom(""); setRangeTo(""); }}>
               {isEs ? "Limpiar" : "Clear"}
             </Button>
           )}

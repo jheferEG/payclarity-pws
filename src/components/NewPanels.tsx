@@ -257,12 +257,22 @@ export function ReportsPanel() {
     downloadCSV("overrides.csv", rows);
   };
 
+  // Single-date and range are two distinct modes, not two filters stacked
+  // together — switching clears whichever one isn't active.
+  const [paymentsDateMode, setPaymentsDateMode] = useState<"single" | "range">("range");
+  const [paymentsDate, setPaymentsDate] = useState("");
   const [paymentsFrom, setPaymentsFrom] = useState("");
   const [paymentsTo, setPaymentsTo] = useState("");
+  const switchPaymentsDateMode = (mode: "single" | "range") => {
+    setPaymentsDateMode(mode);
+    if (mode === "single") { setPaymentsFrom(""); setPaymentsTo(""); } else { setPaymentsDate(""); }
+  };
   const exportPayments = () => {
     const rows: (string | number)[][] = [["Date", "Salesperson", "Amount", "Method", "Reference", "Notes"]];
-    const filtered = s.payments.filter(
-      (p) => (!paymentsFrom || p.date >= paymentsFrom) && (!paymentsTo || p.date <= paymentsTo)
+    const filtered = s.payments.filter((p) =>
+      paymentsDateMode === "single"
+        ? !paymentsDate || p.date === paymentsDate
+        : (!paymentsFrom || p.date >= paymentsFrom) && (!paymentsTo || p.date <= paymentsTo)
     );
     for (const p of filtered) {
       const ag = s.agents.find((a) => a.id === p.agentId);
@@ -297,7 +307,7 @@ export function ReportsPanel() {
   );
 
   const isEs = s.language === "es";
-  const hasPaymentsFilter = !!(paymentsFrom || paymentsTo);
+  const hasPaymentsFilter = paymentsDateMode === "single" ? !!paymentsDate : !!(paymentsFrom || paymentsTo);
 
   return (
     <Card className="p-6 shadow-card">
@@ -314,24 +324,51 @@ export function ReportsPanel() {
               <FileDown className="w-4 h-4 mr-2" />{t("download_csv")}
             </Button>
           </div>
+          <div className="flex items-center rounded-lg border border-border/60 p-0.5 h-7 w-fit">
+            <button
+              type="button"
+              onClick={() => switchPaymentsDateMode("single")}
+              className={`px-2 h-full text-[10px] rounded-md transition-colors ${paymentsDateMode === "single" ? "bg-accent text-white" : "text-muted-foreground"}`}
+            >
+              {isEs ? "Fecha única" : "Single date"}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchPaymentsDateMode("range")}
+              className={`px-2 h-full text-[10px] rounded-md transition-colors ${paymentsDateMode === "range" ? "bg-accent text-white" : "text-muted-foreground"}`}
+            >
+              {isEs ? "Rango" : "Range"}
+            </button>
+          </div>
           <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Label className="text-[10px] text-muted-foreground">{isEs ? "Desde" : "From"}</Label>
-              <Input type="date" className="h-8 text-xs" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} />
-            </div>
-            <div className="flex-1">
-              <Label className="text-[10px] text-muted-foreground">{isEs ? "Hasta" : "To"}</Label>
-              <Input type="date" className="h-8 text-xs" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} />
-            </div>
+            {paymentsDateMode === "single" ? (
+              <div className="flex-1">
+                <Label className="text-[10px] text-muted-foreground">{isEs ? "Fecha" : "Date"}</Label>
+                <Input type="date" className="h-8 text-xs" value={paymentsDate} onChange={(e) => setPaymentsDate(e.target.value)} />
+              </div>
+            ) : (
+              <>
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground">{isEs ? "Desde" : "From"}</Label>
+                  <Input type="date" className="h-8 text-xs" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} />
+                </div>
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground">{isEs ? "Hasta" : "To"}</Label>
+                  <Input type="date" className="h-8 text-xs" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} />
+                </div>
+              </>
+            )}
             {hasPaymentsFilter && (
-              <Button size="sm" variant="ghost" className="h-8" onClick={() => { setPaymentsFrom(""); setPaymentsTo(""); }}>
+              <Button size="sm" variant="ghost" className="h-8" onClick={() => { setPaymentsDate(""); setPaymentsFrom(""); setPaymentsTo(""); }}>
                 {isEs ? "Limpiar" : "Clear"}
               </Button>
             )}
           </div>
           {hasPaymentsFilter && (
             <p className="text-[10px] text-muted-foreground">
-              {isEs ? "El CSV incluirá solo pagos en ese rango de fechas." : "The CSV will only include payments in that date range."}
+              {paymentsDateMode === "single"
+                ? (isEs ? "El CSV incluirá solo pagos en esa fecha." : "The CSV will only include payments on that date.")
+                : (isEs ? "El CSV incluirá solo pagos en ese rango de fechas." : "The CSV will only include payments in that date range.")}
             </p>
           )}
         </div>
