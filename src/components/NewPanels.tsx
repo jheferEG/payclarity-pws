@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileDown, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileDown, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 import { useStore } from "@/lib/commission-store";
 import { calcInvoice, calcPayouts, fmtMoney } from "@/lib/commission-calc";
 import { buildAllWallets } from "@/lib/ledger";
@@ -226,6 +228,15 @@ export function ReportsPanel() {
     [s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.payments, s.disputes, s.company.commissionEntryMode]
   );
 
+  // Narrows every export below to one or more salespeople at once — empty
+  // selection means everyone, same as not filtering at all.
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const agentMatches = (id: string | null | undefined) =>
+    selectedAgentIds.length === 0 || (!!id && selectedAgentIds.includes(id));
+  const toggleAgent = (id: string) => {
+    setSelectedAgentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
   const exportCommissions = () => {
     // Admin fee (1%) is already subtracted out of personalCommission — broken
     // out here as its own column so the deduction is visible, not just baked
@@ -233,6 +244,7 @@ export function ReportsPanel() {
     // invoice preview, explain dialog).
     const rows: (string | number)[][] = [["Salesperson", "Email", "Admin fee (1%)", "Personal commission", "Overrides", "Advances", "Tax reserve", "Final"]];
     for (const p of payouts) {
+      if (!agentMatches(p.agent.id)) continue;
       const adminFee = p.invoices.reduce((sum, c) => sum + c.adminFeeAmount, 0);
       rows.push([p.agent.name, p.agent.email, adminFee.toFixed(2), p.personalCommission.toFixed(2), p.overrideTotal.toFixed(2), p.advanceApplied.toFixed(2), p.taxReserveSuggested.toFixed(2), p.finalPayable.toFixed(2)]);
     }
@@ -242,6 +254,7 @@ export function ReportsPanel() {
   const exportInvoices = () => {
     const rows: (string | number)[][] = [["Number", "Date", "Customer", "Salesperson", "Status", "Sales", "Cost", "Profit", "Admin fee (1%)", "Profit after fee", "Paid"]];
     for (const inv of s.invoices) {
+      if (!agentMatches(inv.agentId)) continue;
       const c = calcInvoice(inv, s.financeCompanies);
       const ag = s.agents.find((a) => a.id === inv.agentId);
       rows.push([inv.number, inv.date, inv.customerName, ag?.name ?? "", inv.status, inv.salesAmount, inv.productCost, c.profit.toFixed(2), c.adminFeeAmount.toFixed(2), (c.profit - c.adminFeeAmount).toFixed(2), inv.paid ? "yes" : "no"]);
@@ -252,7 +265,12 @@ export function ReportsPanel() {
   const exportOverrides = () => {
     const rows: (string | number)[][] = [["Upline", "Downline", "Level", "Override"]];
     for (const p of payouts) {
-      for (const d of p.downline) rows.push([p.agent.name, d.agent.name, d.level, d.override.toFixed(2)]);
+      for (const d of p.downline) {
+        // Either side counts — the sponsor earning the override or the rep
+        // whose sale generated it both count as "this salesperson's" row.
+        if (!agentMatches(p.agent.id) && !agentMatches(d.agent.id)) continue;
+        rows.push([p.agent.name, d.agent.name, d.level, d.override.toFixed(2)]);
+      }
     }
     downloadCSV("overrides.csv", rows);
   };
@@ -269,11 +287,12 @@ export function ReportsPanel() {
   };
   const exportPayments = () => {
     const rows: (string | number)[][] = [["Date", "Salesperson", "Amount", "Method", "Reference", "Notes"]];
-    const filtered = s.payments.filter((p) =>
-      paymentsDateMode === "single"
+    const filtered = s.payments.filter((p) => {
+      if (!agentMatches(p.agentId)) return false;
+      return paymentsDateMode === "single"
         ? !paymentsDate || p.date === paymentsDate
-        : (!paymentsFrom || p.date >= paymentsFrom) && (!paymentsTo || p.date <= paymentsTo)
-    );
+        : (!paymentsFrom || p.date >= paymentsFrom) && (!paymentsTo || p.date <= paymentsTo);
+    });
     for (const p of filtered) {
       const ag = s.agents.find((a) => a.id === p.agentId);
       rows.push([p.date, ag?.name ?? "", p.amount.toFixed(2), p.method, p.reference, p.notes]);
@@ -284,6 +303,7 @@ export function ReportsPanel() {
   const exportLedger = () => {
     const rows: (string | number)[][] = [["Salesperson", "Date", "Type", "Description", "Debit", "Credit", "Balance"]];
     for (const w of wallets) {
+      if (!agentMatches(w.agent.id)) continue;
       for (const e of w.ledger) {
         rows.push([w.agent.name, e.date, e.type, e.description, e.debit.toFixed(2), e.credit.toFixed(2), e.balance.toFixed(2)]);
       }
@@ -294,6 +314,7 @@ export function ReportsPanel() {
   const exportTaxes = () => {
     const rows: (string | number)[][] = [["Salesperson", "State", "Tax reserve %", "Suggested reserve"]];
     for (const p of payouts) {
+      if (!agentMatches(p.agent.id)) continue;
       rows.push([p.agent.name, p.agent.state ?? "", ((p.agent.taxReservePercent ?? 0.2) * 100).toFixed(2) + "%", p.taxReserveSuggested.toFixed(2)]);
     }
     downloadCSV("tax_reserve.csv", rows);
@@ -312,7 +333,50 @@ export function ReportsPanel() {
   return (
     <Card className="p-6 shadow-card">
       <h2 className="text-lg font-semibold">{t("reports_title")}</h2>
-      <p className="text-sm text-muted-foreground mt-1 mb-5">{t("reports_desc")}</p>
+      <p className="text-sm text-muted-foreground mt-1 mb-3">{t("reports_desc")}</p>
+
+      <div className="mb-5">
+        <Label className="text-xs text-muted-foreground">{isEs ? "Filtrar por vendedor" : "Filter by salesperson"}</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="mt-1 justify-between w-full sm:w-64">
+              <span className="truncate">
+                {selectedAgentIds.length === 0
+                  ? (isEs ? "Todos los vendedores" : "All salespeople")
+                  : selectedAgentIds.length === 1
+                    ? s.agents.find((a) => a.id === selectedAgentIds[0])?.name ?? "—"
+                    : `${selectedAgentIds.length} ${isEs ? "seleccionados" : "selected"}`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 ml-2 shrink-0 opacity-60" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2 max-h-72 overflow-y-auto" align="start">
+            {selectedAgentIds.length > 0 && (
+              <button
+                type="button"
+                className="w-full text-left text-xs text-accent px-2 py-1.5 hover:bg-muted rounded"
+                onClick={() => setSelectedAgentIds([])}
+              >
+                {isEs ? "Limpiar selección" : "Clear selection"}
+              </button>
+            )}
+            <div className="space-y-0.5">
+              {s.agents.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
+                  <Checkbox checked={selectedAgentIds.includes(a.id)} onCheckedChange={() => toggleAgent(a.id)} />
+                  <span className="truncate">{a.name}</span>
+                </label>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        {selectedAgentIds.length > 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {isEs ? "Todas las exportaciones de abajo se limitan a esta selección." : "Every export below is limited to this selection."}
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Item label={t("reports_commissions_by_rep")} onClick={exportCommissions} />
         <Item label={t("reports_invoices")} onClick={exportInvoices} />
