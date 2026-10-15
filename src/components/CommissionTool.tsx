@@ -1981,6 +1981,14 @@ function InvoicesPanel() {
       )}
 
       <div className="lg:col-span-2">
+        {(() => {
+          const scoped = isAdmin ? s.invoices : s.invoices.filter((i) => i.agentId === myAgentId);
+          const statusCounts: Record<"all" | Invoice["status"], number> = {
+            all: scoped.length,
+            draft: 0, pending: 0, on_hold: 0, paid: 0,
+          };
+          for (const i of scoped) statusCounts[i.status] = (statusCounts[i.status] ?? 0) + 1;
+          return (
         <SectionCard
           title={t(isAdmin ? "sect_all_invoices" : "sect_my_invoices_lbl")}
           desc={t(isAdmin ? "sect_all_invoices_desc" : "sect_my_invoices_desc")}
@@ -1993,14 +2001,14 @@ function InvoicesPanel() {
                   variant={statusFilter === st ? "secondary" : "ghost"}
                   onClick={() => setStatusFilter(st)}
                 >
-                  {st === "all" ? (s.language === "es" ? "Todos" : "All") : t(`status_${st}` as any)}
+                  {st === "all" ? (s.language === "es" ? "Todos" : "All") : t(`status_${st}` as any)} ({statusCounts[st]})
                 </Button>
               ))}
             </div>
           }
         >
           {(() => {
-            const visible = (isAdmin ? s.invoices : s.invoices.filter((i) => i.agentId === myAgentId))
+            const visible = scoped
               .filter((i) => statusFilter === "all" || i.status === statusFilter)
               .slice()
               .sort((a, b) => {
@@ -2152,6 +2160,8 @@ function InvoicesPanel() {
             </div>);
           })()}
         </SectionCard>
+          );
+        })()}
       </div>
 
       <ExplainDialog invoiceId={explainId} open={!!explainId} onClose={() => setExplainId(null)} />
