@@ -1496,7 +1496,7 @@ function InvoicesPanel() {
   const [addingCreditFor, setAddingCreditFor] = useState<string | null>(null);
   const [creditDraft, setCreditDraft] = useState({ label: "", amount: 0 });
   const [payoutDocsId, setPayoutDocsId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | Invoice["status"]>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | Invoice["status"]>("pending");
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
   const closePdfPreview = () => {
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
@@ -1986,7 +1986,7 @@ function InvoicesPanel() {
           desc={t(isAdmin ? "sect_all_invoices_desc" : "sect_my_invoices_desc")}
           action={
             <div className="flex flex-wrap gap-1.5">
-              {(["all", "draft", "pending", "on_hold", "paid"] as const).map((st) => (
+              {(["pending", "all", "draft", "on_hold", "paid"] as const).map((st) => (
                 <Button
                   key={st}
                   size="sm"
