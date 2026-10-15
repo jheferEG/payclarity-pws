@@ -682,8 +682,8 @@ const CUSTOMER_INVOICE_STATUS_ES: Record<string, string> = {
   paid: "pagado", overdue: "vencido", cancelled: "cancelado", refunded: "reembolsado",
 };
 
-export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, company: Company, lang: Lang = "en"): jsPDF {
-  const b = resolveBranding(company, inv);
+export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice | null | undefined, company: Company, lang: Lang = "en"): jsPDF {
+  const b = resolveBranding(company, inv ?? undefined);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -844,8 +844,8 @@ export function buildCustomerInvoicePDF(ci: CustomerInvoice, inv: Invoice, compa
 }
 
 /** "Generate Receipt" — a short pay-to-date summary, not the full invoice. */
-export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice, company: Company, lang: Lang = "en"): jsPDF {
-  const b = resolveBranding(company, inv);
+export function buildCustomerReceiptPDF(ci: CustomerInvoice, inv: Invoice | null | undefined, company: Company, lang: Lang = "en"): jsPDF {
+  const b = resolveBranding(company, inv ?? undefined);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 40;

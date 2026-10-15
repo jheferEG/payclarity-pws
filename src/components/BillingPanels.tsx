@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, FileDown, DollarSign, Pencil, Paperclip,
+  Plus, Trash2, FileDown, DollarSign, Pencil, Paperclip, Eye, Mail, Receipt,
   CheckCircle2, XCircle, CalendarRange, MapPin, Shield,
 } from "lucide-react";
 import {
@@ -24,12 +24,13 @@ import {
   technicianTerm, resolvePaymentTreatment, TECH_CLASSIFICATIONS, TECH_CLASSIFICATION_LABEL,
   STATEMENT_TYPES, JOB_TYPES,
   type CustomerInvoice, type CustomerInvoiceStatus, type CustomerInvoiceLineItem,
-  type JobStatus, type GeoPoint,
+  type JobStatus, type GeoPoint, type Invoice,
   type TechRatePlan, type RatePlanRule, type RateRuleKind,
   type TechWorkStatement, type WorkStatementStatus, type StatementType,
   type Agent, type TechnicianClassification,
 } from "@/lib/commission-store";
 import { fmtMoney } from "@/lib/commission-calc";
+import { buildCustomerInvoicePDF, buildCustomerReceiptPDF } from "@/lib/generate-invoices";
 
 /* ---------- shared helpers ---------- */
 function Section({ title, desc, children, action }: { title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode }) {
@@ -596,8 +597,41 @@ export function CustomerInvoicesPanel() {
   const [editId, setEditId] = useState<string | null>(null);
   const [payId, setPayId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | CustomerInvoiceStatus>("all");
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
 
   const jobsAvailable = s.jobs.filter((j) => !s.customerInvoices.some((ci) => ci.jobId === j.id));
+  const masterInvoiceFor = (ci: CustomerInvoice): Invoice | null =>
+    (ci.saleInvoiceId && s.invoices.find((inv) => inv.id === ci.saleInvoiceId)) || null;
+
+  const viewPdf = (ci: CustomerInvoice) => {
+    const doc = buildCustomerInvoicePDF(ci, masterInvoiceFor(ci), s.company, s.language);
+    setPdfPreview({ name: ci.number, url: doc.output("bloburl").toString() });
+  };
+  const downloadPdf = (ci: CustomerInvoice) => {
+    buildCustomerInvoicePDF(ci, masterInvoiceFor(ci), s.company, s.language)
+      .save(`${ci.number}_${(ci.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
+  };
+  const viewReceipt = (ci: CustomerInvoice) => {
+    const doc = buildCustomerReceiptPDF(ci, masterInvoiceFor(ci), s.company, s.language);
+    setPdfPreview({ name: `${ci.number} — ${isEs ? "Recibo" : "Receipt"}`, url: doc.output("bloburl").toString() });
+  };
+  const sendToCustomer = (ci: CustomerInvoice) => {
+    if (!ci.customerEmail.trim()) { toast.error(isEs ? "Falta el email del cliente." : "Customer email is required."); return; }
+    const subject = encodeURIComponent(`${s.company.name || "Invoice"} — ${ci.number}`);
+    const { total } = customerInvoiceTotals(ci);
+    const body = encodeURIComponent(
+      isEs
+        ? `Hola ${ci.customerName},\n\nAdjunto encontrará la factura ${ci.number} por ${fmtMoney(total, s.company.currency)}.\n\nGracias.`
+        : `Hi ${ci.customerName},\n\nPlease find attached invoice ${ci.number} for ${fmtMoney(total, s.company.currency)}.\n\nThank you.`
+    );
+    window.open(`mailto:${ci.customerEmail}?subject=${subject}&body=${body}`, "_blank");
+    s.setCustomerInvoiceStatus(ci.id, "sent");
+    toast.success(isEs ? "Se abrió tu cliente de correo. Descarga el PDF y adjúntalo manualmente." : "Your email client opened. Download the PDF and attach it manually.");
+  };
 
   const createFromJob = () => { const id = s.createCustomerInvoice(jobId || null); setJobId(""); setEditId(id); };
   const createBlank = () => { const id = s.createCustomerInvoice(null); setEditId(id); };
@@ -664,6 +698,17 @@ export function CustomerInvoicesPanel() {
                   <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
                     <Button size="sm" variant="outline" onClick={() => setEditId(ci.id)}><Pencil className="w-3.5 h-3.5 mr-1" />{isEs ? "Editar" : "Edit"}</Button>
                     <Button size="sm" variant="ghost" onClick={() => setPayId(ci.id)}><DollarSign className="w-3.5 h-3.5 mr-1" />{isEs ? "Registrar pago" : "Record payment"}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => viewPdf(ci)}><Eye className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver PDF" : "View PDF"}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadPdf(ci)}><FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Descargar" : "Download"}</Button>
+                    {ci.payments.length > 0 && (
+                      <Button size="sm" variant="ghost" onClick={() => viewReceipt(ci)}><Receipt className="w-3.5 h-3.5 mr-1" />{isEs ? "Recibo" : "Receipt"}</Button>
+                    )}
+                    <Button
+                      size="sm" variant="ghost" onClick={() => sendToCustomer(ci)}
+                      title={isEs
+                        ? "Abre tu correo con la factura lista para enviar — no se envía automáticamente, debes adjuntar el PDF descargado."
+                        : "Opens your email app with the invoice pre-filled — this does not send automatically, you must attach the downloaded PDF yourself."}
+                    ><Mail className="w-3.5 h-3.5 mr-1" />{isEs ? "Enviar al cliente" : "Send to customer"}</Button>
                     <div className="ml-auto">
                       <Select value={ci.status} onValueChange={(v: CustomerInvoiceStatus) => s.setCustomerInvoiceStatus(ci.id, v)}>
                         <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
@@ -681,6 +726,15 @@ export function CustomerInvoicesPanel() {
 
       {editing && <CustomerInvoiceEditDialog ci={editing} onClose={() => setEditId(null)} />}
       {paying && <RecordPaymentDialog ci={paying} onClose={() => setPayId(null)} />}
+
+      <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+        <DialogContent className="max-w-3xl max-h-[85vh]">
+          <DialogHeader><DialogTitle>{pdfPreview?.name}</DialogTitle></DialogHeader>
+          {pdfPreview && (
+            <iframe src={pdfPreview.url} title={pdfPreview.name} className="w-full h-[70vh] border border-border rounded" />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
