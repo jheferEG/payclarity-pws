@@ -245,6 +245,9 @@ export function adaptInvoice(row: InvoiceRow): Invoice {
     invoiceItemLabel: row.invoice_item_label ?? undefined,
     customerPayments: (row.customer_payments as unknown as CustomerPayment[] | null) ?? undefined,
     paymentPlanNote: row.payment_plan_note ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    managerReviewedAt: row.manager_reviewed_at ?? null,
+    managerReviewedBy: row.manager_reviewed_by ?? null,
   };
 }
 
@@ -279,6 +282,8 @@ export function invoiceCoreToRow(inv: Invoice, companyId: string) {
     override_amount_overrides: inv.overrideAmountOverrides ?? {},
     override_deductions: inv.overrideDeductions ?? {},
     override_credits: inv.overrideCredits ?? {},
+    manager_reviewed_at: inv.managerReviewedAt ?? null,
+    manager_reviewed_by: inv.managerReviewedBy ?? null,
     branding_snapshot: (inv.brandingSnapshot as any) ?? null,
     is_general_invoice: inv.isGeneralInvoice ?? false,
     job_type: inv.jobType ?? null,

@@ -166,7 +166,53 @@ export type Invoice = {
   invoiceItemLabel?: string;              // e.g. "Water Treatment System" — the main line item's name
   customerPayments?: CustomerPayment[];   // "Abono $X · date" entries the customer has made
   paymentPlanNote?: string;               // free text, e.g. "remaining balance in 13 monthly installments..."
+  // When the record was actually created (set once, by addInvoice) — distinct
+  // from `date`, which is the sale date and is freely editable/backdatable.
+  // Older invoices and CSV imports won't have this; invoiceReviewStatus()
+  // falls back to `date` for those rather than requiring a backfill.
+  createdAt?: string;
+  // A sponsor (the seller's upline) reviewing this sale from "Invoices de
+  // equipo" clicked "Aprobar" within the 24h review window — see
+  // invoiceReviewStatus(). Unset until then; never cleared afterward.
+  managerReviewedAt?: string | null;
+  managerReviewedBy?: string | null;
 };
+
+/** Every agent below `rootId` in the sponsor tree, any depth — cycle-safe. */
+export function getDownlineAgentIds(rootId: string, agents: Agent[]): Set<string> {
+  const result = new Set<string>();
+  const queue = [rootId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const a of agents) {
+      if (a.sponsorId === current && !result.has(a.id)) {
+        result.add(a.id);
+        queue.push(a.id);
+      }
+    }
+  }
+  return result;
+}
+
+export type InvoiceReviewStatus = "pending" | "reviewed" | "auto_approved";
+
+const MANAGER_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** The seller's sponsor gets 24h from invoice creation to approve it, or add
+ *  a discount/credit against their own override on the sale — after that
+ *  window (or once they act), it's treated as approved either way. Computed
+ *  live, never stored, same idea as displayCustomerInvoiceStatus's "overdue". */
+export function invoiceReviewStatus(inv: Invoice): InvoiceReviewStatus {
+  if (inv.managerReviewedAt) return "reviewed";
+  const start = new Date(inv.createdAt ?? inv.date).getTime();
+  if (Number.isNaN(start)) return "pending";
+  return Date.now() > start + MANAGER_REVIEW_WINDOW_MS ? "auto_approved" : "pending";
+}
+
+export function invoiceReviewDeadline(inv: Invoice): Date {
+  const start = new Date(inv.createdAt ?? inv.date).getTime();
+  return new Date(start + MANAGER_REVIEW_WINDOW_MS);
+}
 
 export type CustomerPayment = { label: string; amount: number; date: string };
 
@@ -1121,6 +1167,7 @@ type State = {
 
   addInvoice: (i: Omit<Invoice, "id" | "number">) => string;
   updateInvoice: (id: string, i: Partial<Invoice>) => void;
+  markInvoiceManagerReviewed: (id: string, by: string) => void;
   removeInvoice: (id: string) => void;
 
   // In-progress "New/Edit invoice" form — kept here (not component state) so
@@ -1730,12 +1777,16 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       addInvoice: (i) => {
         const id = uid();
         const number = seqFor(get().company.invoicePrefix, get().invoices);
-        set((s) => ({ invoices: [...s.invoices, { ...i, id, number }] }));
+        set((s) => ({ invoices: [...s.invoices, { ...i, id, number, createdAt: new Date().toISOString() }] }));
         return id;
       },
       updateInvoice: (id, i) =>
         set((s) => ({
           invoices: s.invoices.map((x) => (x.id === id ? { ...x, ...i } : x)),
+        })),
+      markInvoiceManagerReviewed: (id, by) =>
+        set((s) => ({
+          invoices: s.invoices.map((x) => (x.id === id ? { ...x, managerReviewedAt: new Date().toISOString(), managerReviewedBy: by } : x)),
         })),
       removeInvoice: (id) =>
         set((s) => ({

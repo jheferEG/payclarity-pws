@@ -956,6 +956,8 @@ export type Database = {
           invoice_item_label: string | null
           customer_payments: { label: string; amount: number; date: string }[] | null
           payment_plan_note: string | null
+          manager_reviewed_at: string | null
+          manager_reviewed_by: string | null
           created_at: string
           updated_at: string
         }
@@ -999,6 +1001,8 @@ export type Database = {
           invoice_item_label?: string | null
           customer_payments?: { label: string; amount: number; date: string }[] | null
           payment_plan_note?: string | null
+          manager_reviewed_at?: string | null
+          manager_reviewed_by?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1042,6 +1046,8 @@ export type Database = {
           invoice_item_label?: string | null
           customer_payments?: { label: string; amount: number; date: string }[] | null
           payment_plan_note?: string | null
+          manager_reviewed_at?: string | null
+          manager_reviewed_by?: string | null
           created_at?: string
           updated_at?: string
         }
