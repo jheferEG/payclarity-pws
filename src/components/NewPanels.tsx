@@ -377,65 +377,64 @@ export function ReportsPanel() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Item label={t("reports_commissions_by_rep")} onClick={exportCommissions} />
-        <Item label={t("reports_invoices")} onClick={exportInvoices} />
-        <Item label={t("reports_overrides")} onClick={exportOverrides} />
-        <div className="p-4 rounded-lg border border-border/60 bg-muted/20 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm">{t("reports_payments")}</span>
-            <Button size="sm" variant="outline" onClick={exportPayments}>
-              <FileDown className="w-4 h-4 mr-2" />{t("download_csv")}
-            </Button>
-          </div>
-          <div className="flex items-center rounded-lg border border-border/60 p-0.5 h-7 w-fit">
+      <div className="mb-5 p-3 rounded-lg border border-border/60 bg-muted/20">
+        <Label className="text-xs text-muted-foreground">
+          {isEs ? "Rango de fecha — solo para \"Pagos realizados\"" : "Date range — only for \"Payments made\""}
+        </Label>
+        <div className="flex flex-wrap items-end gap-2 mt-1">
+          <div className="flex items-center rounded-lg border border-border/60 p-0.5 h-8">
             <button
               type="button"
               onClick={() => switchPaymentsDateMode("single")}
-              className={`px-2 h-full text-[10px] rounded-md transition-colors ${paymentsDateMode === "single" ? "bg-accent text-white" : "text-muted-foreground"}`}
+              className={`px-2.5 h-full text-xs rounded-md transition-colors ${paymentsDateMode === "single" ? "bg-accent text-white" : "text-muted-foreground"}`}
             >
               {isEs ? "Fecha única" : "Single date"}
             </button>
             <button
               type="button"
               onClick={() => switchPaymentsDateMode("range")}
-              className={`px-2 h-full text-[10px] rounded-md transition-colors ${paymentsDateMode === "range" ? "bg-accent text-white" : "text-muted-foreground"}`}
+              className={`px-2.5 h-full text-xs rounded-md transition-colors ${paymentsDateMode === "range" ? "bg-accent text-white" : "text-muted-foreground"}`}
             >
               {isEs ? "Rango" : "Range"}
             </button>
           </div>
-          <div className="flex items-end gap-2">
-            {paymentsDateMode === "single" ? (
-              <div className="flex-1">
-                <Label className="text-[10px] text-muted-foreground">{isEs ? "Fecha" : "Date"}</Label>
-                <Input type="date" className="h-8 text-xs" value={paymentsDate} onChange={(e) => setPaymentsDate(e.target.value)} />
+          {paymentsDateMode === "single" ? (
+            <div>
+              <Label className="text-[10px] text-muted-foreground">{isEs ? "Fecha" : "Date"}</Label>
+              <Input type="date" className="h-8 text-xs" value={paymentsDate} onChange={(e) => setPaymentsDate(e.target.value)} />
+            </div>
+          ) : (
+            <>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">{isEs ? "Desde" : "From"}</Label>
+                <Input type="date" className="h-8 text-xs" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} />
               </div>
-            ) : (
-              <>
-                <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground">{isEs ? "Desde" : "From"}</Label>
-                  <Input type="date" className="h-8 text-xs" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} />
-                </div>
-                <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground">{isEs ? "Hasta" : "To"}</Label>
-                  <Input type="date" className="h-8 text-xs" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} />
-                </div>
-              </>
-            )}
-            {hasPaymentsFilter && (
-              <Button size="sm" variant="ghost" className="h-8" onClick={() => { setPaymentsDate(""); setPaymentsFrom(""); setPaymentsTo(""); }}>
-                {isEs ? "Limpiar" : "Clear"}
-              </Button>
-            )}
-          </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">{isEs ? "Hasta" : "To"}</Label>
+                <Input type="date" className="h-8 text-xs" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} />
+              </div>
+            </>
+          )}
           {hasPaymentsFilter && (
-            <p className="text-[10px] text-muted-foreground">
-              {paymentsDateMode === "single"
-                ? (isEs ? "El CSV incluirá solo pagos en esa fecha." : "The CSV will only include payments on that date.")
-                : (isEs ? "El CSV incluirá solo pagos en ese rango de fechas." : "The CSV will only include payments in that date range.")}
-            </p>
+            <Button size="sm" variant="ghost" className="h-8" onClick={() => { setPaymentsDate(""); setPaymentsFrom(""); setPaymentsTo(""); }}>
+              {isEs ? "Limpiar" : "Clear"}
+            </Button>
           )}
         </div>
+        {hasPaymentsFilter && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {paymentsDateMode === "single"
+              ? (isEs ? "El CSV de \"Pagos realizados\" incluirá solo pagos en esa fecha." : "The \"Payments made\" CSV will only include payments on that date.")
+              : (isEs ? "El CSV de \"Pagos realizados\" incluirá solo pagos en ese rango de fechas." : "The \"Payments made\" CSV will only include payments in that date range.")}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Item label={t("reports_commissions_by_rep")} onClick={exportCommissions} />
+        <Item label={t("reports_invoices")} onClick={exportInvoices} />
+        <Item label={t("reports_overrides")} onClick={exportOverrides} />
+        <Item label={t("reports_payments")} onClick={exportPayments} />
         <Item label={t("reports_ledger")} onClick={exportLedger} />
         <Item label={t("reports_taxes")} onClick={exportTaxes} />
       </div>
