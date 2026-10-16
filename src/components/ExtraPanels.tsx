@@ -1937,16 +1937,23 @@ export function CalendarPanel() {
     byDate.get(inv.date)!.push(inv);
   }
 
+  // The "paid" checkbox and the status dropdown are two separate fields
+  // that can get out of sync (e.g. an invoice marked status="paid" without
+  // also flipping the paid switch) — everywhere "is this invoice paid?"
+  // matters, treat either one as paid, matching the save-validation check
+  // in CommissionTool.tsx.
+  const isPaid = (i: Invoice) => i.paid || i.status === "paid";
+
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = rangedInvoices.filter((i) => i.date >= today && !i.paid);
-  const past = rangedInvoices.filter((i) => i.date < today || i.paid);
+  const upcoming = rangedInvoices.filter((i) => i.date >= today && !isPaid(i));
+  const past = rangedInvoices.filter((i) => i.date < today || isPaid(i));
 
   const totalPending = upcoming.reduce((acc, i) => {
     const c = calcInvoice(i, s.financeCompanies);
     return acc + Math.max(0, c.profit - c.adminFeeAmount);
   }, 0);
   const totalPaid = past
-    .filter((i) => i.paid)
+    .filter((i) => isPaid(i))
     .reduce((acc, i) => {
       const c = calcInvoice(i, s.financeCompanies);
       return acc + (c.profit - c.adminFeeAmount);
@@ -2027,7 +2034,7 @@ export function CalendarPanel() {
                 const c = calcInvoice(i, s.financeCompanies);
                 return acc + (c.profit - c.adminFeeAmount);
               }, 0);
-              const paidCount = list.filter((i) => i.paid).length;
+              const paidCount = list.filter((i) => isPaid(i)).length;
               const allPaid = paidCount === list.length;
               const anyPaid = paidCount > 0 && !allPaid;
               return (
@@ -2056,7 +2063,7 @@ export function CalendarPanel() {
                             <td>{ag?.name || "—"}</td>
                             <td>
                               <Badge variant="outline" className="text-[10px]">
-                                {i.paid ? t("status_paid") : t(`status_${i.status}` as any)}
+                                {isPaid(i) ? t("status_paid") : t(`status_${i.status}` as any)}
                               </Badge>
                             </td>
                             <td className="text-right font-mono">
