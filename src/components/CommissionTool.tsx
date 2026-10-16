@@ -1538,8 +1538,7 @@ function InvoicesPanel() {
   };
 
   const save = () => {
-    // Admin fee is fixed policy, not a per-invoice choice — always 1%.
-    const payload = { ...draft, agentId: isAdmin ? draft.agentId : myAgentId || draft.agentId, adminFeePercent: 0.01 };
+    const payload = { ...draft, agentId: isAdmin ? draft.agentId : myAgentId || draft.agentId };
     if (!payload.agentId) return toast.error(t("err_pick_rep"));
     if (!payload.customerName.trim()) return toast.error(t("err_customer_required"));
     if (payload.salesAmount < 0 || payload.productCost < 0) return toast.error(t("err_amounts_negative"));
@@ -1835,7 +1834,7 @@ function InvoicesPanel() {
             />
           </div>
           <div><Label>{t("lbl_admin_fee_pct")}</Label>
-            <PercentField step="0.1" value={0.01} onChange={() => {}} disabled className="opacity-50" />
+            <PercentField step="0.1" value={draft.adminFeePercent ?? 0.01} onChange={(n) => setDraft({ ...draft, adminFeePercent: n })} />
           </div>
           <div><Label>{t("lbl_dealer_fee")}</Label>
             <Input type="number" step="0.01"
