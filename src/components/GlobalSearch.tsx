@@ -21,6 +21,11 @@ interface GlobalSearchProps {
 interface SearchResult {
   id: string;
   tab: string;
+  // What onNavigate should jump to — usually the same as `id`, except for
+  // payments: the result is keyed by the payment's own id (for a stable
+  // React key) but navigating should land on the agent's wallet, since
+  // there's no per-payment view to land on.
+  navId: string;
   label: string;
   secondary: string;
   icon: React.ReactNode;
@@ -75,6 +80,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
         .map((a) => ({
           id: a.id,
           tab: "agents",
+          navId: a.id,
           label: a.name,
           secondary: [a.email, a.level].filter(Boolean).join(" · "),
           icon: <Users size={14} />,
@@ -92,6 +98,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
         .map((inv) => ({
           id: inv.id,
           tab: "invoices",
+          navId: inv.id,
           label: inv.number || inv.customerName || inv.id,
           secondary: [
             inv.customerName,
@@ -119,6 +126,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
           return {
             id: p.id,
             tab: "wallet",
+            navId: p.agentId,
             label: agent?.name ?? "Unknown Agent",
             secondary: [fmtMoney(p.amount), p.method, p.date]
               .filter(Boolean)
@@ -135,6 +143,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
         .map((fc) => ({
           id: fc.id,
           tab: "finance",
+          navId: fc.id,
           label: fc.name,
           secondary: fc.active ? "Active" : "Inactive",
           icon: <Building2 size={14} />,
@@ -189,7 +198,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
           for (const g of groups) {
             for (const r of g.results) {
               if (flat === focusedIndex) {
-                onNavigate(r.tab, r.id);
+                onNavigate(r.tab, r.navId);
                 onClose();
                 return;
               }
@@ -285,7 +294,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
                       type="button"
                       data-flat-index={flatIdx}
                       onClick={() => {
-                        onNavigate(result.tab, result.id);
+                        onNavigate(result.tab, result.navId);
                         onClose();
                       }}
                       onMouseEnter={() => setFocusedIndex(flatIdx)}

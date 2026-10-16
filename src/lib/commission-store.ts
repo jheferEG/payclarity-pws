@@ -1286,6 +1286,8 @@ type State = {
     disputeId?: string;
     customerInvoiceId?: string;
     workStatementId?: string;
+    agentId?: string;
+    financeCompanyId?: string;
     openTimeline?: boolean;
     openSplit?: boolean;
     openDispute?: boolean;

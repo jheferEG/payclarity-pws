@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -210,6 +210,14 @@ export function WalletPanel() {
   );
   const visibleWallets = isAdmin ? wallets : wallets.filter((w) => w.agent.id === myAgentId);
   const [selected, setSelected] = useState<string>("");
+
+  // Jumping here from global search — land directly on that agent's wallet.
+  useEffect(() => {
+    if (!s.deepLink || s.deepLink.tab !== "wallet" || !s.deepLink.agentId) return;
+    setSelected(s.deepLink.agentId);
+    s.setDeepLink(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.deepLink?.ts]);
 
   const current = visibleWallets.find((w) => w.agent.id === selected) || visibleWallets[0];
 

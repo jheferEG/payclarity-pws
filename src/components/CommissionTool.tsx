@@ -815,11 +815,15 @@ export default function CommissionTool() {
       <GlobalSearch
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onNavigate={(tab) => {
+        onNavigate={(tab, id) => {
           setSearchOpen(false);
           setTab(tab);
           const grp = navGroups.find((g) => g.tabs.some((t2) => t2.id === tab));
           if (grp) setGroup(grp.id);
+          if (!id) return;
+          if (tab === "invoices") s.setDeepLink({ ts: Date.now(), invoiceId: id, openEdit: true });
+          else if (tab === "agents" || tab === "wallet") s.setDeepLink({ ts: Date.now(), tab, agentId: id });
+          else if (tab === "finance") s.setDeepLink({ ts: Date.now(), tab, financeCompanyId: id });
         }}
       />
     </div>
@@ -995,11 +999,25 @@ function w9StatusClass(status: "missing" | "pending" | "valid" | undefined): str
 }
 
 function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string> }) {
-  const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language, company } = useStore();
+  const { agents, addAgent, updateAgent, removeAgent, positions, disputes, language, company, deepLink, setDeepLink } = useStore();
   const entryMode = company.commissionEntryMode ?? "fixed";
   const t = useT();
   const isEs = language === "es";
   const [form, setForm] = useState({ name: "", email: "", sponsorId: "", fixedAmount: "", percentValue: "", level: "", companyName: "" });
+
+  // Jumping here from global search — scroll to the agent's row and flash
+  // it briefly so it's obvious which one was found, same idea as the
+  // "Editar" flash on the invoices form.
+  const [highlightAgentId, setHighlightAgentId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deepLink || deepLink.tab !== "agents" || !deepLink.agentId) return;
+    const id = deepLink.agentId;
+    setHighlightAgentId(id);
+    setTimeout(() => document.getElementById(`agent-row-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    setTimeout(() => setHighlightAgentId(null), 2000);
+    setDeepLink(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink?.ts]);
 
   const readiness = useMemo(() => {
     if (agents.length === 0) return null;
@@ -1142,7 +1160,7 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
             </thead>
             <tbody>
               {agents.map((a) => (
-                <tr key={a.id} className="border-t border-border/60">
+                <tr key={a.id} id={`agent-row-${a.id}`} className={cn("border-t border-border/60 transition-colors duration-700", highlightAgentId === a.id && "bg-amber-100 dark:bg-amber-950/40")}>
                   <td className="py-2">
                     <AgentAvatar name={a.name} avatarUrl={profileAvatars[a.email] ?? a.avatarUrl} size={30} onClick={() => pickAvatarFile(a.id, updateAgent)} />
                   </td>
@@ -1262,12 +1280,25 @@ function AgentsPanel({ profileAvatars }: { profileAvatars: Record<string, string
 
 /* ---------- Finance Companies ---------- */
 function FinancePanel() {
-  const { financeCompanies, addFinanceCo, updateFinanceCo, removeFinanceCo } = useStore();
+  const { financeCompanies, addFinanceCo, updateFinanceCo, removeFinanceCo, deepLink, setDeepLink } = useStore();
   const t = useT();
   const [form, setForm] = useState({
     name: "", defaultFee: 0, dealerFee: 0, adminFee: 0,
     usesApprovalDiscount: false, active: true, notes: "",
   });
+
+  // Jumping here from global search — scroll to the finance company's card
+  // and flash it briefly, same pattern as the agents row highlight.
+  const [highlightFinanceId, setHighlightFinanceId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deepLink || deepLink.tab !== "finance" || !deepLink.financeCompanyId) return;
+    const id = deepLink.financeCompanyId;
+    setHighlightFinanceId(id);
+    setTimeout(() => document.getElementById(`finance-row-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    setTimeout(() => setHighlightFinanceId(null), 2000);
+    setDeepLink(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink?.ts]);
 
   const submit = () => {
     if (!form.name.trim()) return toast.error(t("err_name_required"));
@@ -1298,7 +1329,7 @@ function FinancePanel() {
       {financeCompanies.length === 0 ? <Empty msg={t("empty_no_finance")} /> : (
         <div className="space-y-3">
           {financeCompanies.map((f) => (
-            <Card key={f.id} className="p-4">
+            <Card key={f.id} id={`finance-row-${f.id}`} className={cn("p-4 transition-colors duration-700", highlightFinanceId === f.id && "ring-4 ring-amber-400")}>
               <div className="grid md:grid-cols-7 gap-3 items-end">
                 <div className="md:col-span-2"><Label className="text-xs">{t("lbl_name")}</Label>
                   <Input value={f.name} onChange={(e) => updateFinanceCo(f.id, { name: e.target.value })} />
