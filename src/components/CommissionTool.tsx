@@ -2146,8 +2146,9 @@ function InvoicesPanel() {
                               : rs === "auto_approved"
                                 ? (s.language === "es" ? "Equipo: auto-aprobado" : "Team: auto-approved")
                                 : (() => {
-                                    const h = Math.max(0, Math.ceil((invoiceReviewDeadline(inv).getTime() - Date.now()) / (60 * 60 * 1000)));
-                                    return s.language === "es" ? `Equipo: pendiente (${h}h)` : `Team: pending (${h}h)`;
+                                    const m = Math.max(0, Math.ceil((invoiceReviewDeadline(inv).getTime() - Date.now()) / (60 * 1000)));
+                                    const label = m >= 60 ? `${Math.ceil(m / 60)}h` : `${m}min`;
+                                    return s.language === "es" ? `Equipo: pendiente (${label})` : `Team: pending (${label})`;
                                   })();
                             return (
                               <div className={cn(

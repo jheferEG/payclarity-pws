@@ -39,14 +39,28 @@ function NumField({ value, onChange, className, ...props }: {
 function ReviewBadge({ status, deadline, reviewedBy, isEs }: {
   status: InvoiceReviewStatus; deadline: Date; reviewedBy?: string | null; isEs: boolean;
 }) {
+  // Ticks on its own every 30s so the countdown actually counts down while
+  // the page sits open, instead of only updating on the next unrelated
+  // re-render — invoiceReviewStatus() itself is always computed fresh, this
+  // just makes sure something asks it to.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    if (status !== "pending") return;
+    const id = setInterval(() => forceTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, [status]);
+
   if (status === "reviewed") {
     return <Badge>{isEs ? `Revisado por ${reviewedBy ?? "—"}` : `Reviewed by ${reviewedBy ?? "—"}`}</Badge>;
   }
   if (status === "auto_approved") {
     return <Badge variant="outline">{isEs ? "Aprobado automático (venció el plazo)" : "Auto-approved (window expired)"}</Badge>;
   }
-  const hoursLeft = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (60 * 60 * 1000)));
-  return <Badge variant="secondary">{isEs ? `Pendiente · vence en ${hoursLeft}h` : `Pending · due in ${hoursLeft}h`}</Badge>;
+  const minutesLeft = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (60 * 1000)));
+  const timeLabel = minutesLeft >= 60
+    ? `${Math.ceil(minutesLeft / 60)}h`
+    : (isEs ? `${minutesLeft}min` : `${minutesLeft}min`);
+  return <Badge variant="secondary">{isEs ? `Pendiente · vence en ${timeLabel}` : `Pending · due in ${timeLabel}`}</Badge>;
 }
 
 /** A sponsor's view of their whole downline's invoices — available to
