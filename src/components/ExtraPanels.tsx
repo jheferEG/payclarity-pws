@@ -1104,7 +1104,7 @@ function RepRequestsPanel() {
                   {t("disp_admin_notes")} {d.adminNotes}
                 </p>
               )}
-              {d.status === "needs_info" && (
+              {!["approved", "rejected", "resolved"].includes(d.status) && (
                 <div className="mt-2 flex gap-2">
                   <Input
                     placeholder={t("disp_reply_placeholder")}
