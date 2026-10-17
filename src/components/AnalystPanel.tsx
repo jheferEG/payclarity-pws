@@ -7,6 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Search, FileDown, MessageSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useStore, type Invoice, getDownlineAgentIds } from "@/lib/commission-store";
 import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
@@ -194,7 +195,17 @@ export function AnalystInvoicesPanel() {
                         <td className="py-2 align-middle font-mono text-xs">{inv.number}</td>
                         <td className="align-middle font-mono text-xs">{fmtDateUS(inv.date)}</td>
                         <td className="align-middle font-medium">{inv.customerName || "—"}</td>
-                        <td className="align-middle"><Badge variant="outline" className="text-xs uppercase">{inv.status}</Badge></td>
+                        <td className="align-middle">
+                          <Badge variant="outline" className={cn(
+                            "text-xs uppercase",
+                            inv.status === "paid" && "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
+                            inv.status === "pending" && "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+                            inv.status === "on_hold" && "border-transparent bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
+                            inv.status === "draft" && "border-transparent bg-muted text-muted-foreground"
+                          )}>
+                            {inv.status}
+                          </Badge>
+                        </td>
                         <td className="align-middle">
                           <Badge variant={doc?.status === "paid" ? "default" : doc?.status === "rejected" ? "destructive" : "outline"} className="text-xs">
                             {payLabel}
