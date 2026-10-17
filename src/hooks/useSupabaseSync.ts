@@ -231,19 +231,31 @@ export function useSupabaseSync() {
             );
             return;
           }
-          await supabase.from("invoice_line_items").delete().eq("invoice_id", inv.id);
-          const lineItems = [
-            ...inv.charges.map((c, i) => ({
-              invoice_id: inv.id,
-              kind: "charge" as const, label: c.label, amount: c.amount, sort_order: i,
-            })),
-            ...inv.credits.map((c, i) => ({
-              invoice_id: inv.id,
-              kind: "credit" as const, label: c.label, amount: c.amount, sort_order: i,
-            })),
-          ];
-          if (lineItems.length > 0) {
-            await supabase.from("invoice_line_items").insert(lineItems);
+          // invoice_line_items is admin-only (no sponsor policy there — a
+          // sponsor reviewing a downline invoice never touches charges/
+          // credits, only their own override), so skip this step entirely
+          // when those two fields didn't actually change — avoids a second,
+          // unrelated RLS rejection on every sponsor save.
+          const prevInv = prev.invoices.find((x) => x.id === inv.id);
+          const lineItemsChanged =
+            !prevInv ||
+            JSON.stringify(prevInv.charges) !== JSON.stringify(inv.charges) ||
+            JSON.stringify(prevInv.credits) !== JSON.stringify(inv.credits);
+          if (lineItemsChanged) {
+            await supabase.from("invoice_line_items").delete().eq("invoice_id", inv.id);
+            const lineItems = [
+              ...inv.charges.map((c, i) => ({
+                invoice_id: inv.id,
+                kind: "charge" as const, label: c.label, amount: c.amount, sort_order: i,
+              })),
+              ...inv.credits.map((c, i) => ({
+                invoice_id: inv.id,
+                kind: "credit" as const, label: c.label, amount: c.amount, sort_order: i,
+              })),
+            ];
+            if (lineItems.length > 0) {
+              await supabase.from("invoice_line_items").insert(lineItems);
+            }
           }
         },
         (inv) => supabase.from("invoices").delete().eq("id", inv.id),
