@@ -191,26 +191,28 @@ export function AnalystInvoicesPanel() {
                       : (isEs ? "Sin generar" : "Not generated");
                     return (
                       <tr key={inv.id} className="border-t border-border/60">
-                        <td className="py-2 font-mono text-xs">{inv.number}</td>
-                        <td className="font-mono text-xs">{fmtDateUS(inv.date)}</td>
-                        <td className="font-medium">{inv.customerName || "—"}</td>
-                        <td><Badge variant="outline" className="text-xs uppercase">{inv.status}</Badge></td>
-                        <td>
+                        <td className="py-2 align-middle font-mono text-xs">{inv.number}</td>
+                        <td className="align-middle font-mono text-xs">{fmtDateUS(inv.date)}</td>
+                        <td className="align-middle font-medium">{inv.customerName || "—"}</td>
+                        <td className="align-middle"><Badge variant="outline" className="text-xs uppercase">{inv.status}</Badge></td>
+                        <td className="align-middle">
                           <Badge variant={doc?.status === "paid" ? "default" : doc?.status === "rejected" ? "destructive" : "outline"} className="text-xs">
                             {payLabel}
                           </Badge>
                         </td>
-                        <td className="text-right font-mono">{fmtMoney(row?.amount ?? 0, cur)}</td>
-                        <td className="text-right whitespace-nowrap">
-                          <Button variant="ghost" size="sm" onClick={() => viewPdf(inv)}>
-                            <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver" : "View"}
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => downloadPdf(inv)}>
-                            {isEs ? "Descargar" : "Download"}
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDisputeId(inv.id)}>
-                            <MessageSquare className="w-3.5 h-3.5 mr-1" />{isEs ? "Reclamo" : "Claim"}
-                          </Button>
+                        <td className="text-right align-middle font-mono">{fmtMoney(row?.amount ?? 0, cur)}</td>
+                        <td className="align-middle whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => viewPdf(inv)}>
+                              <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver" : "View"}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => downloadPdf(inv)}>
+                              {isEs ? "Descargar" : "Download"}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setDisputeId(inv.id)}>
+                              <MessageSquare className="w-3.5 h-3.5 mr-1" />{isEs ? "Reclamo" : "Claim"}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
