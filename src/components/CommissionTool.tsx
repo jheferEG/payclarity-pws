@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition,
-  getDownlineAgentIds,
+  getDownlineAgentIds, invoiceReviewStatus, invoiceReviewDeadline,
 } from "@/lib/commission-store";
 import { TeamInvoicesSection } from "@/components/TeamInvoicesSection";
 import {
@@ -2139,6 +2139,27 @@ function InvoicesPanel() {
                           )}>
                             {inv.status}
                           </span>
+                          {ag?.sponsorId && (() => {
+                            const rs = invoiceReviewStatus(inv);
+                            const label = rs === "reviewed"
+                              ? (s.language === "es" ? `Revisado por ${inv.managerReviewedBy ?? "—"}` : `Reviewed by ${inv.managerReviewedBy ?? "—"}`)
+                              : rs === "auto_approved"
+                                ? (s.language === "es" ? "Equipo: auto-aprobado" : "Team: auto-approved")
+                                : (() => {
+                                    const h = Math.max(0, Math.ceil((invoiceReviewDeadline(inv).getTime() - Date.now()) / (60 * 60 * 1000)));
+                                    return s.language === "es" ? `Equipo: pendiente (${h}h)` : `Team: pending (${h}h)`;
+                                  })();
+                            return (
+                              <div className={cn(
+                                "text-[10px] mt-1 whitespace-nowrap",
+                                rs === "pending" && "text-amber-600 dark:text-amber-400",
+                                rs === "reviewed" && "text-emerald-600 dark:text-emerald-400",
+                                rs === "auto_approved" && "text-muted-foreground"
+                              )}>
+                                {label}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="text-right font-mono">{fmtMoney(inv.salesAmount, s.company.currency)}</td>
                         <td className="text-right font-mono">{fmtMoney(c.profit, s.company.currency)}</td>
