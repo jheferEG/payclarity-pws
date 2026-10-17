@@ -7,11 +7,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Search, FileDown, MessageSquare } from "lucide-react";
-import { useStore, type Invoice } from "@/lib/commission-store";
+import { useStore, type Invoice, getDownlineAgentIds } from "@/lib/commission-store";
 import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
 import { buildInvoicePayoutStatementPDF } from "@/lib/generate-invoices";
 import { DisputeDialog } from "@/components/ExtraPanels";
+import { TeamInvoicesSection } from "@/components/TeamInvoicesSection";
 
 const PAYOUT_STATUS_LABEL: Record<string, { es: string; en: string }> = {
   pending: { es: "Pendiente", en: "Pending" },
@@ -42,6 +43,14 @@ export function AnalystInvoicesPanel() {
   const myInvoices = useMemo(
     () => s.invoices.filter((i) => i.agentId === myAgentId),
     [s.invoices, myAgentId]
+  );
+
+  // Sponsorship is about the agent tree, not login role — an analyst can
+  // still sponsor reps below them (e.g. Kevin over Sara) and gets the same
+  // 24h team-review window a rep sponsor would.
+  const myDownline = useMemo(
+    () => (myAgentId ? getDownlineAgentIds(myAgentId, s.agents) : new Set<string>()),
+    [myAgentId, s.agents]
   );
 
   const filtered = useMemo(() => {
@@ -109,6 +118,8 @@ export function AnalystInvoicesPanel() {
   return (
     <>
       <div className="space-y-4">
+        {myDownline.size > 0 && <TeamInvoicesSection downlineIds={myDownline} myAgentId={myAgentId!} />}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">
