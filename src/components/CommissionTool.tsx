@@ -705,6 +705,14 @@ export default function CommissionTool() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {showPicker ? (
           <MultiCompanyDashboard onEnter={() => setPickerMode(false)} />
+        ) : (isRep || isTechnician || isAnalyst) && !dataLoaded ? (
+          // Right after a refresh, agents/activeAgentId haven't loaded back
+          // in yet — effectiveAgentId is briefly null even for a correctly
+          // linked account. Show a neutral spinner here instead of the "no
+          // rep assigned" error, which otherwise flashes on every reload.
+          <Card className="p-8 text-center">
+            <span className="inline-block w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin" />
+          </Card>
         ) : (isRep || isTechnician || isAnalyst) && !effectiveAgentId ? (
           <Card className="p-8 text-center">
             <UserRound className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
