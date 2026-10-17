@@ -717,7 +717,7 @@ export default function CommissionTool() {
             const groups = isRep ? repGroups : isTechnician ? technicianGroups : isAnalyst ? analystGroups : isAccountant ? accountantGroups : navGroups;
             const currentGroup = groups.find((g) => g.id === group) ?? groups[0];
             const openRequests = s.disputes.filter(
-              (d) => d.status === "submitted" || d.status === "needs_info"
+              (d) => d.status === "submitted" || d.status === "needs_info" || d.status === "under_review"
             ).length;
             return (
               <>
