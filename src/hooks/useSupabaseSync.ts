@@ -218,6 +218,18 @@ export function useSupabaseSync() {
       syncItems(
         prev.invoices, next.invoices,
         async (inv) => {
+          // Captured before any `await` — `prev` (the outer closure variable)
+          // gets reassigned to `next` synchronously once all of this tick's
+          // syncItems calls are dispatched, so reading prev.invoices after an
+          // await here would silently see the NEW state as "previous" too,
+          // making lineItemsChanged always false and dropping every new
+          // charge/credit without ever writing it to invoice_line_items.
+          const prevInv = prev.invoices.find((x) => x.id === inv.id);
+          const lineItemsChanged =
+            !prevInv ||
+            JSON.stringify(prevInv.charges) !== JSON.stringify(inv.charges) ||
+            JSON.stringify(prevInv.credits) !== JSON.stringify(inv.credits);
+
           const { error } = await supabase
             .from("invoices")
             .upsert(invoiceCoreToRow(inv, companyId), { onConflict: "id" });
@@ -236,11 +248,6 @@ export function useSupabaseSync() {
           // credits, only their own override), so skip this step entirely
           // when those two fields didn't actually change — avoids a second,
           // unrelated RLS rejection on every sponsor save.
-          const prevInv = prev.invoices.find((x) => x.id === inv.id);
-          const lineItemsChanged =
-            !prevInv ||
-            JSON.stringify(prevInv.charges) !== JSON.stringify(inv.charges) ||
-            JSON.stringify(prevInv.credits) !== JSON.stringify(inv.credits);
           if (lineItemsChanged) {
             await supabase.from("invoice_line_items").delete().eq("invoice_id", inv.id);
             const lineItems = [
