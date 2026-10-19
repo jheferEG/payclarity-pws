@@ -1078,6 +1078,7 @@ export type NotificationKind =
   | "dispute_claimed"
   | "split_changed"
   | "pdf_regenerated"
+  | "team_invoice_reviewed"
   | "info";
 
 export type Notification = {

@@ -699,6 +699,7 @@ const D: Dict = {
   notif_no_match: { es: "Ninguna notificación coincide con estos filtros.", en: "No notifications match these filters." },
   notif_open_request: { es: "· solicitud abierta", en: "· open request" },
   notif_view_timeline: { es: "· ver timeline", en: "· view timeline" },
+  notif_view_invoice: { es: "· ver invoice", en: "· view invoice" },
   notif_select_all: { es: "Seleccionar todos", en: "Select all" },
   notif_selected: { es: "seleccionados", en: "selected" },
   notif_delete: { es: "Eliminar", en: "Delete" },
@@ -713,6 +714,7 @@ const D: Dict = {
   notif_filter_status: { es: "Estado", en: "Status" },
   notif_filter_splits: { es: "Splits", en: "Splits" },
   notif_filter_pdfs: { es: "PDFs", en: "PDFs" },
+  notif_filter_team: { es: "Equipo", en: "Team" },
 
   // Invoice Timeline
   tl_title: { es: "Timeline · Invoice", en: "Timeline · Invoice" },

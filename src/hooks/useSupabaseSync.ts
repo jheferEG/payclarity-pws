@@ -424,7 +424,8 @@ export function useSupabaseSync() {
       // Notifications
       syncItems(
         prev.notifications, next.notifications,
-        (n) => supabase.from("notifications").upsert(notificationToRow(n, companyId), { onConflict: "id" }),
+        // cast needed: generated types.ts still has the pre-"team_invoice_reviewed" kind enum
+        (n) => supabase.from("notifications").upsert(notificationToRow(n, companyId) as any, { onConflict: "id" }),
         (n) => supabase.from("notifications").delete().eq("id", n.id),
       );
 

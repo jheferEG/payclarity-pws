@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { useStore, type Notification, type NotificationKind } from "@/lib/commission-store";
 import { useT } from "@/lib/i18n";
 
-type KindFilter = "all" | "submitted" | "replied" | "status" | "split" | "pdf";
+type KindFilter = "all" | "submitted" | "replied" | "status" | "split" | "pdf" | "team";
 type SortOrder = "newest" | "oldest";
 const SORT_KEY = "notifications.sortOrder";
 const KIND_KEY = "notifications.kindFilter";
@@ -45,6 +45,7 @@ function getKindFilters(t: (k: any) => string) {
     { value: "status" as KindFilter, label: t("notif_filter_status"), kinds: ["dispute_status", "dispute_claimed"] as NotificationKind[] },
     { value: "split" as KindFilter, label: t("notif_filter_splits"), kinds: ["split_changed"] as NotificationKind[] },
     { value: "pdf" as KindFilter, label: t("notif_filter_pdfs"), kinds: ["pdf_regenerated"] as NotificationKind[] },
+    { value: "team" as KindFilter, label: t("notif_filter_team"), kinds: ["team_invoice_reviewed"] as NotificationKind[] },
   ];
 }
 
@@ -143,7 +144,7 @@ export function NotificationsBell() {
     const matchesInvoice = (n: Notification) =>
       invoiceFilter === "all" ? true : n.invoiceId === invoiceFilter;
     const result: Record<KindFilter, number> = {
-      all: 0, submitted: 0, replied: 0, status: 0, split: 0, pdf: 0,
+      all: 0, submitted: 0, replied: 0, status: 0, split: 0, pdf: 0, team: 0,
     };
     for (const n of mine) {
       if (n.read) continue;
@@ -234,12 +235,17 @@ export function NotificationsBell() {
     s.markNotificationRead(n.id);
     if (n.invoiceId || n.disputeId) {
       const tab = n.disputeId ? "disputes" : "invoices";
+      const isTeamReview = n.kind === "team_invoice_reviewed";
       s.setDeepLink({
         ts: Date.now(),
         tab,
         invoiceId: n.invoiceId,
         disputeId: n.disputeId,
-        openTimeline: !!n.invoiceId && !n.disputeId,
+        // A sponsor's approval/discount shows up on the invoice itself (via
+        // "Ver invoices"), not in its PDF history — open it for editing
+        // instead of the usual read-only timeline.
+        openTimeline: !!n.invoiceId && !n.disputeId && !isTeamReview,
+        openEdit: !!n.invoiceId && !n.disputeId && isTeamReview,
         openDispute: !!n.disputeId,
       });
     }
@@ -443,7 +449,9 @@ export function NotificationsBell() {
                           <div className="mt-1 flex items-center gap-2 text-[11px] text-primary">
                             {inv && <span className="font-mono">→ {inv.number}</span>}
                             {n.disputeId && <span>{t("notif_open_request")}</span>}
-                            {n.invoiceId && !n.disputeId && <span>{t("notif_view_timeline")}</span>}
+                            {n.invoiceId && !n.disputeId && (
+                              <span>{n.kind === "team_invoice_reviewed" ? t("notif_view_invoice") : t("notif_view_timeline")}</span>
+                            )}
                           </div>
                         )}
                       </div>

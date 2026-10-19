@@ -85,6 +85,8 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
 
   const cancelDraft = () => { setAddingFor(null); setDraftLabel(""); setDraftAmount(0); };
 
+  const myName = s.agents.find((a) => a.id === myAgentId)?.name ?? s.currentUserName;
+
   const addEntry = (inv: Invoice, kind: "deduction" | "credit") => {
     const label = draftLabel.trim();
     if (!label || !draftAmount) return;
@@ -96,6 +98,15 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
         [myAgentId]: [...existing, { id: crypto.randomUUID(), label, amount: draftAmount, addedBy: s.currentUserName, addedAt: new Date().toISOString() }],
       },
     } as Partial<Invoice>);
+    s.addNotification({
+      kind: "team_invoice_reviewed",
+      title: isEs
+        ? `${myName} ${kind === "deduction" ? "agregó un descuento" : "agregó un crédito"}`
+        : `${myName} added a ${kind === "deduction" ? "deduction" : "credit"}`,
+      message: `${inv.number} (${inv.customerName || "—"}) — ${label}: ${kind === "deduction" ? "-" : "+"}${fmtMoney(draftAmount, s.company.currency)}`,
+      audience: "admin",
+      invoiceId: inv.id,
+    });
     cancelDraft();
   };
 
@@ -109,6 +120,13 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
 
   const approve = (inv: Invoice) => {
     s.markInvoiceManagerReviewed(inv.id, s.currentUserName);
+    s.addNotification({
+      kind: "team_invoice_reviewed",
+      title: isEs ? `${myName} aprobó un invoice de equipo` : `${myName} approved a team invoice`,
+      message: `${inv.number} (${inv.customerName || "—"})`,
+      audience: "admin",
+      invoiceId: inv.id,
+    });
     toast.success(isEs ? "Invoice aprobado." : "Invoice approved.");
   };
 
