@@ -2827,6 +2827,15 @@ export const useStore = create<State>()(
         return rest;
       },
       migrate: (persisted: any) => {
+        // Self-heal the exact corruption the old localStorage-quota crash
+        // left behind on some machines: invoiceDraftEditingId persisted fine
+        // (a tiny write) right before the much bigger invoiceDraft write blew
+        // the quota and never landed — so the app reopens "editing" an
+        // invoice (amber highlight, title says Editando) with a blank form,
+        // forever, until this clears the dangling id along with it.
+        if (persisted && persisted.invoiceDraftEditingId && !persisted.invoiceDraft) {
+          persisted.invoiceDraftEditingId = null;
+        }
         if (persisted?.disputes) {
           persisted.disputes = persisted.disputes.map((d: any) => ({
             kind: "correction",
