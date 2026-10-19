@@ -744,7 +744,7 @@ export default function CommissionTool() {
                       >
                         {g.label}
                         {g.id === "payouts" && !isRep && !isAnalyst && openRequests > 0 && (
-                          <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-white/30 text-white text-[10px] font-bold">
+                          <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
                             {openRequests}
                           </span>
                         )}
