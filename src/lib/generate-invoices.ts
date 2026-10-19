@@ -49,7 +49,11 @@ export function resolveBranding(company: Company, inv?: Invoice): EffectiveBrand
       phone: snap.phone,
       taxId: snap.taxId,
       currency: snap.currency,
-      logoDataUrl: snap.logoDataUrl,
+      // The logo itself is never kept in the snapshot (see makeBrandingSnapshot) —
+      // it's the one field in here big enough to blow the localStorage quota once
+      // duplicated across every invoice's PDF history, and a company's logo almost
+      // never changes, so falling back to the live one is a non-issue in practice.
+      logoDataUrl: snap.logoDataUrl || company.logoDataUrl || "",
       brandColor: snap.brandColor,
       brandColorSecondary: snap.brandColorSecondary,
       footerText: snap.footerText,
@@ -73,7 +77,13 @@ export function resolveBranding(company: Company, inv?: Invoice): EffectiveBrand
   };
 }
 
-/** Snapshot to persist on an invoice when its PDF is generated. */
+/** Snapshot to persist on an invoice when its PDF is generated.
+ * Deliberately excludes the logo image: this snapshot gets copied onto every
+ * invoice (and again onto every pdfHistory entry on every reprint), so an
+ * embedded base64 logo multiplies fast enough to exceed the localStorage
+ * quota on an active account — which then throws mid-click and corrupts
+ * whatever the user was doing (e.g. opening an invoice to edit it).
+ * resolveBranding() falls back to the live company logo when this is blank. */
 export function makeBrandingSnapshot(company: Company): NonNullable<Invoice["brandingSnapshot"]> {
   return {
     companyName: company.name,
@@ -82,7 +92,7 @@ export function makeBrandingSnapshot(company: Company): NonNullable<Invoice["bra
     phone: company.phone,
     taxId: company.taxId,
     currency: company.currency,
-    logoDataUrl: company.logoDataUrl || "",
+    logoDataUrl: "",
     brandColor: company.brandColor || "#232D5A",
     brandColorSecondary: company.brandColorSecondary || "#4F6BFF",
     footerText: company.footerText || "",

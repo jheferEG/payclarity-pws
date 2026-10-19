@@ -1,5 +1,5 @@
 import { create, type StateCreator } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export type W9Status = "missing" | "pending" | "valid";
 
@@ -2800,6 +2800,27 @@ export const useStore = create<State>()(
     storeCreator,
     {
       name: "commission-tool-v3",
+      // Plain localStorage.setItem throws when the write exceeds the origin's
+      // quota — and since persist calls it synchronously inside every set(),
+      // that exception propagates straight out of whatever store action was
+      // running and aborts the rest of that click handler. That's what made
+      // "Editar" look like it was ignoring the invoice: setEditing(id) wrote
+      // fine, the quota error then killed the handler before the very next
+      // line (setDraft(inv)) ever ran, leaving the title in edit mode with a
+      // blank form. Swallowing the error here keeps every action completing
+      // in memory even once a browser is over quota (new data just won't
+      // survive a refresh until the account is back under it).
+      storage: createJSONStorage(() => ({
+        getItem: (name) => localStorage.getItem(name),
+        setItem: (name, value) => {
+          try {
+            localStorage.setItem(name, value);
+          } catch (err) {
+            console.error("commission-tool-v3: localStorage quota exceeded, change kept in memory only", err);
+          }
+        },
+        removeItem: (name) => localStorage.removeItem(name),
+      })),
       partialize: (state: any) => {
         // Exclude language so it always resets to the default "es" on load
         const { language, ...rest } = state;
@@ -2846,17 +2867,38 @@ export const useStore = create<State>()(
           };
         }
         if (persisted?.invoices) {
-          persisted.invoices = persisted.invoices.map((i: any) => ({
-            saleType: "finance",
-            ccpfPercent: 0.035,
-            adminFeePercent: 0,
-            dealerFee: undefined,
-            approvedAdvanceAmount: 0,
-            pendingAdvanceBalance: 0,
-            commissionLevel: "",
-            commissionBase: "profit",
-            ...i,
-          }));
+          persisted.invoices = persisted.invoices.map((i: any) => {
+            const out = {
+              saleType: "finance",
+              ccpfPercent: 0.035,
+              adminFeePercent: 0,
+              dealerFee: undefined,
+              approvedAdvanceAmount: 0,
+              pendingAdvanceBalance: 0,
+              commissionLevel: "",
+              commissionBase: "profit",
+              ...i,
+            };
+            // One-time cleanup: brandingSnapshot used to embed the company
+            // logo as a base64 data URL, copied onto every invoice and again
+            // onto every pdfHistory entry on every reprint — on an active
+            // account that's enough to blow the localStorage quota, which
+            // then throws mid-click and silently drops whatever else that
+            // click was doing (e.g. "Editar" setting the draft right after).
+            // resolveBranding() already falls back to the live company logo
+            // when this is blank, so stripping it here is lossless.
+            if (out.brandingSnapshot?.logoDataUrl) {
+              out.brandingSnapshot = { ...out.brandingSnapshot, logoDataUrl: "" };
+            }
+            if (out.pdfHistory?.length) {
+              out.pdfHistory = out.pdfHistory.map((r: any) =>
+                r.brandingSnapshot?.logoDataUrl
+                  ? { ...r, brandingSnapshot: { ...r.brandingSnapshot, logoDataUrl: "" } }
+                  : r
+              );
+            }
+            return out;
+          });
         }
         return persisted;
       },
