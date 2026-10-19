@@ -60,7 +60,7 @@ export function AnalystInvoicesPanel() {
       .filter((i) => (!dateFrom || i.date >= dateFrom) && (!dateTo || i.date <= dateTo))
       .filter((i) => !search || (i.customerName || "").toLowerCase().includes(search))
       .slice()
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date));
   }, [myInvoices, dateFrom, dateTo, customerSearch]);
 
   const payout = useMemo(

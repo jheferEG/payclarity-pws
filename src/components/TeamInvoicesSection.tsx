@@ -81,7 +81,7 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
   const list = s.invoices
     .filter((i) => downlineIds.has(i.agentId))
     .slice()
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date));
 
   const cancelDraft = () => { setAddingFor(null); setDraftLabel(""); setDraftAmount(0); };
 

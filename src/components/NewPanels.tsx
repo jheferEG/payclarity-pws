@@ -104,7 +104,7 @@ export function DashboardPanel({ profileAvatars = {} }: { profileAvatars?: Recor
   const topReps = [...totals.payouts]
     .sort((a, b) => (b.personalCommission + b.overrideTotal) - (a.personalCommission + a.overrideTotal))
     .slice(0, 5);
-  const recent = [...s.invoices].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+  const recent = [...s.invoices].sort((a, b) => (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date)).slice(0, 6);
 
   function renderWidget(id: string, i: number) {
     const isDragTarget = dragOver === i;

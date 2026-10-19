@@ -2142,7 +2142,9 @@ function InvoicesPanel() {
                 const aPaid = a.status === "paid" ? 1 : 0;
                 const bPaid = b.status === "paid" ? 1 : 0;
                 if (aPaid !== bPaid) return aPaid - bPaid;
-                return b.date.localeCompare(a.date);
+                // By creation order, not the (manually editable) sale date —
+                // the last invoice entered should always show up first.
+                return (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date);
               });
             if (visible.length === 0) return <Empty msg={t("empty_no_invoices")} />;
             return (
