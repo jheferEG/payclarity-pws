@@ -875,7 +875,19 @@ function DashboardQuickActions({
         <Button
           size="lg"
           className="bg-gradient-orange shadow-orange text-white hover:opacity-90"
-          onClick={() => onNav("invoices", "invoices")}
+          onClick={() => {
+            if (s.invoiceDraftEditingId) {
+              const ok = confirm(
+                s.language === "es"
+                  ? "Invoice en edición — ¿seguro que deseas crear uno nuevo sin actualizarlo?"
+                  : "You have an invoice open for editing — are you sure you want to create a new one without updating it?"
+              );
+              if (!ok) return;
+            }
+            s.setInvoiceDraftEditingId(null);
+            s.setInvoiceDraft(null);
+            onNav("invoices", "invoices");
+          }}
         >
           <Plus className="w-4 h-4 mr-2" />
           {t("qa_create_invoice")}
@@ -1617,6 +1629,19 @@ function InvoicesPanel() {
       }
     }
     if (editing) {
+      // Guard against the exact failure mode that lost a real invoice: the
+      // form stays in "editing" an existing invoice (not always obvious at
+      // a glance) and someone types a different sale into it, silently
+      // overwriting the original instead of creating a new one. Always
+      // confirming on update (not just when the name changes) makes sure
+      // nobody updates an invoice without meaning to.
+      const existingInv = s.invoices.find((x) => x.id === editing);
+      const ok = confirm(
+        s.language === "es"
+          ? `Vas a actualizar el invoice ${existingInv?.number ?? ""} (${existingInv?.customerName ?? ""}) con los datos de este formulario.\n\n¿Seguro que quieres actualizarlo?`
+          : `You're about to update invoice ${existingInv?.number ?? ""} (${existingInv?.customerName ?? ""}) with this form's data.\n\nAre you sure you want to update it?`
+      );
+      if (!ok) return;
       s.updateInvoice(editing, payload);
       toast.success(t("success_invoice_updated"));
     } else {
@@ -1946,8 +1971,42 @@ function InvoicesPanel() {
 
         <div className="flex gap-2 mt-4">
           <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (editing) {
+                const ok = confirm(
+                  s.language === "es"
+                    ? "Invoice en edición — ¿seguro que deseas crear uno nuevo sin actualizarlo?"
+                    : "You have an invoice open for editing — are you sure you want to create a new one without updating it?"
+                );
+                if (!ok) return;
+              }
+              setEditing(null);
+              setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
+              setSelectedProductId("");
+              setShowCreateForm(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />{s.language === "es" ? "Nuevo invoice" : "New invoice"}
+          </Button>
           {(editing || showCreateForm) && (
-            <Button variant="outline" onClick={() => { setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); setShowCreateForm(false); }}>{t("btn_cancel")}</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (editing) {
+                  const ok = confirm(
+                    s.language === "es"
+                      ? "Vas a salir de la edición de este invoice sin guardar los cambios. ¿Seguro que deseas cancelar?"
+                      : "You're about to exit this invoice's edit without saving changes. Are you sure you want to cancel?"
+                  );
+                  if (!ok) return;
+                }
+                setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); setShowCreateForm(false);
+              }}
+            >
+              {editing ? (s.language === "es" ? "Cancelar edición" : "Cancel edit") : t("btn_cancel")}
+            </Button>
           )}
           {isAdmin && draft.agentId && (
             <Button variant="outline" onClick={() => setInvolvedOpen(true)}>
