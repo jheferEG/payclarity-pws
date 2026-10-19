@@ -136,6 +136,12 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
             const deadline = invoiceReviewDeadline(inv);
             const myDeductions = inv.overrideDeductions?.[myAgentId] ?? [];
             const myCredits = inv.overrideCredits?.[myAgentId] ?? [];
+            // Seeing your whole downline here is fine (oversight), but
+            // approving/discounting a sale is the DIRECT sponsor's call only
+            // — someone two levels up (e.g. Jose over Kevin over Sara) can
+            // look at Sara's invoice but not act on it, that's Kevin's job.
+            const isDirectReport = ag?.sponsorId === myAgentId;
+            const directSponsorName = s.agents.find((a) => a.id === ag?.sponsorId)?.name;
             return (
               <Card key={inv.id} className="p-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -177,7 +183,13 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
                 )}
 
                 <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
-                  {reviewStatus !== "pending" ? (
+                  {!isDirectReport ? (
+                    <p className="text-xs text-muted-foreground">
+                      {isEs
+                        ? `Solo puedes ver este invoice — el sponsor directo de ${ag?.name ?? "—"} es ${directSponsorName ?? "—"}.`
+                        : `View only — ${ag?.name ?? "—"}'s direct sponsor is ${directSponsorName ?? "—"}.`}
+                    </p>
+                  ) : reviewStatus !== "pending" ? (
                     <p className="text-xs text-muted-foreground">
                       {isEs ? "La ventana de revisión ya se cerró." : "The review window is closed."}
                     </p>
