@@ -1517,7 +1517,10 @@ function InvoicesPanel() {
   // after explicitly asking for it with "Crear nuevo invoice"; otherwise
   // it's just a button, not a standing form on the page.
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const formVisible = s.role === "admin" || editing != null || showCreateForm;
+  // Collapsed by default for every role, including admin — the Invoices
+  // screen should land on just "Nuevo invoice" + the list, not an already-
+  // expanded form and commission preview nobody asked to see yet.
+  const formVisible = editing != null || showCreateForm;
   useEffect(() => {
     if (s.invoiceDraft == null) setDraft(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1574,6 +1577,13 @@ function InvoicesPanel() {
   // and shows a toast.
   const editFormRef = useRef<HTMLDivElement>(null);
   const [justStartedEdit, setJustStartedEdit] = useState(false);
+  // Snapshot of the invoice as it stood the moment editing started — lets
+  // "Actualizar invoice" tell a real change from a no-op click.
+  const editSnapshotRef = useRef<string | null>(null);
+  // An "Editar" click lands here instead of switching straight away when a
+  // brand-new (never-saved) invoice is mid-composition — losing that silently
+  // is exactly the kind of accidental-overwrite this screen used to allow.
+  const [pendingEditTarget, setPendingEditTarget] = useState<string | null>(null);
 
   useEffect(() => {
     const dl = s.deepLink;
@@ -1586,11 +1596,12 @@ function InvoicesPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.deepLink?.ts]);
 
-  const editInvoice = (id: string) => {
+  const performEditSwitch = (id: string) => {
     const inv = s.invoices.find((x) => x.id === id);
     if (!inv) return;
     setEditing(id);
     setDraft(inv);
+    editSnapshotRef.current = JSON.stringify(inv);
     setSelectedProductId("");
     toast.success(s.language === "es" ? `Editando ${inv.number} — mira el formulario arriba.` : `Editing ${inv.number} — see the form above.`);
     setJustStartedEdit(true);
@@ -1600,6 +1611,36 @@ function InvoicesPanel() {
     // scroll-mt-28 on the target reserves that space.
     setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     setTimeout(() => setJustStartedEdit(false), 2000);
+  };
+
+  const editInvoice = (id: string) => {
+    if (!editing && showCreateForm) {
+      setPendingEditTarget(id);
+      return;
+    }
+    performEditSwitch(id);
+  };
+
+  const discardNewAndSwitch = () => {
+    const target = pendingEditTarget;
+    setPendingEditTarget(null);
+    if (target) performEditSwitch(target);
+  };
+
+  const saveNewAsDraftAndSwitch = () => {
+    const payload = {
+      ...draft,
+      agentId: isAdmin ? draft.agentId : myAgentId || draft.agentId,
+      status: "draft" as const,
+    };
+    if (!payload.agentId) return toast.error(t("err_pick_rep"));
+    if (!payload.customerName.trim()) return toast.error(t("err_customer_required"));
+    s.addInvoice(payload);
+    toast.success(s.language === "es" ? "Invoice guardado en borrador." : "Invoice saved as a draft.");
+    setSelectedProductId("");
+    const target = pendingEditTarget;
+    setPendingEditTarget(null);
+    if (target) performEditSwitch(target);
   };
 
   const save = () => {
@@ -1629,6 +1670,16 @@ function InvoicesPanel() {
       }
     }
     if (editing) {
+      // Nothing to save if the form still matches the invoice as it stood
+      // when editing started — most often someone opened "Editar" to look,
+      // not to change anything, then hit the update button out of habit.
+      if (editSnapshotRef.current === JSON.stringify(draft)) {
+        return toast.error(
+          s.language === "es"
+            ? "No se puede guardar: no has hecho ningún cambio en este invoice."
+            : "Can't save: you haven't made any changes to this invoice."
+        );
+      }
       // Guard against the exact failure mode that lost a real invoice: the
       // form stays in "editing" an existing invoice (not always obvious at
       // a glance) and someone types a different sale into it, silently
@@ -1672,7 +1723,7 @@ function InvoicesPanel() {
             {s.language === "es" ? "¿Necesitas registrar una venta nueva?" : "Need to log a new sale?"}
           </p>
           <Button onClick={() => setShowCreateForm(true)}>
-            <Plus className="w-4 h-4 mr-2" />{t("btn_create_invoice")}
+            <Plus className="w-4 h-4 mr-2" />{s.language === "es" ? "Nuevo invoice" : "New invoice"}
           </Button>
         </Card>
       )}
@@ -1696,6 +1747,53 @@ function InvoicesPanel() {
         }
         desc={t("sect_invoice_desc")}
       >
+        <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-border/60">
+          <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (editing) {
+                const ok = confirm(
+                  s.language === "es"
+                    ? "Invoice en edición — ¿seguro que deseas crear uno nuevo sin actualizarlo?"
+                    : "You have an invoice open for editing — are you sure you want to create a new one without updating it?"
+                );
+                if (!ok) return;
+              }
+              setEditing(null);
+              setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
+              setSelectedProductId("");
+              setShowCreateForm(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />{s.language === "es" ? "Nuevo invoice" : "New invoice"}
+          </Button>
+          {(editing || showCreateForm) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (editing) {
+                  const ok = confirm(
+                    s.language === "es"
+                      ? "Vas a salir de la edición de este invoice sin guardar los cambios. ¿Seguro que deseas cancelar?"
+                      : "You're about to exit this invoice's edit without saving changes. Are you sure you want to cancel?"
+                  );
+                  if (!ok) return;
+                }
+                setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); setShowCreateForm(false);
+              }}
+            >
+              {editing ? (s.language === "es" ? "Cancelar edición" : "Cancel edit") : t("btn_cancel")}
+            </Button>
+          )}
+          {isAdmin && draft.agentId && (
+            <Button variant="outline" onClick={() => setInvolvedOpen(true)}>
+              <Users className="w-4 h-4 mr-2" />
+              {s.language === "es" ? "Ver invoices" : "View invoices"}
+            </Button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <div><Label>{draft.isGeneralInvoice ? (s.language === "es" ? "Fecha de instalación" : "Installation date") : t("lbl_date")}</Label><Input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></div>
           <div><Label>{t("lbl_status")}</Label>
@@ -1968,53 +2066,6 @@ function InvoicesPanel() {
             </div>
           </div>
         )}
-
-        <div className="flex gap-2 mt-4">
-          <Button onClick={save}><Plus className="w-4 h-4 mr-2" />{editing ? t("btn_update") : t("btn_create_invoice")}</Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (editing) {
-                const ok = confirm(
-                  s.language === "es"
-                    ? "Invoice en edición — ¿seguro que deseas crear uno nuevo sin actualizarlo?"
-                    : "You have an invoice open for editing — are you sure you want to create a new one without updating it?"
-                );
-                if (!ok) return;
-              }
-              setEditing(null);
-              setDraft(myAgentId ? { ...blankInvoice(), agentId: myAgentId } : blankInvoice());
-              setSelectedProductId("");
-              setShowCreateForm(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" />{s.language === "es" ? "Nuevo invoice" : "New invoice"}
-          </Button>
-          {(editing || showCreateForm) && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (editing) {
-                  const ok = confirm(
-                    s.language === "es"
-                      ? "Vas a salir de la edición de este invoice sin guardar los cambios. ¿Seguro que deseas cancelar?"
-                      : "You're about to exit this invoice's edit without saving changes. Are you sure you want to cancel?"
-                  );
-                  if (!ok) return;
-                }
-                setEditing(null); setDraft(blankInvoice()); setSelectedProductId(""); setShowCreateForm(false);
-              }}
-            >
-              {editing ? (s.language === "es" ? "Cancelar edición" : "Cancel edit") : t("btn_cancel")}
-            </Button>
-          )}
-          {isAdmin && draft.agentId && (
-            <Button variant="outline" onClick={() => setInvolvedOpen(true)}>
-              <Users className="w-4 h-4 mr-2" />
-              {s.language === "es" ? "Ver invoices" : "View invoices"}
-            </Button>
-          )}
-        </div>
       </SectionCard>
       </div>
       )}
@@ -2312,6 +2363,32 @@ function InvoicesPanel() {
         })()
         )}
       </div>
+
+      <Dialog open={!!pendingEditTarget} onOpenChange={(o) => { if (!o) setPendingEditTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {s.language === "es" ? "Tienes un invoice nuevo sin guardar" : "You have an unsaved new invoice"}
+            </DialogTitle>
+            <DialogDescription>
+              {s.language === "es"
+                ? "Estás creando un invoice nuevo. ¿Qué quieres hacer antes de abrir el otro invoice para editarlo?"
+                : "You're creating a new invoice. What do you want to do before opening the other invoice to edit it?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-col gap-2">
+            <Button variant="outline" className="w-full justify-center" onClick={() => setPendingEditTarget(null)}>
+              {s.language === "es" ? "Seguir con el invoice nuevo" : "Keep editing the new invoice"}
+            </Button>
+            <Button variant="outline" className="w-full justify-center" onClick={saveNewAsDraftAndSwitch}>
+              {s.language === "es" ? "Guardarlo en borrador y editar el otro" : "Save it as a draft and edit the other"}
+            </Button>
+            <Button variant="destructive" className="w-full justify-center" onClick={discardNewAndSwitch}>
+              {s.language === "es" ? "Descartarlo y editar el otro" : "Discard it and edit the other"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ExplainDialog invoiceId={explainId} open={!!explainId} onClose={() => setExplainId(null)} />
       <DisputeDialog invoiceId={disputeId} open={!!disputeId} onClose={() => setDisputeId(null)} />

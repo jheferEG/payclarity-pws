@@ -155,8 +155,8 @@ const D: Dict = {
   btn_cancel: { es: "Cancelar", en: "Cancel" },
   btn_edit: { es: "Editar", en: "Edit" },
   btn_view: { es: "Ver", en: "View" },
-  btn_update: { es: "Actualizar", en: "Update" },
-  btn_create_invoice: { es: "Crear invoice", en: "Create invoice" },
+  btn_update: { es: "Actualizar invoice", en: "Update invoice" },
+  btn_create_invoice: { es: "Guardar invoice", en: "Save invoice" },
   lbl_select_ellipsis: { es: "Seleccionar…", en: "Select…" },
   lbl_customer_name_placeholder: { es: "Nombre del cliente", en: "Customer name" },
   err_split_total_100: {
