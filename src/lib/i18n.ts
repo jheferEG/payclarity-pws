@@ -56,6 +56,7 @@ const D: Dict = {
   tab_calendar: { es: "Calendario", en: "Calendar" },
   tab_my_payouts: { es: "Mis pagos", en: "My payouts" },
   tab_approvals: { es: "Aprobaciones", en: "Approvals" },
+  tab_team_reviews: { es: "Equipo", en: "Team" },
   tab_my_requests: { es: "Mis solicitudes", en: "My requests" },
   tab_templates: { es: "Industry Launch Kits", en: "Industry Launch Kits" },
   tab_team: { es: "Equipo de ventas", en: "Sales team" },

@@ -98,6 +98,7 @@ function makeNavGroups(t: (key: any) => string): NavGroup[] {
       { id: "calendar", label: t("tab_calendar"), icon: CalendarDays },
       { id: "disputes", label: t("tab_approvals"), icon: MessageSquare },
       { id: "generate", label: t("tab_generate"), icon: FileDown },
+      { id: "team-reviews", label: t("tab_team_reviews"), icon: Users },
       { id: "adjustments", label: t("tab_adjustments"), icon: Settings2 },
     ]},
     { id: "reports", label: t("nav_reports"), tabs: [
@@ -140,6 +141,7 @@ function makeAccountantGroups(t: (key: any) => string): NavGroup[] {
       { id: "calendar", label: t("tab_calendar"), icon: CalendarDays },
       { id: "disputes", label: t("tab_approvals"), icon: MessageSquare },
       { id: "generate", label: t("tab_generate"), icon: FileDown },
+      { id: "team-reviews", label: t("tab_team_reviews"), icon: Users },
       { id: "adjustments", label: t("tab_adjustments"), icon: Settings2 },
     ]},
     { id: "billing", label: t("nav_billing"), tabs: [
@@ -793,6 +795,7 @@ export default function CommissionTool() {
           <TabsContent value="simulator"><SimulatorPanel /></TabsContent>
           <TabsContent value="calendar"><CalendarPanel /></TabsContent>
           <TabsContent value="disputes"><DisputesPanel /></TabsContent>
+          <TabsContent value="team-reviews"><TeamReviewsPanel /></TabsContent>
           <TabsContent value="work-statements"><WorkStatementsPanel /></TabsContent>
           {!isRep && !isTechnician && !isAnalyst && <>
             <TabsContent value="reports"><ReportsPanel /></TabsContent>
@@ -938,6 +941,65 @@ function SectionCard({ title, desc, children, action, className }: any) {
 
 function Empty({ msg }: { msg: string }) {
   return <div className="text-center py-12 text-sm text-muted-foreground border border-dashed border-border rounded-lg">{msg}</div>;
+}
+
+/** Admin-facing log of what sponsors did in "Invoices de equipo" — approvals
+ * and discounts/credits against their own override — mirroring the same
+ * "team_invoice_reviewed" notifications the bell shows, but as a persistent,
+ * browsable list instead of something you only catch in passing. */
+function TeamReviewsPanel() {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const items = useMemo(
+    () =>
+      s.notifications
+        .filter((n) => n.kind === "team_invoice_reviewed")
+        .slice()
+        .sort((a, b) => b.at.localeCompare(a.at)),
+    [s.notifications]
+  );
+  return (
+    <SectionCard
+      title={isEs ? "Revisiones de equipo" : "Team reviews"}
+      desc={isEs
+        ? "Aprobaciones y descuentos/créditos que los sponsors agregaron desde \"Invoices de equipo\"."
+        : "Approvals and deductions/credits sponsors added from \"Team invoices\"."}
+    >
+      {items.length === 0 ? (
+        <Empty msg={isEs ? "Todavía no hay revisiones de equipo." : "No team reviews yet."} />
+      ) : (
+        <div className="space-y-2">
+          {items.map((n) => {
+            const inv = n.invoiceId ? s.invoices.find((i) => i.id === n.invoiceId) : null;
+            return (
+              <Card key={n.id} className="p-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{n.title}</p>
+                    {n.message && <p className="text-xs text-muted-foreground mt-0.5 break-words">{n.message}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                      {n.at.slice(0, 16).replace("T", " ")}
+                    </span>
+                    {inv && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true })}
+                      >
+                        {isEs ? "Ver invoice" : "View invoice"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
