@@ -729,6 +729,10 @@ export default function CommissionTool() {
             const openRequests = s.disputes.filter(
               (d) => d.status === "submitted" || d.status === "needs_info" || d.status === "under_review"
             ).length;
+            const unreadTeamReviews = s.notifications.filter(
+              (n) => n.kind === "team_invoice_reviewed" && n.audience === "admin" && !n.read
+            ).length;
+            const payoutsBadgeCount = openRequests + unreadTeamReviews;
             return (
               <>
                 {/* Group nav — scrollable on mobile, wraps on desktop */}
@@ -745,9 +749,9 @@ export default function CommissionTool() {
                         }`}
                       >
                         {g.label}
-                        {g.id === "payouts" && !isRep && !isAnalyst && openRequests > 0 && (
+                        {g.id === "payouts" && !isRep && !isAnalyst && payoutsBadgeCount > 0 && (
                           <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
-                            {openRequests}
+                            {payoutsBadgeCount}
                           </span>
                         )}
                       </button>
@@ -770,6 +774,11 @@ export default function CommissionTool() {
                             {tt.id === "disputes" && !isRep && !isAnalyst && openRequests > 0 && (
                               <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
                                 {openRequests}
+                              </span>
+                            )}
+                            {tt.id === "team-reviews" && !isRep && !isAnalyst && unreadTeamReviews > 0 && (
+                              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.125rem] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+                                {unreadTeamReviews}
                               </span>
                             )}
                           </TabsTrigger>
@@ -958,6 +967,14 @@ function TeamReviewsPanel() {
         .sort((a, b) => b.at.localeCompare(a.at)),
     [s.notifications]
   );
+  // Opening this tab is the admin "seeing" these — clears the badge next to
+  // the tab and off the Pagos group total, same idea as opening the bell.
+  useEffect(() => {
+    for (const n of s.notifications) {
+      if (n.kind === "team_invoice_reviewed" && n.audience === "admin" && !n.read) s.markNotificationRead(n.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <SectionCard
       title={isEs ? "Revisiones de equipo" : "Team reviews"}
