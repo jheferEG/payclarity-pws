@@ -967,14 +967,6 @@ function TeamReviewsPanel() {
         .sort((a, b) => b.at.localeCompare(a.at)),
     [s.notifications]
   );
-  // Opening this tab is the admin "seeing" these — clears the badge next to
-  // the tab and off the Pagos group total, same idea as opening the bell.
-  useEffect(() => {
-    for (const n of s.notifications) {
-      if (n.kind === "team_invoice_reviewed" && n.audience === "admin" && !n.read) s.markNotificationRead(n.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   return (
     <SectionCard
       title={isEs ? "Revisiones de equipo" : "Team reviews"}
@@ -989,7 +981,7 @@ function TeamReviewsPanel() {
           {items.map((n) => {
             const inv = n.invoiceId ? s.invoices.find((i) => i.id === n.invoiceId) : null;
             return (
-              <Card key={n.id} className="p-3">
+              <Card key={n.id} className={cn("p-3", !n.read && "bg-accent/30")}>
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{n.title}</p>
@@ -1003,7 +995,14 @@ function TeamReviewsPanel() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true })}
+                        onClick={() => {
+                          // Marking read happens on this explicit "I looked
+                          // at it" action, not just from opening the tab —
+                          // otherwise the badge cleared itself before anyone
+                          // actually saw what was in the list.
+                          s.markNotificationRead(n.id);
+                          s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true });
+                        }}
                       >
                         {isEs ? "Ver invoice" : "View invoice"}
                       </Button>
