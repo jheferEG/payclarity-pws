@@ -11,3 +11,14 @@ dist/
 *.swo
 .cache/
 .turbo/
+
+# Separate projects that live on disk next to this repo but have nothing to
+# do with it (own deployment, own Supabase backend, own git history) —
+# tracked here by accident, never meant to be part of Transpare's repo.
+/3e36808c-44b4-45f3-847b-518aeb9889c1/
+/multi-level-mint/
+
+# One-off files dropped into the repo root while testing/debugging —
+# personal media and generated PDFs, not source code.
+/*.pdf
+/WhatsApp*
