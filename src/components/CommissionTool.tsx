@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   useStore, type Invoice, type LineItem, type PayoutDocument, type CustomerPayment, type CompensationPosition,
+  type Notification,
   getDownlineAgentIds, invoiceReviewStatus, invoiceReviewDeadline,
 } from "@/lib/commission-store";
 import { TeamInvoicesSection } from "@/components/TeamInvoicesSection";
@@ -967,6 +968,19 @@ function TeamReviewsPanel() {
         .sort((a, b) => b.at.localeCompare(a.at)),
     [s.notifications]
   );
+  const respondToReview = (n: Notification, kind: "verified" | "updated") => {
+    if (!n.actorAgentId) return;
+    s.addNotification({
+      kind: "info",
+      title: isEs
+        ? `Tu ${n.title.includes("crédito") ? "crédito" : n.title.includes("aprob") ? "invoice aprobado" : "descuento"} fue ${kind === "verified" ? "verificado" : "actualizado"}`
+        : `Your ${n.title.includes("credit") ? "credit" : n.title.includes("approv") ? "approved invoice" : "deduction"} was ${kind}`,
+      message: n.message,
+      audience: { agentId: n.actorAgentId },
+      invoiceId: n.invoiceId,
+    });
+    toast.success(isEs ? "Notificación enviada." : "Notification sent.");
+  };
   return (
     <SectionCard
       title={isEs ? "Revisiones de equipo" : "Team reviews"}
@@ -991,6 +1005,16 @@ function TeamReviewsPanel() {
                     <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
                       {n.at.slice(0, 16).replace("T", " ")}
                     </span>
+                    {n.actorAgentId && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => respondToReview(n, "verified")}>
+                          {isEs ? "Verificado" : "Verified"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => respondToReview(n, "updated")}>
+                          {isEs ? "Actualizado" : "Updated"}
+                        </Button>
+                      </>
+                    )}
                     {inv && (
                       <Button
                         size="sm"

@@ -1091,6 +1091,10 @@ export type Notification = {
   invoiceId?: string;
   disputeId?: string;
   read: boolean;
+  // Who the notification is ABOUT (e.g. the sponsor who reviewed a team
+  // invoice) — kept separate from `audience` so the admin can reply
+  // straight back to that specific person ("Verificado"/"Actualizado").
+  actorAgentId?: string;
 };
 
 export type AdjustmentKind =

@@ -106,6 +106,7 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
       message: `${inv.number} (${inv.customerName || "—"}) — ${label}: ${kind === "deduction" ? "-" : "+"}${fmtMoney(draftAmount, s.company.currency)}`,
       audience: "admin",
       invoiceId: inv.id,
+      actorAgentId: myAgentId,
     });
     cancelDraft();
   };
@@ -126,6 +127,7 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
       message: `${inv.number} (${inv.customerName || "—"})`,
       audience: "admin",
       invoiceId: inv.id,
+      actorAgentId: myAgentId,
     });
     toast.success(isEs ? "Invoice aprobado." : "Invoice approved.");
   };
