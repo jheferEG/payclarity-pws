@@ -2074,6 +2074,17 @@ export function CalendarPanel() {
                                 {isPaid(i) ? t("status_paid") : t(`status_${i.status}` as any)}
                               </Badge>
                             </td>
+                            {isAdmin && (
+                              <td>
+                                <input
+                                  type="date"
+                                  className="h-7 text-[11px] border border-input rounded-md px-1 bg-transparent"
+                                  value={i.date}
+                                  onChange={(e) => s.updateInvoice(i.id, { date: e.target.value })}
+                                  title={isEs ? "Corregir la fecha de pago" : "Fix the payout date"}
+                                />
+                              </td>
+                            )}
                             <td className="text-right font-mono">
                               {fmtMoney(c.profit - c.adminFeeAmount, cur)}
                             </td>
