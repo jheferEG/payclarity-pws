@@ -819,8 +819,9 @@ export function adaptNotification(row: Tables<"notifications">): Notification {
     invoiceId: row.invoice_id ?? undefined,
     disputeId: row.dispute_id ?? undefined,
     read: row.read,
-    // cast needed: generated types.ts doesn't have this column yet
+    // cast needed: generated types.ts doesn't have these columns yet
     actorAgentId: (row as any).actor_agent_id ?? undefined,
+    respondedAs: (row as any).responded_as ?? undefined,
   };
 }
 
@@ -836,6 +837,7 @@ export function notificationToRow(n: Notification, companyId: string) {
     dispute_id: n.disputeId ?? null,
     read: n.read,
     actor_agent_id: n.actorAgentId ?? null,
+    responded_as: n.respondedAs ?? null,
   };
 }
 

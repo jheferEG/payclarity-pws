@@ -979,6 +979,7 @@ function TeamReviewsPanel() {
       audience: { agentId: n.actorAgentId },
       invoiceId: n.invoiceId,
     });
+    s.setNotificationResponse(n.id, kind);
     toast.success(isEs ? "Notificación enviada." : "Notification sent.");
   };
   return (
@@ -1006,14 +1007,23 @@ function TeamReviewsPanel() {
                       {n.at.slice(0, 16).replace("T", " ")}
                     </span>
                     {n.actorAgentId && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => respondToReview(n, "verified")}>
-                          {isEs ? "Verificado" : "Verified"}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => respondToReview(n, "updated")}>
-                          {isEs ? "Actualizado" : "Updated"}
-                        </Button>
-                      </>
+                      n.respondedAs ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {n.respondedAs === "verified"
+                            ? (isEs ? "Verificado" : "Verified")
+                            : (isEs ? "Actualizado" : "Updated")}
+                        </span>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => respondToReview(n, "verified")}>
+                            {isEs ? "Verificado" : "Verified"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => respondToReview(n, "updated")}>
+                            {isEs ? "Actualizado" : "Updated"}
+                          </Button>
+                        </>
+                      )
                     )}
                     {inv && (
                       <Button

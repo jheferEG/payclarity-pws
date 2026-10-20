@@ -1095,6 +1095,9 @@ export type Notification = {
   // invoice) — kept separate from `audience` so the admin can reply
   // straight back to that specific person ("Verificado"/"Actualizado").
   actorAgentId?: string;
+  // Once the admin replies, this turns that one-time action into a
+  // checklist item instead of a button that can be clicked over and over.
+  respondedAs?: "verified" | "updated";
 };
 
 export type AdjustmentKind =
@@ -1325,6 +1328,7 @@ type State = {
   notifications: Notification[];
   addNotification: (n: Omit<Notification, "id" | "at" | "read">) => void;
   markNotificationRead: (id: string) => void;
+  setNotificationResponse: (id: string, response: "verified" | "updated") => void;
   markAllNotificationsRead: (audience: "admin" | { agentId: string }) => void;
   clearNotifications: (audience: "admin" | { agentId: string }) => void;
   removeNotification: (id: string) => void;
@@ -1641,6 +1645,12 @@ const storeCreator: StateCreator<State> = (set, get) => ({
         set((s) => ({
           notifications: s.notifications.map((x) =>
             x.id === id ? { ...x, read: true } : x
+          ),
+        })),
+      setNotificationResponse: (id, response) =>
+        set((s) => ({
+          notifications: s.notifications.map((x) =>
+            x.id === id ? { ...x, respondedAs: response } : x
           ),
         })),
       markAllNotificationsRead: (audience) =>
