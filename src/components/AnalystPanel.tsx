@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, FileDown, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStore, type Invoice, getDownlineAgentIds } from "@/lib/commission-store";
+import { useStore, type Invoice, type PayoutDocument, getDownlineAgentIds } from "@/lib/commission-store";
 import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
 import { buildInvoicePayoutStatementPDF } from "@/lib/generate-invoices";
@@ -236,6 +236,120 @@ export function AnalystInvoicesPanel() {
       </div>
 
       <DisputeDialog invoiceId={disputeId} open={!!disputeId} onClose={() => setDisputeId(null)} />
+
+      <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+        <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{pdfPreview?.name}</DialogTitle>
+          </DialogHeader>
+          {pdfPreview && (
+            <iframe src={pdfPreview.url} title={pdfPreview.name} className="w-full flex-1 rounded-md border border-border" />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closePdfPreview}>{isEs ? "Cerrar" : "Close"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Read-only list of payout documents generated FOR this person — status,
+ * net amount, and a PDF of their own row on that sale. No editing: manual
+ * amount overrides/deductions and approve/reject are admin-only, done from
+ * the main "Documentos de pago" dialog on the invoice itself. */
+export function MyPayoutDocumentsPanel() {
+  const s = useStore();
+  const isEs = s.language === "es";
+  const myAgentId = s.activeAgentId;
+  const cur = s.company.currency;
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
+
+  const docs = useMemo(
+    () =>
+      s.payoutDocuments
+        .filter((d) => d.agentId === myAgentId)
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [s.payoutDocuments, myAgentId]
+  );
+
+  const netAmount = (d: PayoutDocument) =>
+    d.manualAmountOverride != null
+      ? d.manualAmountOverride
+      : d.amount - (d.manualDeductions ?? []).reduce((sum, x) => sum + x.amount, 0);
+
+  const viewPdf = (d: PayoutDocument) => {
+    const inv = s.invoices.find((i) => i.id === d.invoiceId);
+    if (!inv) return;
+    const c = calcInvoice(inv, s.financeCompanies);
+    const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+    const row = rows.find((r) => r.agentId === myAgentId);
+    if (!row) return;
+    const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent, s.language);
+    setPdfPreview({ name: `${d.number} — ${inv.number}`, url: pdf.output("bloburl").toString() });
+  };
+
+  return (
+    <>
+      <Card className="p-4">
+        <h2 className="text-lg font-semibold mb-1">{isEs ? "Mis documentos de pago" : "My payout documents"}</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          {isEs
+            ? "Cada documento de pago generado para ti, con su estado."
+            : "Every payout document generated for you, with its status."}
+        </p>
+        {docs.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            {isEs ? "Todavía no tienes documentos de pago." : "No payout documents yet."}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  <th className="py-2">#</th>
+                  <th>{isEs ? "Invoice" : "Invoice"}</th>
+                  <th>{isEs ? "Descripción" : "Description"}</th>
+                  <th>{isEs ? "Estado" : "Status"}</th>
+                  <th className="text-right">{isEs ? "Monto" : "Amount"}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((d) => {
+                  const inv = s.invoices.find((i) => i.id === d.invoiceId);
+                  return (
+                    <tr key={d.id} className="border-t border-border/60">
+                      <td className="py-2 align-middle font-mono text-xs">{d.number}</td>
+                      <td className="align-middle font-mono text-xs">{inv?.number ?? "—"}</td>
+                      <td className="align-middle">{d.description}</td>
+                      <td className="align-middle">
+                        <Badge variant={d.status === "paid" ? "default" : d.status === "rejected" ? "destructive" : "outline"} className="text-xs">
+                          {PAYOUT_STATUS_LABEL[d.status]?.[isEs ? "es" : "en"] ?? d.status}
+                        </Badge>
+                        {d.status === "rejected" && d.rejectedReason && (
+                          <p className="text-[10px] text-destructive mt-0.5">{d.rejectedReason}</p>
+                        )}
+                      </td>
+                      <td className="text-right align-middle font-mono">{fmtMoney(netAmount(d), cur)}</td>
+                      <td className="align-middle whitespace-nowrap">
+                        <Button variant="ghost" size="sm" onClick={() => viewPdf(d)}>
+                          <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver PDF" : "View PDF"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
         <DialogContent className="max-w-3xl h-[85vh] flex flex-col">

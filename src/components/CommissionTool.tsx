@@ -57,7 +57,7 @@ import {
   WeeklyStatementsPanel, CompanyPayablesPanel, PayrollPanel, TaxFilingPanel,
 } from "@/components/BillingPanels";
 import { UserManagementPanel } from "@/components/UserManagementPanel";
-import { AnalystInvoicesPanel } from "@/components/AnalystPanel";
+import { AnalystInvoicesPanel, MyPayoutDocumentsPanel } from "@/components/AnalystPanel";
 import { AdminGate } from "@/components/AdminGate";
 import { AdjustmentsPanel, CsvImportPanel, SetupWizard } from "@/components/CompetitivePanels";
 import { SplitsPanel, SplitEditorDialog, totalSplitPercent, isSplitValid, roleLabel } from "@/components/SplitsPanel";
@@ -183,16 +183,24 @@ function makeTechnicianGroups(t: (key: any) => string): NavGroup[] {
   ];
 }
 
-/** An analyst's own restricted portal: only their own invoices (view +
- * PDF + file a reclamo) and the status of requests they've already filed —
- * no Wallet, no editing, no company-wide figures. */
+/** An analyst's own restricted portal: Wallet, Invoices, Payouts (My
+ * payouts / My payout documents / My requests) and Tools — matches the
+ * client's reference layout, view-only everywhere, no company-wide figures. */
 function makeAnalystGroups(t: (key: any) => string): NavGroup[] {
   return [
+    { id: "wallet", label: t("nav_wallet"), tabs: [
+      { id: "wallet", label: t("tab_my_wallet"), icon: Wallet },
+    ]},
     { id: "invoices", label: t("nav_invoices"), tabs: [
       { id: "my-invoices", label: t("tab_my_invoices"), icon: Receipt },
     ]},
     { id: "payouts", label: t("nav_payouts"), tabs: [
+      { id: "calendar", label: t("tab_my_payouts"), icon: CalendarDays },
+      { id: "my-payout-docs", label: t("tab_my_payout_docs"), icon: FileDown },
       { id: "disputes", label: t("tab_my_requests"), icon: MessageSquare },
+    ]},
+    { id: "reports", label: t("nav_tools"), tabs: [
+      { id: "simulator", label: t("tab_simulator"), icon: Calculator },
     ]},
   ];
 }
@@ -801,6 +809,7 @@ export default function CommissionTool() {
           )}
           <TabsContent value="invoices"><InvoicesPanel /></TabsContent>
           <TabsContent value="my-invoices"><AnalystInvoicesPanel /></TabsContent>
+          <TabsContent value="my-payout-docs"><MyPayoutDocumentsPanel /></TabsContent>
           <TabsContent value="wallet"><WalletPanel /></TabsContent>
           <TabsContent value="simulator"><SimulatorPanel /></TabsContent>
           <TabsContent value="calendar"><CalendarPanel /></TabsContent>

@@ -58,6 +58,7 @@ const D: Dict = {
   tab_approvals: { es: "Aprobaciones", en: "Approvals" },
   tab_team_reviews: { es: "Revisión de equipo", en: "Team review" },
   tab_my_requests: { es: "Mis solicitudes", en: "My requests" },
+  tab_my_payout_docs: { es: "Mis documentos de pago", en: "My payout documents" },
   tab_templates: { es: "Industry Launch Kits", en: "Industry Launch Kits" },
   tab_team: { es: "Equipo de ventas", en: "Sales team" },
   tab_finance: { es: "Financieras", en: "Finance Co." },
