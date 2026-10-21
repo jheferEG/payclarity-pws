@@ -960,6 +960,20 @@ function Empty({ msg }: { msg: string }) {
 function TeamReviewsPanel() {
   const s = useStore();
   const isEs = s.language === "es";
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  const closePdfPreview = () => {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    setPdfPreview(null);
+  };
+  const viewPdf = (inv: Invoice) => {
+    const c = calcInvoice(inv, s.financeCompanies);
+    const payouts = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode);
+    const payout = payouts.find((p) => p.agent.id === inv.agentId) ?? null;
+    const ag = s.agents.find((a) => a.id === inv.agentId);
+    const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+    const doc = buildSaleInvoicePDF(c, s.company, payeeLabel(ag), payout, rows, s.company.commissionEntryMode, s.language);
+    setPdfPreview({ name: `${inv.number} — ${payeeLabel(ag)}`, url: doc.output("bloburl").toString() });
+  };
   const items = useMemo(
     () =>
       s.notifications
@@ -973,8 +987,8 @@ function TeamReviewsPanel() {
     s.addNotification({
       kind: "info",
       title: isEs
-        ? `Tu ${n.title.includes("crédito") ? "crédito" : n.title.includes("aprob") ? "invoice aprobado" : "descuento"} fue ${kind === "verified" ? "verificado" : "actualizado"}`
-        : `Your ${n.title.includes("credit") ? "credit" : n.title.includes("approv") ? "approved invoice" : "deduction"} was ${kind}`,
+        ? `Tu ${n.title.includes("crédito") ? "crédito" : n.title.includes("confirmó") ? "revisión" : "descuento"} fue ${kind === "verified" ? "verificado" : "actualizado"}`
+        : `Your ${n.title.includes("credit") ? "credit" : n.title.includes("confirmed") ? "review" : "deduction"} was ${kind}`,
       message: n.message,
       audience: { agentId: n.actorAgentId },
       invoiceId: n.invoiceId,
@@ -983,6 +997,7 @@ function TeamReviewsPanel() {
     toast.success(isEs ? "Notificación enviada." : "Notification sent.");
   };
   return (
+    <>
     <SectionCard
       title={isEs ? "Revisiones de equipo" : "Team reviews"}
       desc={isEs
@@ -1026,20 +1041,32 @@ function TeamReviewsPanel() {
                       )
                     )}
                     {inv && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          // Marking read happens on this explicit "I looked
-                          // at it" action, not just from opening the tab —
-                          // otherwise the badge cleared itself before anyone
-                          // actually saw what was in the list.
-                          s.markNotificationRead(n.id);
-                          s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true });
-                        }}
-                      >
-                        {isEs ? "Ver invoice" : "View invoice"}
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            // Marking read happens on this explicit "I looked
+                            // at it" action, not just from opening the tab —
+                            // otherwise the badge cleared itself before anyone
+                            // actually saw what was in the list.
+                            s.markNotificationRead(n.id);
+                            viewPdf(inv);
+                          }}
+                        >
+                          {isEs ? "Ver invoice" : "View invoice"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            s.markNotificationRead(n.id);
+                            s.setDeepLink({ ts: Date.now(), tab: "invoices", invoiceId: inv.id, openEdit: true });
+                          }}
+                        >
+                          {isEs ? "Editar" : "Edit"}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1049,6 +1076,27 @@ function TeamReviewsPanel() {
         </div>
       )}
     </SectionCard>
+    <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
+      <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{pdfPreview?.name}</DialogTitle>
+          <DialogDescription>
+            {isEs ? "Vista previa del PDF del invoice." : "Preview of the invoice's PDF."}
+          </DialogDescription>
+        </DialogHeader>
+        {pdfPreview && (
+          <iframe
+            src={pdfPreview.url}
+            title={pdfPreview.name}
+            className="w-full flex-1 rounded-md border border-border"
+          />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={closePdfPreview}>{isEs ? "Cerrar" : "Close"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

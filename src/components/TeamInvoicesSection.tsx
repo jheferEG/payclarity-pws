@@ -90,6 +90,12 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
   const addEntry = (inv: Invoice, kind: "deduction" | "credit") => {
     const label = draftLabel.trim();
     if (!label || !draftAmount) return;
+    const ok = confirm(
+      isEs
+        ? `¿Seguro que quieres agregar ${kind === "deduction" ? "el descuento" : "el crédito"} "${label}" (${fmtMoney(draftAmount, s.company.currency)}) a ${inv.number}?`
+        : `Are you sure you want to add ${kind === "deduction" ? "the deduction" : "the credit"} "${label}" (${fmtMoney(draftAmount, s.company.currency)}) to ${inv.number}?`
+    );
+    if (!ok) return;
     const field = kind === "deduction" ? "overrideDeductions" : "overrideCredits";
     const existing = inv[field]?.[myAgentId] ?? [];
     s.updateInvoice(inv.id, {
@@ -120,16 +126,27 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
   };
 
   const approve = (inv: Invoice) => {
+    // "Aprobar" here only closes out the review window — it confirms there
+    // are no more deductions/credits to add against this sponsor's own
+    // override, not that the sale/invoice itself is approved.
+    const ok = confirm(
+      isEs
+        ? `¿Confirmas que no vas a agregar más descuentos o créditos a ${inv.number}?`
+        : `Are you sure you won't add any more deductions or credits to ${inv.number}?`
+    );
+    if (!ok) return;
     s.markInvoiceManagerReviewed(inv.id, s.currentUserName);
     s.addNotification({
       kind: "team_invoice_reviewed",
-      title: isEs ? `${myName} aprobó un invoice de equipo` : `${myName} approved a team invoice`,
-      message: `${inv.number} (${inv.customerName || "—"})`,
+      title: isEs ? `${myName} confirmó su revisión de equipo` : `${myName} confirmed their team review`,
+      message: isEs
+        ? `${inv.number} (${inv.customerName || "—"}) — sin más descuentos/créditos`
+        : `${inv.number} (${inv.customerName || "—"}) — no further deductions/credits`,
       audience: "admin",
       invoiceId: inv.id,
       actorAgentId: myAgentId,
     });
-    toast.success(isEs ? "Invoice aprobado." : "Invoice approved.");
+    toast.success(isEs ? "Revisión confirmada." : "Review confirmed.");
   };
 
   return (
@@ -186,7 +203,9 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
                         <span className="truncate">{d.label}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono text-destructive">-{fmtMoney(d.amount, s.company.currency)}</span>
-                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeEntry(inv, "deduction", d.id)}><Trash2 className="w-3 h-3" /></Button>
+                          {reviewStatus === "pending" && (
+                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeEntry(inv, "deduction", d.id)}><Trash2 className="w-3 h-3" /></Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -195,7 +214,9 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
                         <span className="truncate">{cr.label}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono text-emerald-600">+{fmtMoney(cr.amount, s.company.currency)}</span>
-                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeEntry(inv, "credit", cr.id)}><Trash2 className="w-3 h-3" /></Button>
+                          {reviewStatus === "pending" && (
+                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => removeEntry(inv, "credit", cr.id)}><Trash2 className="w-3 h-3" /></Button>
+                          )}
                         </div>
                       </div>
                     ))}
