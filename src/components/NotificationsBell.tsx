@@ -234,7 +234,17 @@ export function NotificationsBell() {
   const handleClick = (n: Notification) => {
     s.markNotificationRead(n.id);
     if (n.invoiceId || n.disputeId) {
-      const tab = n.disputeId ? "disputes" : "invoices";
+      // An analyst or rep clicking their own invoice-related notification
+      // (e.g. the admin's "Verificado"/"Actualizado" reply) must land on
+      // their OWN restricted portal, never the full admin invoices screen —
+      // that one used to treat analyst as admin by accident.
+      const tab = n.disputeId
+        ? "disputes"
+        : s.role === "analyst"
+          ? "my-invoices"
+          : s.role === "rep"
+            ? "wallet"
+            : "invoices";
       const isTeamReview = n.kind === "team_invoice_reviewed";
       s.setDeepLink({
         ts: Date.now(),

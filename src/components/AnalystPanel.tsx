@@ -6,13 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, FileDown, MessageSquare } from "lucide-react";
+import { Search, FileDown, MessageSquare, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore, type Invoice, type PayoutDocument, getDownlineAgentIds } from "@/lib/commission-store";
 import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
 import { buildInvoicePayoutStatementPDF } from "@/lib/generate-invoices";
-import { DisputeDialog } from "@/components/ExtraPanels";
+import { DisputeDialog, ExplainDialog } from "@/components/ExtraPanels";
 import { TeamInvoicesSection } from "@/components/TeamInvoicesSection";
 
 const PAYOUT_STATUS_LABEL: Record<string, { es: string; en: string }> = {
@@ -39,6 +39,7 @@ export function AnalystInvoicesPanel() {
   const [dateTo, setDateTo] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [disputeId, setDisputeId] = useState<string | null>(null);
+  const [explainId, setExplainId] = useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
 
   const myInvoices = useMemo(
@@ -214,6 +215,9 @@ export function AnalystInvoicesPanel() {
                         <td className="text-right align-middle font-mono">{fmtMoney(row?.amount ?? 0, cur)}</td>
                         <td className="align-middle whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => setExplainId(inv.id)}>
+                              <HelpCircle className="w-3.5 h-3.5 mr-1" />{isEs ? "¿Por qué esta comisión?" : "Why this commission?"}
+                            </Button>
                             <Button variant="ghost" size="sm" onClick={() => viewPdf(inv)}>
                               <FileDown className="w-3.5 h-3.5 mr-1" />{isEs ? "Ver" : "View"}
                             </Button>
@@ -236,6 +240,7 @@ export function AnalystInvoicesPanel() {
       </div>
 
       <DisputeDialog invoiceId={disputeId} open={!!disputeId} onClose={() => setDisputeId(null)} />
+      <ExplainDialog invoiceId={explainId} open={!!explainId} onClose={() => setExplainId(null)} />
 
       <Dialog open={!!pdfPreview} onOpenChange={(o) => !o && closePdfPreview()}>
         <DialogContent className="max-w-3xl h-[85vh] flex flex-col">

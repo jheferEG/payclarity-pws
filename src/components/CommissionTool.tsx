@@ -1668,8 +1668,13 @@ function PercentField({
 function InvoicesPanel() {
   const s = useStore();
   const t = useT();
-  const isAdmin = s.role !== "rep" && s.role !== "technician";
-  const myAgentId = (s.role === "rep" || s.role === "technician") ? s.activeAgentId : null;
+  // Analysts never reach this screen through the nav (their own portal uses
+  // AnalystInvoicesPanel), but a stray deep link (e.g. clicking their own
+  // "Verificado"/"Actualizado" reply notification) can still land them on
+  // the "invoices" tab — excluding them here means that accident gets the
+  // same view-only treatment a rep would get, not full admin controls.
+  const isAdmin = s.role !== "rep" && s.role !== "technician" && s.role !== "analyst";
+  const myAgentId = (s.role === "rep" || s.role === "technician" || s.role === "analyst") ? s.activeAgentId : null;
   // Sponsors (anyone with people under them in the agent tree — a rep, or
   // any other non-admin role moonlighting as one, like Kevin the analyst
   // sponsoring Sara) get an extra "Invoices de equipo" view of their whole
