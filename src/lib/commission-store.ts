@@ -1095,9 +1095,10 @@ export type Notification = {
   // invoice) — kept separate from `audience` so the admin can reply
   // straight back to that specific person ("Verificado"/"Actualizado").
   actorAgentId?: string;
-  // Once the admin replies, this turns that one-time action into a
-  // checklist item instead of a button that can be clicked over and over.
-  respondedAs?: "verified" | "updated";
+  // Verificado and Actualizado are independent checklist items — clicking
+  // one doesn't resolve the other, so both get their own flag.
+  respondedVerified?: boolean;
+  respondedUpdated?: boolean;
 };
 
 export type AdjustmentKind =
@@ -1650,7 +1651,11 @@ const storeCreator: StateCreator<State> = (set, get) => ({
       setNotificationResponse: (id, response) =>
         set((s) => ({
           notifications: s.notifications.map((x) =>
-            x.id === id ? { ...x, respondedAs: response } : x
+            x.id === id
+              ? response === "verified"
+                ? { ...x, respondedVerified: true }
+                : { ...x, respondedUpdated: true }
+              : x
           ),
         })),
       markAllNotificationsRead: (audience) =>

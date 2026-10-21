@@ -1022,23 +1022,28 @@ function TeamReviewsPanel() {
                       {n.at.slice(0, 16).replace("T", " ")}
                     </span>
                     {n.actorAgentId && (
-                      n.respondedAs ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {n.respondedAs === "verified"
-                            ? (isEs ? "Verificado" : "Verified")
-                            : (isEs ? "Actualizado" : "Updated")}
-                        </span>
-                      ) : (
-                        <>
+                      <>
+                        {n.respondedVerified ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {isEs ? "Verificado" : "Verified"}
+                          </span>
+                        ) : (
                           <Button size="sm" variant="outline" onClick={() => respondToReview(n, "verified")}>
                             {isEs ? "Verificado" : "Verified"}
                           </Button>
+                        )}
+                        {n.respondedUpdated ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {isEs ? "Actualizado" : "Updated"}
+                          </span>
+                        ) : (
                           <Button size="sm" variant="outline" onClick={() => respondToReview(n, "updated")}>
                             {isEs ? "Actualizado" : "Updated"}
                           </Button>
-                        </>
-                      )
+                        )}
+                      </>
                     )}
                     {inv && (
                       <>
