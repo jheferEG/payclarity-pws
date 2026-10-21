@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, Split as SplitIcon, MessageSquare, Activity, Download, ArrowDownNarrowWide, ArrowUpNarrowWide, Receipt, Users } from "lucide-react";
-import { useStore } from "@/lib/commission-store";
+import { useStore, getDownlineAgentIds } from "@/lib/commission-store";
 import { calcInvoice, fmtMoney } from "@/lib/commission-calc";
 import { computeInvolved } from "@/lib/ledger";
 import { useT } from "@/lib/i18n";
@@ -103,11 +103,22 @@ export function InvoiceTimelineDialog({
     [inv, s.disputes]
   );
 
+  // A seller (rep/technician/analyst) must never see what the people ABOVE
+  // them in the sponsor chain earn on this sale — only their own row, plus
+  // anyone's who reports to them, same scope as "Invoices de equipo".
+  const isAdmin = s.role !== "rep" && s.role !== "technician" && s.role !== "analyst";
+  const myAgentId = !isAdmin ? s.activeAgentId : null;
+  const myDownline = useMemo(
+    () => (myAgentId ? getDownlineAgentIds(myAgentId, s.agents) : new Set<string>()),
+    [myAgentId, s.agents]
+  );
   const involved = useMemo(() => {
     if (!inv) return [];
     const c = calcInvoice(inv, s.financeCompanies);
-    return computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-  }, [inv, s.financeCompanies, s.agents, s.overrides, s.language, s.company.commissionEntryMode]);
+    const rows = computeInvolved(inv, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
+    if (isAdmin) return rows;
+    return rows.filter((r) => r.agentId === myAgentId || (!!r.agentId && myDownline.has(r.agentId)));
+  }, [inv, s.financeCompanies, s.agents, s.overrides, s.language, s.company.commissionEntryMode, isAdmin, myAgentId, myDownline]);
 
   const allEntries = useMemo<TimelineEntry[]>(() => {
     if (!inv) return [];
