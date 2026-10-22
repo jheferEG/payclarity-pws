@@ -147,8 +147,18 @@ export type AgentPayout = {
 export function costCascade(
   sellerId: string,
   sellerProductCost: number,
-  agents: Agent[]
-): { agentId: string; level: number; amount: number }[] {
+  agents: Agent[],
+  // A level's manual override (admin correction from "Who's involved") used
+  // to just win locally for that one row — the next level up still computed
+  // its own "difference" against this agent's configured cost threshold, as
+  // if the override never happened. That left an adjacent level's share
+  // wrong (too high or too low) any time someone below them got manually
+  // fixed. Feeding the EFFECTIVE amount (override or default) forward as
+  // the next level's `belowCost`, instead of the static configured cost,
+  // keeps the whole chain consistent. With no overrides this is exactly the
+  // same math as before.
+  overrideAmountOverrides?: Record<string, number>
+): { agentId: string; level: number; amount: number; defaultAmount: number }[] {
   const seller = agents.find((a) => a.id === sellerId);
   if (!seller) return [];
   const chain: { agent: Agent; level: number }[] = [];
@@ -163,12 +173,15 @@ export function costCascade(
     cursor = sponsor;
     level++;
   }
-  const results: { agentId: string; level: number; amount: number }[] = [];
+  const results: { agentId: string; level: number; amount: number; defaultAmount: number }[] = [];
   let belowCost = sellerProductCost;
   for (const { agent, level: lvl } of chain) {
     const ownCost = agent.fixedCommissionAmount ?? 0;
-    results.push({ agentId: agent.id, level: lvl, amount: Math.max(0, belowCost - ownCost) });
-    belowCost = ownCost;
+    const defaultAmount = Math.max(0, belowCost - ownCost);
+    const manual = overrideAmountOverrides?.[agent.id];
+    const amount = manual != null ? manual : defaultAmount;
+    results.push({ agentId: agent.id, level: lvl, amount, defaultAmount });
+    belowCost = belowCost - amount;
   }
   return results;
 }
@@ -241,13 +254,11 @@ export function calcPayouts(
     // General invoices (flat pay per job) never cascade to sponsors —
     // level/cost don't apply to that role, so there's nothing to walk up.
     if (commissionEntryMode === "fixed" && !c.invoice.isGeneralInvoice) {
-      for (const row of costCascade(a, c.invoice.productCost || 0, agents)) {
-        // Admin can manually correct one sponsor's override on this specific
-        // invoice from the "Who's involved" dialog — that override wins here
-        // too, not just in the preview, so the payout always matches what
-        // was shown before saving.
-        const manual = c.invoice.overrideAmountOverrides?.[row.agentId];
-        const gross = manual != null ? manual : row.amount;
+      for (const row of costCascade(a, c.invoice.productCost || 0, agents, c.invoice.overrideAmountOverrides)) {
+        // costCascade already applies this agent's own manual correction —
+        // and, now, feeds it forward so the next level's "difference" is
+        // computed against what this one actually got, not their default.
+        const gross = row.amount;
         const deducted = (c.invoice.overrideDeductions?.[row.agentId] ?? []).reduce((s, d) => s + (d.amount || 0), 0);
         const credited = (c.invoice.overrideCredits?.[row.agentId] ?? []).reduce((s, cr) => s + (cr.amount || 0), 0);
         const amount = Math.max(0, gross - deducted + credited);

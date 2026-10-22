@@ -717,16 +717,26 @@ export function computeInvolved(
       : Math.max(0, Math.max(0, c.commissionableBase) * rate - c.adminFeeAmount);
   const splits = inv.split?.participants ?? [];
 
+  // Passing overrideAmountOverrides in lets costCascade feed each level's
+  // ACTUAL (possibly manually fixed) amount forward into the next level's
+  // "difference from below" — otherwise fixing one sponsor's amount left an
+  // adjacent level's share computed against their un-overridden default,
+  // showing a now-wrong (usually inflated) number for someone who never got
+  // their own override touched.
   const cascadeByAgent = commissionEntryMode === "fixed" && !inv.isGeneralInvoice
-    ? new Map(costCascade(seller.id, inv.productCost || 0, agents).map((r) => [r.agentId, r.amount]))
+    ? new Map(costCascade(seller.id, inv.productCost || 0, agents, inv.overrideAmountOverrides).map((r) => [r.agentId, r]))
     : null;
 
   const rows: InvolvedRow[] = upline.map((u) => {
-    const defaultAmount = cascadeByAgent
-      ? (cascadeByAgent.get(u.agent.id) || 0)
+    const cascadeRow = cascadeByAgent?.get(u.agent.id);
+    const defaultAmount = cascadeRow
+      ? cascadeRow.defaultAmount
       : Math.max(0, c.commissionProfit) * (overrideMap.get(u.level) || 0);
     const manual = inv.overrideAmountOverrides?.[u.agent.id];
-    const grossAmount = manual != null ? manual : defaultAmount;
+    // costCascade already resolved the fixed-mode case (its own `amount` is
+    // the override when set) — the percent-mode fallback still applies the
+    // override itself here, since that path never cascades between levels.
+    const grossAmount = cascadeRow ? cascadeRow.amount : (manual != null ? manual : defaultAmount);
     const deductions = inv.overrideDeductions?.[u.agent.id] ?? [];
     const deductionTotal = deductions.reduce((s, d) => s + (d.amount || 0), 0);
     const credits = inv.overrideCredits?.[u.agent.id] ?? [];

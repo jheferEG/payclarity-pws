@@ -1990,12 +1990,13 @@ function InvoicesPanel() {
             <Select value={draft.agentId} onValueChange={(v) => {
               const ag = s.agents.find((a) => a.id === v);
               const pos = s.positions.find((p) => p.name === ag?.level);
-              // Costo de producto ← this rep's own commission rule (Equipo tab).
-              // The $ field is what matters here, regardless of which mode
-              // the agent's row is currently set to — both fields are always
-              // visible/editable now, so a filled-in $ value should count.
+              // Costo de producto ← this rep's own commission rule (Equipo tab),
+              // UNLESS a specific product (e.g. a well-water machine) is
+              // already picked — that product's own cost can be nothing like
+              // the rep's generic per-level default, and changing the
+              // salesperson afterward shouldn't quietly clobber it back.
               const productCostDefault = ag?.fixedCommissionAmount != null ? ag.fixedCommissionAmount : undefined;
-              const nextProductCost = productCostDefault ?? draft.productCost;
+              const nextProductCost = selectedProductId ? draft.productCost : (productCostDefault ?? draft.productCost);
               setDraft({
                 ...draft,
                 agentId: v,
@@ -2111,10 +2112,12 @@ function InvoicesPanel() {
                 setSelectedProductId(v === "none" ? "" : v);
                 if (v === "none") return;
                 const p = s.products.find((x) => x.id === v);
-                // Picking a product only sets the sale amount — product
-                // cost is the rep's commission rule (set when the
-                // salesperson was chosen) and stays untouched here.
-                if (p) setDraft({ ...draft, salesAmount: p.price });
+                // Different machines (e.g. a well-water pump) can have a
+                // product cost nothing like the rep's generic per-level
+                // default — Sandra kept forgetting to type it by hand, so
+                // picking the product now sets its own configured cost too,
+                // not just the sale price.
+                if (p) setDraft({ ...draft, salesAmount: p.price, productCost: p.cost });
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
