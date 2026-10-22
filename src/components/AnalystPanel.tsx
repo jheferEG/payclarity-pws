@@ -41,6 +41,12 @@ export function AnalystInvoicesPanel() {
   const [disputeId, setDisputeId] = useState<string | null>(null);
   const [explainId, setExplainId] = useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
+  // "Mis invoices" (their own sales — ¿Por qué esta comisión?/Ver/Descargar/
+  // Reclamo) is the whole reason most analysts open this screen, so it's
+  // the default — "Invoices de equipo" (reviewing a downline sale) used to
+  // render above it unconditionally, which buried the actually-used
+  // buttons below a section most analysts don't even have a reason to open.
+  const [view, setView] = useState<"personal" | "team">("personal");
 
   const myInvoices = useMemo(
     () => s.invoices.filter((i) => i.agentId === myAgentId),
@@ -120,8 +126,27 @@ export function AnalystInvoicesPanel() {
   return (
     <>
       <div className="space-y-4">
-        {myDownline.size > 0 && <TeamInvoicesSection downlineIds={myDownline} myAgentId={myAgentId!} />}
+        {myDownline.size > 0 && (
+          <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
+            <button
+              onClick={() => setView("personal")}
+              className={cn("min-h-9 shrink-0 rounded-md px-3 text-sm font-medium", view === "personal" ? "bg-card shadow-sm" : "text-muted-foreground")}
+            >
+              {isEs ? "Invoices personal" : "Personal invoices"}
+            </button>
+            <button
+              onClick={() => setView("team")}
+              className={cn("min-h-9 shrink-0 rounded-md px-3 text-sm font-medium", view === "team" ? "bg-card shadow-sm" : "text-muted-foreground")}
+            >
+              {isEs ? "Revisión invoices equipo" : "Team invoice review"}
+            </button>
+          </div>
+        )}
 
+        {myDownline.size > 0 && view === "team" ? (
+          <TeamInvoicesSection downlineIds={myDownline} myAgentId={myAgentId!} />
+        ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -237,6 +262,8 @@ export function AnalystInvoicesPanel() {
             </div>
           )}
         </Card>
+        </>
+        )}
       </div>
 
       <DisputeDialog invoiceId={disputeId} open={!!disputeId} onClose={() => setDisputeId(null)} />

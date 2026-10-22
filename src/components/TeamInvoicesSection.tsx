@@ -78,8 +78,12 @@ export function TeamInvoicesSection({ downlineIds, myAgentId }: { downlineIds: S
   const [draftLabel, setDraftLabel] = useState("");
   const [draftAmount, setDraftAmount] = useState(0);
 
+  // Once the 24h window closes (or it's been reviewed), it's effectively
+  // the admin's invoice now — leaving it listed here just for a disabled
+  // "ventana cerrada" message added clutter nobody acts on; "Revisión de
+  // equipo" (admin) already keeps the historical record.
   const list = s.invoices
-    .filter((i) => downlineIds.has(i.agentId))
+    .filter((i) => downlineIds.has(i.agentId) && invoiceReviewStatus(i) === "pending")
     .slice()
     .sort((a, b) => (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date));
 
