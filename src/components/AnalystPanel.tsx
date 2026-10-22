@@ -9,9 +9,9 @@ import {
 import { Search, FileDown, MessageSquare, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore, type Invoice, type PayoutDocument, getDownlineAgentIds } from "@/lib/commission-store";
-import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS } from "@/lib/commission-calc";
+import { calcInvoice, calcPayouts, fmtMoney, fmtDateUS, payeeLabel } from "@/lib/commission-calc";
 import { computeInvolved, buildWallet } from "@/lib/ledger";
-import { buildInvoicePayoutStatementPDF } from "@/lib/generate-invoices";
+import { buildInvoicePayoutStatementPDF, buildSaleInvoicePDF } from "@/lib/generate-invoices";
 import { DisputeDialog, ExplainDialog } from "@/components/ExtraPanels";
 import { TeamInvoicesSection } from "@/components/TeamInvoicesSection";
 
@@ -97,18 +97,30 @@ export function AnalystInvoicesPanel() {
     return { c, row: rows.find((r) => r.agentId === myAgentId) ?? null };
   };
 
-  const viewPdf = (inv: Invoice) => {
+  // The full sale invoice — same document Sandra creates/sends by hand —
+  // not the stripped-down payout statement this used to generate. Passing
+  // only the viewer's own row keeps the "quién cobra" breakdown limited to
+  // them (or hides it entirely when they're the seller themselves), same
+  // privacy rule as the Timeline and Wallet PDFs.
+  const invoicePdf = (inv: Invoice) => {
     const { c, row } = myRowFor(inv);
-    if (!row) return;
-    const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent, s.language);
-    setPdfPreview({ name: `${inv.number} — ${row.name}`, url: pdf.output("bloburl").toString() });
+    if (!row) return null;
+    const payout = calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode)
+      .find((p) => p.agent.id === inv.agentId) ?? null;
+    const seller = s.agents.find((a) => a.id === inv.agentId);
+    return buildSaleInvoicePDF(c, s.company, payeeLabel(seller), payout, [row], s.company.commissionEntryMode, s.language);
+  };
+
+  const viewPdf = (inv: Invoice) => {
+    const pdf = invoicePdf(inv);
+    if (!pdf) return;
+    setPdfPreview({ name: `${inv.number} — ${inv.customerName || "—"}`, url: pdf.output("bloburl").toString() });
   };
 
   const downloadPdf = (inv: Invoice) => {
-    const { c, row } = myRowFor(inv);
-    if (!row) return;
-    const pdf = buildInvoicePayoutStatementPDF(row, c, s.company, inv.taxReservePercent, s.language);
-    pdf.save(`${inv.number}_statement.pdf`);
+    const pdf = invoicePdf(inv);
+    if (!pdf) return;
+    pdf.save(`${inv.number}_${(inv.customerName || "invoice").replace(/\s+/g, "_")}.pdf`);
   };
 
   if (!agent) {
