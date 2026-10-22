@@ -392,10 +392,13 @@ function WalletDetail({ wallet, canRecordPayment = true }: { wallet: AgentWallet
                         onClick={() => {
                           const c = calcInvoice(invoice, s.financeCompanies);
                           const rows = computeInvolved(invoice, c, s.agents, s.overrides, s.language, s.company.commissionEntryMode);
-                          // Admin sees the whole deal; a rep viewing their own wallet
-                          // only ever gets their own private payout statement.
+                          // Admin sees the whole deal; a rep or analyst viewing
+                          // their own wallet only ever gets their own private
+                          // payout statement — never the overrides of whoever
+                          // is above them in the sponsor chain.
                           const myRow = rows.find((r) => r.agentId === wallet.agent.id);
-                          if (s.role !== "rep" || !myRow) {
+                          const restrictedToOwnRow = s.role === "rep" || s.role === "analyst";
+                          if (!restrictedToOwnRow || !myRow) {
                             buildSaleAndDownload(c, s.company, payeeLabel(wallet.agent), wallet.payout, rows, s.company.commissionEntryMode, s.language);
                           } else {
                             buildInvoicePayoutStatementPDF(myRow, c, s.company, invoice.taxReservePercent, s.language)
