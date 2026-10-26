@@ -1990,13 +1990,10 @@ function InvoicesPanel() {
             <Select value={draft.agentId} onValueChange={(v) => {
               const ag = s.agents.find((a) => a.id === v);
               const pos = s.positions.find((p) => p.name === ag?.level);
-              // Costo de producto ← this rep's own commission rule (Equipo tab),
-              // UNLESS a specific product (e.g. a well-water machine) is
-              // already picked — that product's own cost can be nothing like
-              // the rep's generic per-level default, and changing the
-              // salesperson afterward shouldn't quietly clobber it back.
-              const productCostDefault = ag?.fixedCommissionAmount != null ? ag.fixedCommissionAmount : undefined;
-              const nextProductCost = selectedProductId ? draft.productCost : (productCostDefault ?? draft.productCost);
+              // Costo de producto ← siempre el monto fijo de este vendedor en
+              // Equipo de ventas, sin importar si ya hay un producto elegido
+              // (el producto solo define el monto de venta, nunca el costo).
+              const nextProductCost = ag?.fixedCommissionAmount != null ? ag.fixedCommissionAmount : draft.productCost;
               setDraft({
                 ...draft,
                 agentId: v,
@@ -2112,12 +2109,11 @@ function InvoicesPanel() {
                 setSelectedProductId(v === "none" ? "" : v);
                 if (v === "none") return;
                 const p = s.products.find((x) => x.id === v);
-                // Different machines (e.g. a well-water pump) can have a
-                // product cost nothing like the rep's generic per-level
-                // default — Sandra kept forgetting to type it by hand, so
-                // picking the product now sets its own configured cost too,
-                // not just the sale price.
-                if (p) setDraft({ ...draft, salesAmount: p.price, productCost: p.cost });
+                // Product cost is the vendedor's commission rule (defaulted
+                // when the salesperson is picked, from their fixed amount in
+                // Equipo de ventas) — picking a product only ever sets the
+                // sale amount, never touches cost.
+                if (p) setDraft({ ...draft, salesAmount: p.price });
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
