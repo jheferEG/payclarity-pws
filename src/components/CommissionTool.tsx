@@ -4479,7 +4479,16 @@ function ProductsPanel() {
                       </Select>
                     </td>
                     <td className="p-2"><NumField step="0.01" className="text-right" value={p.price} onChange={(n) => s.updateProduct(p.id, { price: n })} /></td>
-                    <td className="p-2"><NumField step="0.01" className="text-right" value={p.cost} onChange={(n) => s.updateProduct(p.id, { cost: n })} /></td>
+                    <td className="p-2">
+                      <div className="flex items-center justify-end gap-1">
+                        {p.cost === 0 && (
+                          <span title={isEs ? "Sin costo configurado: al elegir este producto, el invoice tomará $0 y habrá que escribirlo a mano." : "No cost set: picking this product will fill the invoice with $0 and it'll need to be typed in by hand."}>
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                          </span>
+                        )}
+                        <NumField step="0.01" className="text-right" value={p.cost} onChange={(n) => s.updateProduct(p.id, { cost: n })} />
+                      </div>
+                    </td>
                     <td className="p-2 text-center"><Switch checked={p.priceEditable} onCheckedChange={(v) => s.updateProduct(p.id, { priceEditable: v })} /></td>
                     <td className="p-2 text-center"><Switch checked={p.active} onCheckedChange={(v) => s.updateProduct(p.id, { active: v })} /></td>
                     <td className="p-2 text-right">
