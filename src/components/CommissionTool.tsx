@@ -1708,21 +1708,23 @@ function InvoicesPanel() {
   const setSelectedProductId = s.setInvoiceDraftProductId;
   const selectedProduct = s.products.find((p) => p.id === selectedProductId) ?? null;
 
-  // Some products (e.g. "Sistema de agua de pozo") don't have a price of
-  // their own — they're negotiated per site — so their margin is pinned to
-  // a reference product's catalog margin instead (e.g. "Water Treatment
-  // System"): cost = ref.cost + (monto de venta - ref.price), recalculated
-  // live as the sale amount is negotiated. Others (e.g. RO) just carry a
-  // flat, fixed cost regardless of sale amount. Returns undefined when
-  // neither applies, meaning cost shouldn't be touched (stays the
-  // vendedor's rule — e.g. Water Treatment System itself).
+  // Built-in rule, no catalog setup needed: "Reverse Osmosis" always sets a
+  // flat $1,450 cost. "Sistema de agua de pozo" has no price of its own —
+  // it's negotiated per site — so its cost is pinned to whatever margin
+  // "Water Treatment System" has in the catalog: cost = ref.cost + (monto
+  // de venta - ref.price), recalculated live as the sale is negotiated.
+  // Any other product (Water Treatment System itself included) is left
+  // untouched — cost stays the vendedor's rule.
+  const RO_FIXED_COST = 1450;
+  const norm = (str: string) => str.trim().toLowerCase();
   const autoCostFor = (product: Product | null, salesAmount: number): number | undefined => {
     if (!product) return undefined;
-    if (product.referenceProductId) {
-      const ref = s.products.find((x) => x.id === product.referenceProductId);
+    const name = norm(product.name);
+    if (name.includes("reverse osmosis")) return RO_FIXED_COST;
+    if (name.includes("sistema de agua de pozo") || name.includes("well water")) {
+      const ref = s.products.find((x) => norm(x.name).includes("water treatment system"));
       if (ref) return ref.cost + (salesAmount - ref.price);
     }
-    if (product.targetProfit != null) return product.targetProfit;
     return undefined;
   };
 
@@ -4351,7 +4353,7 @@ function GeneratePanel() {
 function ProductsPanel() {
   const s = useStore();
   const isEs = s.language === "es";
-  const blank = { name: "", sku: "", kind: "product" as const, price: 0, cost: 0, priceEditable: true, active: true, notes: "", photoUrl: "", targetProfit: undefined as number | undefined, referenceProductId: undefined as string | undefined };
+  const blank = { name: "", sku: "", kind: "product" as const, price: 0, cost: 0, priceEditable: true, active: true, notes: "", photoUrl: "" };
   const [draft, setDraft] = useState(blank);
   const t = useT();
   const add = () => {
@@ -4430,26 +4432,6 @@ function ProductsPanel() {
             <Label className="text-xs">{t("lbl_cost")}</Label>
             <NumField step="0.01" value={draft.cost} onChange={(n) => setDraft({ ...draft, cost: n })} />
           </div>
-          <div>
-            <Label className="text-xs">{isEs ? "Costo fijo al elegirlo" : "Fixed cost on pick"}</Label>
-            <NumField step="0.01" value={draft.targetProfit ?? 0} onChange={(n) => setDraft({ ...draft, targetProfit: n })} disabled={!!draft.referenceProductId} />
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {isEs ? "Al elegir este producto en un invoice, el Costo del producto se pone directo en este número (ej. RO = 1450), sin importar el monto de venta." : "Picking this product in an invoice sets Costo del producto to exactly this number (e.g. RO = 1450), regardless of sale amount."}
-            </p>
-          </div>
-          <div>
-            <Label className="text-xs">{isEs ? "Producto de referencia" : "Reference product"}</Label>
-            <Select value={draft.referenceProductId || "none"} onValueChange={(v) => setDraft({ ...draft, referenceProductId: v === "none" ? undefined : v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— {isEs ? "Ninguno" : "None"} —</SelectItem>
-                {s.products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {isEs ? "Ej. \"Sistema de agua de pozo\" → \"Water Treatment System\": el costo se calcula para que el margen siempre sea igual al de ese otro producto." : "E.g. \"Well water system\" → \"Water Treatment System\": cost is computed so the margin always matches that other product's."}
-            </p>
-          </div>
           <div className="md:col-span-5 flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={draft.priceEditable} onCheckedChange={(v) => setDraft({ ...draft, priceEditable: v })} />
@@ -4485,8 +4467,6 @@ function ProductsPanel() {
                   <th className="text-left p-2">{t("lbl_type")}</th>
                   <th className="text-right p-2">{t("lbl_price")}</th>
                   <th className="text-right p-2">{t("lbl_cost")}</th>
-                  <th className="text-right p-2">{isEs ? "Costo fijo al elegirlo" : "Fixed cost on pick"}</th>
-                  <th className="text-left p-2">{isEs ? "Producto de referencia" : "Reference product"}</th>
                   <th className="text-center p-2">{t("th_editable")}</th>
                   <th className="text-center p-2">{t("lbl_active")}</th>
                   <th></th>
@@ -4535,18 +4515,6 @@ function ProductsPanel() {
                         )}
                         <NumField step="0.01" className="text-right" value={p.cost} onChange={(n) => s.updateProduct(p.id, { cost: n })} />
                       </div>
-                    </td>
-                    <td className="p-2">
-                      <NumField step="0.01" className="text-right" value={p.targetProfit ?? 0} onChange={(n) => s.updateProduct(p.id, { targetProfit: n })} disabled={!!p.referenceProductId} />
-                    </td>
-                    <td className="p-2">
-                      <Select value={p.referenceProductId || "none"} onValueChange={(v) => s.updateProduct(p.id, { referenceProductId: v === "none" ? undefined : v })}>
-                        <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— {isEs ? "Ninguno" : "None"} —</SelectItem>
-                          {s.products.filter((x) => x.id !== p.id).map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
                     </td>
                     <td className="p-2 text-center"><Switch checked={p.priceEditable} onCheckedChange={(v) => s.updateProduct(p.id, { priceEditable: v })} /></td>
                     <td className="p-2 text-center"><Switch checked={p.active} onCheckedChange={(v) => s.updateProduct(p.id, { active: v })} /></td>

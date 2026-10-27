@@ -99,8 +99,6 @@ export type Product = {
   active: boolean;
   notes: string;
   photoUrl?: string; // base64 data URL thumbnail
-  targetProfit?: number; // fixed profit this product should always net; invoice cost = monto de venta - targetProfit
-  referenceProductId?: string; // e.g. "Sistema de agua de pozo" references "Water Treatment System": cost = ref.cost + (monto de venta - ref.price), so the margin always matches the reference product's own
 };
 
 export type Invoice = {
