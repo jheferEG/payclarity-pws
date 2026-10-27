@@ -1729,8 +1729,12 @@ function InvoicesPanel() {
     }
     return undefined;
   };
+  // The "Costo del producto" field always shows the vendedor's own number
+  // as-is — RO/pozo never touch it. Only the actual math (preview + what
+  // gets saved on the invoice) uses this adjusted, effective cost.
+  const effectiveProductCost = autoCostFor(selectedProduct, draft.salesAmount) ?? draft.productCost;
 
-  const live = useMemo(() => calcInvoice({ ...(draft as Invoice), id: "tmp", number: "—" }, s.financeCompanies), [draft, s.financeCompanies]);
+  const live = useMemo(() => calcInvoice({ ...(draft as Invoice), productCost: effectiveProductCost, id: "tmp", number: "—" }, s.financeCompanies), [draft, effectiveProductCost, s.financeCompanies]);
 
   const payouts = useMemo(
     () => calcPayouts(s.agents, s.invoices, s.financeCompanies, s.personalTiers, s.overrides, s.company.commissionEntryMode),
@@ -1845,7 +1849,10 @@ function InvoicesPanel() {
   };
 
   const save = () => {
-    const payload = { ...draft, agentId: isAdmin ? draft.agentId : myAgentId || draft.agentId };
+    // The invoice is saved with the effective cost (RO/pozo adjustment
+    // included) — the "Costo del producto" field itself just keeps
+    // displaying the vendedor's raw number during data entry.
+    const payload = { ...draft, agentId: isAdmin ? draft.agentId : myAgentId || draft.agentId, productCost: effectiveProductCost };
     if (!payload.agentId) return toast.error(t("err_pick_rep"));
     if (!payload.customerName.trim()) return toast.error(t("err_customer_required"));
     if (payload.salesAmount < 0 || payload.productCost < 0) return toast.error(t("err_amounts_negative"));
@@ -2132,12 +2139,11 @@ function InvoicesPanel() {
                 if (v === "none") return;
                 const p = s.products.find((x) => x.id === v);
                 if (!p) return;
-                const autoCost = autoCostFor(p, p.price);
-                setDraft({
-                  ...draft,
-                  salesAmount: p.price,
-                  productCost: autoCost != null ? autoCost : draft.productCost,
-                });
+                // Costo del producto field itself always stays the
+                // vendedor's own number, untouched — RO/pozo only adjust
+                // the EFFECTIVE cost used in the preview math and on save
+                // (see effectiveProductCost below), never this field.
+                setDraft({ ...draft, salesAmount: p.price });
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
@@ -2162,22 +2168,18 @@ function InvoicesPanel() {
             <NumField
               step="0.01"
               value={draft.salesAmount}
-              onChange={(n) => {
-                const autoCost = autoCostFor(selectedProduct, n);
-                setDraft({
-                  ...draft,
-                  salesAmount: n,
-                  // Keep the profit fixed at the product's (or its reference
-                  // product's) target as the sale amount is negotiated.
-                  productCost: autoCost != null ? autoCost : draft.productCost,
-                });
-              }}
+              onChange={(n) => setDraft({ ...draft, salesAmount: n })}
               disabled={!!selectedProduct && selectedProduct.priceEditable === false}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>{t("lbl_product_cost")}</Label>
               <NumField step="0.01" value={draft.productCost} onChange={(n) => setDraft({ ...draft, productCost: n })} />
+              {effectiveProductCost !== draft.productCost && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {s.language === "es" ? `Costo real usado en el cálculo: ${fmtMoney(effectiveProductCost, s.company.currency)}` : `Actual cost used in the math: ${fmtMoney(effectiveProductCost, s.company.currency)}`}
+                </p>
+              )}
             </div>
             <div><Label>{t("lbl_commission_level")}</Label>
               <Input value={draft.commissionLevel ?? ""} readOnly disabled
@@ -2294,7 +2296,7 @@ function InvoicesPanel() {
         <Row k={t("preview_total_credits")} v={`+ ${fmtMoney(live.totalCredits, s.company.currency)}`} />
         <div className="border-t my-2" />
         <Row k={t("preview_grand_total")} v={fmtMoney(live.grandTotal, s.company.currency)} bold />
-        <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(draft.productCost, s.company.currency)}`} />
+        <Row k={t("preview_product_cost_lbl")} v={`- ${fmtMoney(effectiveProductCost, s.company.currency)}`} />
         <Row k={t("preview_net_profit")} v={fmtMoney(live.profit, s.company.currency)} accent bold />
           </>
         )}
