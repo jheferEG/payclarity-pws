@@ -1711,17 +1711,18 @@ function InvoicesPanel() {
   // Some products (e.g. "Sistema de agua de pozo") don't have a price of
   // their own — they're negotiated per site — so their margin is pinned to
   // a reference product's catalog margin instead (e.g. "Water Treatment
-  // System"): cost = ref.cost + (monto de venta - ref.price). Others just
-  // carry a flat target profit (e.g. RO = $1,450): cost = monto - target.
-  // Returns undefined when neither applies, meaning cost shouldn't be
-  // touched at all (stays the vendedor's rule).
+  // System"): cost = ref.cost + (monto de venta - ref.price), recalculated
+  // live as the sale amount is negotiated. Others (e.g. RO) just carry a
+  // flat, fixed cost regardless of sale amount. Returns undefined when
+  // neither applies, meaning cost shouldn't be touched (stays the
+  // vendedor's rule — e.g. Water Treatment System itself).
   const autoCostFor = (product: Product | null, salesAmount: number): number | undefined => {
     if (!product) return undefined;
     if (product.referenceProductId) {
       const ref = s.products.find((x) => x.id === product.referenceProductId);
       if (ref) return ref.cost + (salesAmount - ref.price);
     }
-    if (product.targetProfit != null) return salesAmount - product.targetProfit;
+    if (product.targetProfit != null) return product.targetProfit;
     return undefined;
   };
 
@@ -4430,10 +4431,10 @@ function ProductsPanel() {
             <NumField step="0.01" value={draft.cost} onChange={(n) => setDraft({ ...draft, cost: n })} />
           </div>
           <div>
-            <Label className="text-xs">{isEs ? "Profit objetivo" : "Target profit"}</Label>
+            <Label className="text-xs">{isEs ? "Costo fijo al elegirlo" : "Fixed cost on pick"}</Label>
             <NumField step="0.01" value={draft.targetProfit ?? 0} onChange={(n) => setDraft({ ...draft, targetProfit: n })} disabled={!!draft.referenceProductId} />
             <p className="text-[10px] text-muted-foreground mt-1">
-              {isEs ? "Ganancia fija de este producto: el costo del invoice se calcula solo (monto de venta − este número)." : "This product's fixed profit: invoice cost auto-computes as sale amount − this number."}
+              {isEs ? "Al elegir este producto en un invoice, el Costo del producto se pone directo en este número (ej. RO = 1450), sin importar el monto de venta." : "Picking this product in an invoice sets Costo del producto to exactly this number (e.g. RO = 1450), regardless of sale amount."}
             </p>
           </div>
           <div>
@@ -4484,7 +4485,7 @@ function ProductsPanel() {
                   <th className="text-left p-2">{t("lbl_type")}</th>
                   <th className="text-right p-2">{t("lbl_price")}</th>
                   <th className="text-right p-2">{t("lbl_cost")}</th>
-                  <th className="text-right p-2">{isEs ? "Profit objetivo" : "Target profit"}</th>
+                  <th className="text-right p-2">{isEs ? "Costo fijo al elegirlo" : "Fixed cost on pick"}</th>
                   <th className="text-left p-2">{isEs ? "Producto de referencia" : "Reference product"}</th>
                   <th className="text-center p-2">{t("th_editable")}</th>
                   <th className="text-center p-2">{t("lbl_active")}</th>
