@@ -2109,11 +2109,16 @@ function InvoicesPanel() {
                 setSelectedProductId(v === "none" ? "" : v);
                 if (v === "none") return;
                 const p = s.products.find((x) => x.id === v);
-                // Product cost is the vendedor's commission rule (defaulted
-                // when the salesperson is picked, from their fixed amount in
-                // Equipo de ventas) — picking a product only ever sets the
-                // sale amount, never touches cost.
-                if (p) setDraft({ ...draft, salesAmount: p.price });
+                if (!p) return;
+                // Products with a "Profit objetivo" always net that exact
+                // profit: cost = monto de venta - profit objetivo, no matter
+                // what was actually negotiated. Products without one set
+                // don't touch cost at all — it stays the vendedor's rule.
+                if (p.targetProfit != null) {
+                  setDraft({ ...draft, salesAmount: p.price, productCost: p.price - p.targetProfit });
+                } else {
+                  setDraft({ ...draft, salesAmount: p.price });
+                }
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
@@ -2138,7 +2143,13 @@ function InvoicesPanel() {
             <NumField
               step="0.01"
               value={draft.salesAmount}
-              onChange={(n) => setDraft({ ...draft, salesAmount: n })}
+              onChange={(n) => setDraft({
+                ...draft,
+                salesAmount: n,
+                // Keep the profit fixed at the product's target as the sale
+                // amount is negotiated up or down.
+                productCost: selectedProduct?.targetProfit != null ? n - selectedProduct.targetProfit : draft.productCost,
+              })}
               disabled={!!selectedProduct && selectedProduct.priceEditable === false}
             />
           </div>
@@ -4322,7 +4333,7 @@ function GeneratePanel() {
 function ProductsPanel() {
   const s = useStore();
   const isEs = s.language === "es";
-  const blank = { name: "", sku: "", kind: "product" as const, price: 0, cost: 0, priceEditable: true, active: true, notes: "", photoUrl: "" };
+  const blank = { name: "", sku: "", kind: "product" as const, price: 0, cost: 0, priceEditable: true, active: true, notes: "", photoUrl: "", targetProfit: undefined as number | undefined };
   const [draft, setDraft] = useState(blank);
   const t = useT();
   const add = () => {
@@ -4401,6 +4412,13 @@ function ProductsPanel() {
             <Label className="text-xs">{t("lbl_cost")}</Label>
             <NumField step="0.01" value={draft.cost} onChange={(n) => setDraft({ ...draft, cost: n })} />
           </div>
+          <div>
+            <Label className="text-xs">{isEs ? "Profit objetivo" : "Target profit"}</Label>
+            <NumField step="0.01" value={draft.targetProfit ?? 0} onChange={(n) => setDraft({ ...draft, targetProfit: n })} />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {isEs ? "Ganancia fija de este producto: el costo del invoice se calcula solo (monto de venta − este número)." : "This product's fixed profit: invoice cost auto-computes as sale amount − this number."}
+            </p>
+          </div>
           <div className="md:col-span-5 flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={draft.priceEditable} onCheckedChange={(v) => setDraft({ ...draft, priceEditable: v })} />
@@ -4436,6 +4454,7 @@ function ProductsPanel() {
                   <th className="text-left p-2">{t("lbl_type")}</th>
                   <th className="text-right p-2">{t("lbl_price")}</th>
                   <th className="text-right p-2">{t("lbl_cost")}</th>
+                  <th className="text-right p-2">{isEs ? "Profit objetivo" : "Target profit"}</th>
                   <th className="text-center p-2">{t("th_editable")}</th>
                   <th className="text-center p-2">{t("lbl_active")}</th>
                   <th></th>
@@ -4484,6 +4503,9 @@ function ProductsPanel() {
                         )}
                         <NumField step="0.01" className="text-right" value={p.cost} onChange={(n) => s.updateProduct(p.id, { cost: n })} />
                       </div>
+                    </td>
+                    <td className="p-2">
+                      <NumField step="0.01" className="text-right" value={p.targetProfit ?? 0} onChange={(n) => s.updateProduct(p.id, { targetProfit: n })} />
                     </td>
                     <td className="p-2 text-center"><Switch checked={p.priceEditable} onCheckedChange={(v) => s.updateProduct(p.id, { priceEditable: v })} /></td>
                     <td className="p-2 text-center"><Switch checked={p.active} onCheckedChange={(v) => s.updateProduct(p.id, { active: v })} /></td>

@@ -99,6 +99,7 @@ export type Product = {
   active: boolean;
   notes: string;
   photoUrl?: string; // base64 data URL thumbnail
+  targetProfit?: number; // fixed profit this product should always net; invoice cost = monto de venta - targetProfit
 };
 
 export type Invoice = {
