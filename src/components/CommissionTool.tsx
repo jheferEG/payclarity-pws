@@ -524,7 +524,7 @@ export default function CommissionTool() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b-4 border-red-600 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-[0_1px_12px_rgb(13_148_136/0.08)]">
+      <header className="sticky top-0 z-10 border-b border-teal-200/60 dark:border-teal-800/40 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-[0_1px_12px_rgb(13_148_136/0.08)]">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
           {/* Logo */}
           <div className="flex items-center gap-2.5 min-w-0">
