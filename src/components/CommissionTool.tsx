@@ -1709,12 +1709,13 @@ function InvoicesPanel() {
   const selectedProduct = s.products.find((p) => p.id === selectedProductId) ?? null;
 
   // Built-in rule, no catalog setup needed: "Reverse Osmosis" always sets a
-  // flat $1,450 cost. "Sistema de agua de pozo" has no price of its own —
-  // it's negotiated per site — so its cost is pinned to whatever margin
-  // "Water Treatment System" has in the catalog: cost = ref.cost + (monto
-  // de venta - ref.price), recalculated live as the sale is negotiated.
-  // Any other product (Water Treatment System itself included) is left
-  // untouched — cost stays the vendedor's rule.
+  // flat $1,450 cost. "Sistema de agua de pozo" gets negotiated per site, so
+  // its cost = the vendedor's own base cost (Equipo) + (monto de venta -
+  // precio de catálogo de "Water Treatment System") — the amount sold above
+  // (or below) the standard price is added straight onto the vendedor's
+  // cost, recalculated live as the sale is negotiated. Any other product
+  // (Water Treatment System itself included) is left untouched — cost stays
+  // the vendedor's rule as-is.
   const RO_FIXED_COST = 1450;
   const norm = (str: string) => str.trim().toLowerCase();
   const autoCostFor = (product: Product | null, salesAmount: number): number | undefined => {
@@ -1723,7 +1724,8 @@ function InvoicesPanel() {
     if (name.includes("reverse osmosis")) return RO_FIXED_COST;
     if (name.includes("sistema de agua de pozo") || name.includes("well water")) {
       const ref = s.products.find((x) => norm(x.name).includes("water treatment system"));
-      if (ref) return ref.cost + (salesAmount - ref.price);
+      const vendorBaseCost = s.agents.find((a) => a.id === draft.agentId)?.fixedCommissionAmount;
+      if (ref && vendorBaseCost != null) return vendorBaseCost + (salesAmount - ref.price);
     }
     return undefined;
   };
