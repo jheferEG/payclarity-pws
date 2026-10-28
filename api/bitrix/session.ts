@@ -68,16 +68,18 @@ export default async function handler(req: any, res: any) {
     }
 
     // Deliberately no auto-provisioning: a Bitrix24 email with no matching,
-    // active accountant profile here is rejected outright.
+    // active profile here is rejected outright. Any role is accepted — the
+    // profile's own role (admin/rep/accountant/...) decides what the user
+    // sees once signed in, via the app's existing role-based gating.
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("id, role, status")
       .ilike("email", email)
       .maybeSingle();
 
-    if (!profile || profile.role !== "accountant" || profile.status !== "active") {
+    if (!profile || profile.status !== "active") {
       res.status(403).json({
-        error: "Tu correo de Bitrix24 no está vinculado a una cuenta de contador activa en Transpare. Pide a un administrador que te registre.",
+        error: "Tu correo de Bitrix24 no está vinculado a una cuenta activa en Transpare. Pide a un administrador que te registre.",
       });
       return;
     }
