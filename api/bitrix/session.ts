@@ -4,12 +4,24 @@
 // handler calls Bitrix24's REST API itself, server-to-server, with the
 // supplied token to find out who it actually belongs to, before ever
 // looking anyone up in our own database.
-// Dynamic import, not a top-level one: client.server.ts's own comment warns
-// a static import of it is only safe from other *.server.ts modules — a
-// top-level import here was crashing this whole function before the
-// handler's own try/catch ever got a chance to run (every request, even
-// with garbage input, failed with a raw FUNCTION_INVOCATION_FAILED instead
-// of a JSON error).
+import { createClient } from "@supabase/supabase-js";
+
+// A standalone admin client, not the one imported from src/integrations —
+// Vercel doesn't bundle src/ into this function's deployment (confirmed:
+// that import failed at runtime with "Cannot find module
+// .../src/integrations/supabase/client.server", even though it type-checks
+// and works fine locally). Everything this function needs has to live
+// under api/.
+function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      `Missing Supabase environment variable(s): ${[!url && "SUPABASE_URL", !key && "SUPABASE_SERVICE_ROLE_KEY"].filter(Boolean).join(", ")}.`
+    );
+  }
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 const ALLOWED_DOMAINS = (process.env.BITRIX_ALLOWED_DOMAINS || "")
   .split(",")
@@ -35,7 +47,7 @@ const USER_EMAIL_OVERRIDES: Record<string, string> = Object.fromEntries(
 
 export default async function handler(req: any, res: any) {
   try {
-    const { supabaseAdmin } = await import("../../src/integrations/supabase/client.server");
+    const supabaseAdmin = getSupabaseAdmin();
 
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
