@@ -447,6 +447,9 @@ export function JobsPanel() {
   });
   const [form, setForm] = useState(blank());
   const [useMyLoc, setUseMyLoc] = useState(false);
+  const technicianBusyThatDay = !!form.technicianId && s.jobs.some(
+    (j) => j.technicianId === form.technicianId && j.date === form.date && j.status !== "cancelled"
+  );
 
   const grabLocation = () => {
     if (!navigator.geolocation) return toast.error(isEs ? "Geolocalización no disponible." : "Geolocation not available.");
@@ -480,6 +483,13 @@ export function JobsPanel() {
             </Select>
             {technicians.length === 0 && (
               <p className="text-xs text-muted-foreground mt-1">{isEs ? `Sin ${techLabel.toLowerCase()}s activos — agrega uno en la pestaña de Técnicos.` : "No active technicians yet — add one under the Technicians tab."}</p>
+            )}
+            {form.technicianId && (
+              <p className={`text-xs mt-1 font-medium ${technicianBusyThatDay ? "text-destructive" : "text-emerald-600"}`}>
+                {technicianBusyThatDay
+                  ? (isEs ? `⚠ Ya tiene un trabajo agendado ese día` : "⚠ Already has a job scheduled that day")
+                  : (isEs ? `✓ Disponible ese día` : "✓ Available that day")}
+              </p>
             )}
           </div>
           <div><Label className="text-xs">{isEs ? "Cliente" : "Customer"}</Label>

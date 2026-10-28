@@ -483,8 +483,12 @@ export default function CommissionTool() {
   }, [isAdmin]);
   // Accountants land directly on the approvals queue — approving payouts/
   // corrections is their actual job, not browsing the sales dashboard first.
-  const [tab, setTab] = useState<string>(isRep ? "wallet" : isTechnician ? "work-statements" : isAnalyst ? "my-invoices" : isAccountant ? "disputes" : "dashboard");
-  const [group, setGroup] = useState<string>(isRep ? "team" : isTechnician ? "billing" : isAnalyst ? "invoices" : isAccountant ? "payouts" : "dashboard");
+  // "?view=jobs" overrides the role default — used by the Bitrix24 Widget
+  // Master's "Instalaciones" tile to land directly on the Jobs tab instead
+  // of each role's usual starting tab.
+  const deepLinkView = new URLSearchParams(window.location.search).get("view");
+  const [tab, setTab] = useState<string>(deepLinkView === "jobs" ? "jobs" : isRep ? "wallet" : isTechnician ? "work-statements" : isAnalyst ? "my-invoices" : isAccountant ? "disputes" : "dashboard");
+  const [group, setGroup] = useState<string>(deepLinkView === "jobs" ? "billing" : isRep ? "team" : isTechnician ? "billing" : isAnalyst ? "invoices" : isAccountant ? "payouts" : "dashboard");
   useEffect(() => {
     if (s.deepLink?.tab) {
       setTab(s.deepLink.tab);

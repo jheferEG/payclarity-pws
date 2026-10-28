@@ -53,9 +53,15 @@ export default function handler(req: any, res: any) {
               fail(msg + " (HTTP " + result.status + ")");
               return;
             }
+            // "view" lets a caller (e.g. the Bitrix24 Widget Master's
+            // "Instalaciones" tile) deep-link straight into a tab instead of
+            // each role's usual starting tab — forwarded as-is from this
+            // page's own query string.
+            var view = new URLSearchParams(window.location.search).get("view");
             window.location.href =
               "/?bx_email=" + encodeURIComponent(result.body.email) +
-              "&bx_otp=" + encodeURIComponent(result.body.otp);
+              "&bx_otp=" + encodeURIComponent(result.body.otp) +
+              (view ? "&view=" + encodeURIComponent(view) : "");
           })
           .catch(function (err) {
             fail("Error de conexión: " + (err && err.message ? err.message : String(err)));
