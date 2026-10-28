@@ -4,7 +4,12 @@
 // handler calls Bitrix24's REST API itself, server-to-server, with the
 // supplied token to find out who it actually belongs to, before ever
 // looking anyone up in our own database.
-import { supabaseAdmin } from "../../src/integrations/supabase/client.server";
+// Dynamic import, not a top-level one: client.server.ts's own comment warns
+// a static import of it is only safe from other *.server.ts modules — a
+// top-level import here was crashing this whole function before the
+// handler's own try/catch ever got a chance to run (every request, even
+// with garbage input, failed with a raw FUNCTION_INVOCATION_FAILED instead
+// of a JSON error).
 
 const ALLOWED_DOMAINS = (process.env.BITRIX_ALLOWED_DOMAINS || "")
   .split(",")
@@ -30,6 +35,8 @@ const USER_EMAIL_OVERRIDES: Record<string, string> = Object.fromEntries(
 
 export default async function handler(req: any, res: any) {
   try {
+    const { supabaseAdmin } = await import("../../src/integrations/supabase/client.server");
+
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
