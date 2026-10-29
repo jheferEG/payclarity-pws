@@ -2147,7 +2147,10 @@ function InvoicesPanel() {
                 // vendedor's own number, untouched — RO/pozo only adjust
                 // the EFFECTIVE cost used in the preview math and on save
                 // (see effectiveProductCost below), never this field.
-                setDraft({ ...draft, salesAmount: p.price });
+                // Única excepción: "Costo de producto 0" también pone el
+                // campo de Costo del producto en 0 (sigue editable después).
+                const isZeroCostProduct = p.name.trim().toLowerCase().includes("costo de producto 0");
+                setDraft({ ...draft, salesAmount: p.price, ...(isZeroCostProduct ? { productCost: 0 } : {}) });
               }}
             >
               <SelectTrigger><SelectValue placeholder={s.language === "es" ? "Elegir producto…" : "Pick a product…"} /></SelectTrigger>
